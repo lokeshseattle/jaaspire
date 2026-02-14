@@ -1,13 +1,13 @@
-import { View, Text, Button } from "react-native";
-import { useAuthStore } from "../../store/authStore";
+import { useAuth } from "@/src/features/auth/auth.hooks";
+import { Button, Text, View } from "react-native";
 
 export default function Home() {
-//   const logout = useAuthStore((state) => state.logout);
+  const { logout } = useAuth();
 
   return (
     <View>
       <Text>Home (Protected)</Text>
-      <Button title="Logout" />
+      <Button onPress={logout} title="Logout" />
     </View>
   );
 }

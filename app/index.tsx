@@ -1,17 +1,28 @@
+import { useAuth } from "@/src/features/auth/auth.hooks";
 import { Redirect } from "expo-router";
-import { useAuthStore } from "@/store/authStore";
+import { ActivityIndicator, Text, View } from "react-native";
 
 export default function Index() {
-  const { user, isHydrated } = useAuthStore().state;
+  const { isAuthenticated, isLoading } = useAuth();
 
-  // Show nothing until store has rehydrated (e.g. from storage) to avoid flash
-  if (!isHydrated) {
-    return null;
+  if (isLoading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: "#fff",
+        }}
+      >
+        <ActivityIndicator size="large" />
+        <Text style={{ marginTop: 10 }}>Checking authentication...</Text>
+      </View>
+    );
   }
 
-  if (user) {
-    return <Redirect href="/home" />;
-  }
+  const destination = isAuthenticated ? "/(app)/home" : "/(auth)/login";
+  console.log("Attempting redirect to:", destination);
 
-  return <Redirect href="/login" />;
+  return <Redirect href={destination} />;
 }

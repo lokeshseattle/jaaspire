@@ -1,0 +1,6 @@
+{"location":"_layout.tsx:18","message":"RootLayout render","data":{"isAuthenticated":true},"timestamp":1771008979084,"runId":"run1","hypothesisId":"D"}
+{"location":"_layout.tsx:25","message":"restoreSession called","data":{},"timestamp":1771008979085,"runId":"run1","hypothesisId":"E"}
+{"location":"auth.store.ts:17","message":"setToken called","data":{"hasToken":true,"isAuthenticated":true},"timestamp":1771008979094,"runId":"run1","hypothesisId":"C"}
+{"location":"_layout.tsx:18","message":"RootLayout render","data":{"isAuthenticated":false},"timestamp":1771008979750,"runId":"run1","hypothesisId":"D"}
+{"location":"_layout.tsx:25","message":"restoreSession called","data":{},"timestamp":1771008979750,"runId":"run1","hypothesisId":"E"}
+{"location":"_layout.tsx:18","message":"RootLayout render","data":{"isAuthenticated":true},"timestamp":1771008979766,"runId":"run1","hypothesisId":"D"}

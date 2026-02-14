@@ -1,13 +1,13 @@
-import { Colors } from "@/constants/theme";
+import { Colors } from "@/src/constants/theme";
 import React from "react";
 import {
-  Pressable,
-  Text,
-  StyleSheet,
   ActivityIndicator,
-  View,
+  Pressable,
   PressableProps,
   StyleProp,
+  StyleSheet,
+  Text,
+  View,
   ViewStyle,
 } from "react-native";
 
@@ -18,7 +18,6 @@ interface ButtonProps extends Omit<PressableProps, "style"> {
   variant?: "primary" | "outline";
   style?: StyleProp<ViewStyle>; // ✅ explicitly typed
 }
-
 
 const Button: React.FC<ButtonProps> = ({
   title,
@@ -32,21 +31,21 @@ const Button: React.FC<ButtonProps> = ({
 
   return (
     <Pressable
-  disabled={isDisabled}
-  style={({ pressed }) => {
-    const computedStyle: StyleProp<ViewStyle> = [
-      styles.base,
-      variant === "primary" && styles.primary,
-      variant === "outline" && styles.outline,
-      isDisabled && styles.disabled,
-      pressed && !isDisabled && styles.pressed,
-      style,
-    ];
+      disabled={isDisabled}
+      style={({ pressed }) => {
+        const computedStyle: StyleProp<ViewStyle> = [
+          styles.base,
+          variant === "primary" && styles.primary,
+          variant === "outline" && styles.outline,
+          isDisabled && styles.disabled,
+          pressed && !isDisabled && styles.pressed,
+          style,
+        ];
 
-    return computedStyle;
-  }}
-  {...props}
->
+        return computedStyle;
+      }}
+      {...props}
+    >
       <View style={styles.content}>
         {loading && (
           <ActivityIndicator
@@ -57,10 +56,7 @@ const Button: React.FC<ButtonProps> = ({
         )}
 
         <Text
-          style={[
-            styles.text,
-            variant === "outline" && styles.outlineText,
-          ]}
+          style={[styles.text, variant === "outline" && styles.outlineText]}
         >
           {title}
         </Text>

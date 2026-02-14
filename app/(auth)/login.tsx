@@ -1,10 +1,11 @@
 import { StyleSheet, Text, View } from "react-native";
 
 import { Logo } from "@/assets/svg";
-import { ThemedView } from "@/components/themed-view";
-import Button from "@/components/ui/button";
-import FormInput from "@/components/ui/input";
-import { Colors } from "@/constants/theme";
+import { ThemedView } from "@/src/components/themed-view";
+import Button from "@/src/components/ui/button";
+import FormInput from "@/src/components/ui/input";
+import { Colors } from "@/src/constants/theme";
+import { useAuth, useLogin } from "@/src/features/auth/auth.hooks";
 import Fontisto from "@expo/vector-icons/Fontisto";
 import { Link } from "expo-router";
 import { useForm } from "react-hook-form";
@@ -16,17 +17,24 @@ type FormData = {
 };
 
 export default function Login() {
-  const { control, handleSubmit } = useForm<FormData>();
+  const { control, handleSubmit, setError } = useForm<FormData>();
+
+  const login = useLogin();
+  const authStore = useAuth();
 
   const onSubmit = (data: FormData) => {
-    console.log(data);
+    login.mutate(data, {
+      onSuccess: (d) => {
+        authStore.login(d.data.token);
+      },
+      onError: (e) => {
+        console.log(e.message);
+        setError("email", { message: e.message });
+      },
+    });
   };
   return (
-    <ThemedView
-      style={styles.container}
-      // headerBackgroundColor={{ light: "#A1CEDC", dark: "#1D3D47" }}
-      // headerImage={<Logo />}
-    >
+    <ThemedView style={styles.container}>
       <KeyboardAwareScrollView
         contentContainerStyle={styles.container}
         bottomOffset={20}
@@ -70,15 +78,15 @@ export default function Login() {
           keyboardType="visible-password"
           Left={<Fontisto name="email" size={24} color="black" />}
           rules={{
-            required: "Email is required",
-            pattern: {
-              value: /\S+@\S+\.\S+/,
-              message: "Invalid email format",
-            },
+            required: "Password is required",
           }}
         />
 
-        <Button title="Sign In" onPress={handleSubmit(onSubmit)} />
+        <Button
+          title="Sign In"
+          loading={login.isPending}
+          onPress={handleSubmit(onSubmit)}
+        />
 
         <Link href="../register">Don't have an account? Register</Link>
       </KeyboardAwareScrollView>
