@@ -21,7 +21,7 @@ export default function Index() {
     );
   }
 
-  const destination = isAuthenticated ? "/(app)/home" : "/(auth)/login";
+  const destination = isAuthenticated ? "/(app)/(tabs)" : "/(auth)/login";
   console.log("Attempting redirect to:", destination);
 
   return <Redirect href={destination} />;

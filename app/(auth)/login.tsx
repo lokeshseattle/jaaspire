@@ -23,15 +23,18 @@ export default function Login() {
   const authStore = useAuth();
 
   const onSubmit = (data: FormData) => {
-    login.mutate(data, {
-      onSuccess: (d) => {
-        authStore.login(d.data.token);
-      },
-      onError: (e) => {
-        console.log(e.message);
-        setError("email", { message: e.message });
-      },
-    });
+    // login.mutate(data, {
+    //   onSuccess: (d) => {
+    //     authStore.login(d.data.token);
+    //   },
+    //   onError: (e) => {
+    //     console.log(e.message);
+    //     setError("email", { message: e.message });
+    //   },
+    // });
+
+    // Bypass login
+    authStore.login("");
   };
   return (
     <ThemedView style={styles.container}>

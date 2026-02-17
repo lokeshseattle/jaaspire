@@ -11,8 +11,29 @@ export default function AppLayout() {
   //   }
 
   return (
-    <Stack>
-      <Stack.Screen name="home" />
+    // <Stack screenOptions={{ headerShown: false }}>
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+
+      <Stack.Screen
+        name="messages"
+        options={{
+          headerShown: true,
+          title: "Messages",
+          presentation: "card",
+        }}
+      />
+
+      <Stack.Screen
+        name="story-viewer"
+        options={{
+          headerShown: false,
+          // Present as a modal that comes up from the bottom and fades
+          presentation: "transparentModal",
+          animation: "fade",
+        }}
+      />
     </Stack>
+    // </Stack>
   );
 }

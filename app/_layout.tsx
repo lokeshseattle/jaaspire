@@ -11,7 +11,7 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuth } from "@/src/features/auth/auth.hooks";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 const queryClient = new QueryClient();
 
@@ -27,7 +27,7 @@ export default function RootLayout() {
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <QueryClientProvider client={queryClient}>
         <KeyboardProvider>
-          <SafeAreaView style={{ flex: 1, backgroundColor: "#f5f5f5" }}>
+          <GestureHandlerRootView style={{ flex: 1 }}>
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="(app)" />
               <Stack.Screen
@@ -35,7 +35,7 @@ export default function RootLayout() {
                 options={{ animation: "slide_from_left" }}
               />
             </Stack>
-          </SafeAreaView>
+          </GestureHandlerRootView>
         </KeyboardProvider>
       </QueryClientProvider>
     </ThemeProvider>

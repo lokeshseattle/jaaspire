@@ -12,7 +12,10 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.flickios.jaaspire",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryUsageDescription": "This app needs access to your photos so you can upload images.",
+        "NSCameraUsageDescription": "This app needs access to your camera to take photos.",
+        "NSPhotoLibraryAddUsageDescription": "This app needs permission to save photos to your library."
       }
     },
     "android": {
@@ -44,7 +47,15 @@
           }
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-video",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you share them with your friends.",
+          "cameraPermission": "The app accesses your camera."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

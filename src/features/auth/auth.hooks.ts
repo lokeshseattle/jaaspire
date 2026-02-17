@@ -78,18 +78,18 @@ export const useAuth = () => {
     async (token: string): Promise<void> => {
       await tokenStorage.save(token);
       setToken(token);
-      router.replace("/(app)/home");
+      router.replace("/(app)/(tabs)");
     },
     [setToken],
   );
 
   // Logout
   const logout = useCallback(async (): Promise<void> => {
-    const logoutMutation = useLogout();
+    // const logoutMutation = useLogout();
     await tokenStorage.remove();
     setToken(null);
     router.replace("/(auth)/login");
-    logoutMutation.mutate();
+    // logoutMutation.mutate();
   }, [setToken]);
 
   return {
