@@ -1,30 +1,35 @@
-import { View } from "react-native";
 import PostFooter from "./post-footer";
 import PostHeader from "./post-header";
 import PostMedia from "./post-media";
 
-interface PostItem {
-  id: string;
-  user: {
-    id: string;
-    username: string;
-    avatar: string;
-  };
-  media: string;
-  caption: string;
-  likesCount: number;
-  isLiked: boolean;
+import PostContext from "@/src/context/post-context";
+import type { Post as PostItem } from "@/src/services/api/api.types";
+import { getMediaType } from "@/src/utils/helpers";
+interface Props extends PostItem {
   isVisible: boolean;
-  type: string;
 }
 
-export default function Post(props: PostItem) {
-  const { user, media, isVisible, type } = props;
+export default function Post({ isVisible, ...post }: Props) {
+  const { attachments } = post;
+
+  //   const [isLiked, setIsLiked] = useState(initialLiked);
+  //   const [likesCount, setLikesCount] = useState(props.likesCount);
+
+  const handleLike = () => {
+    // TODO: send like to backend (optimistic update)
+  };
+
   return (
-    <View>
-      <PostHeader avatar={user.avatar} id={user.id} username={user.username} />
-      <PostMedia isVisible={isVisible} media={media} type={type} />
+    <PostContext.Provider value={{ post }}>
+      <PostHeader />
+      <PostMedia
+        media={attachments[0]?.path}
+        type={getMediaType(attachments[0]?.type)}
+        isVisible={isVisible}
+        isLiked={true}
+        onLike={handleLike}
+      />
       <PostFooter />
-    </View>
+    </PostContext.Provider>
   );
 }

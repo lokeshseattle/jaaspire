@@ -12,7 +12,7 @@ const { height, width } = Dimensions.get("window");
 
 const STORIES: StoryItem[] = [
   { id: "1", type: "image", uri: "https://picsum.photos/800/1200?1" },
-  { id: "2", type: "video", uri: "https://www.w3schools.com/html/mov_bbb.mp4" },
+  // { id: "2", type: "video", uri: "https://www.w3schools.com/html/mov_bbb.mp4" },
   { id: "3", type: "image", uri: "https://picsum.photos/800/1200?3" },
   { id: "4", type: "image", uri: "https://picsum.photos/800/1200?6" },
 ];

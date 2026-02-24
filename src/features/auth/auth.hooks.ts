@@ -1,3 +1,4 @@
+import { asyncStoragePersister } from "@/src/lib/persister";
 import { tokenStorage } from "@/src/lib/secure-storage";
 import { apiClient } from "@/src/services/api/api.client";
 import {
@@ -11,6 +12,7 @@ import {
   useMutation,
   UseMutationResult,
   useQuery,
+  useQueryClient,
   UseQueryResult,
 } from "@tanstack/react-query";
 import { router } from "expo-router";
@@ -85,11 +87,12 @@ export const useAuth = () => {
 
   // Logout
   const logout = useCallback(async (): Promise<void> => {
-    // const logoutMutation = useLogout();
+    const queryClient = useQueryClient();
     await tokenStorage.remove();
     setToken(null);
+    queryClient.clear();
+    await asyncStoragePersister.removeClient();
     router.replace("/(auth)/login");
-    // logoutMutation.mutate();
   }, [setToken]);
 
   return {

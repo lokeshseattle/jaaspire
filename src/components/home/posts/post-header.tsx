@@ -1,27 +1,25 @@
+import { usePost } from "@/src/context/post-context";
+import { timeAgo } from "@/src/utils/helpers";
 import Feather from "@expo/vector-icons/Feather";
-import { Image } from "expo-image";
+import { router } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
-    Dimensions,
-    Modal,
-    Pressable,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    UIManager,
-    View,
-    findNodeHandle,
+  Dimensions,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  UIManager,
+  View,
+  findNodeHandle,
 } from "react-native";
-
-interface User {
-  id: string;
-  username: string;
-  avatar: string;
-}
+import StoryAvatar from "../story/StoryAvatar";
 
 const MENU_WIDTH = 180;
 
-const PostHeader: React.FC<User> = ({ avatar, id, username }) => {
+const PostHeader: React.FC = () => {
+  const { post } = usePost();
   const iconRef = useRef<View>(null);
 
   const [menuVisible, setMenuVisible] = useState(false);
@@ -58,24 +56,38 @@ const PostHeader: React.FC<User> = ({ avatar, id, username }) => {
     closeMenu();
   };
 
+  const navigateToUser = () => {
+    if (post.user.username)
+      router.push({
+        pathname: "/user/[username]",
+        params: { username: post.user.username },
+      });
+  };
+
   return (
     <>
       <View style={styles.container}>
         {/* Left Section */}
-        <View style={styles.left}>
-          <View style={styles.avatarWrapper}>
-            <Image source={avatar} style={styles.avatar} />
-          </View>
+        <Pressable onPress={navigateToUser} style={styles.left}>
+          {/* <View style={styles.avatarWrapper}>
+            <Image source={post.user.avatar} style={styles.avatar} />
+          </View> */}
+          <StoryAvatar
+            username={post.user.username}
+            hasStory={post.user.story_status.has_stories}
+            seen={post.user.story_status.all_viewed}
+            uri={post.user.avatar}
+          />
 
           <View>
-            <Text style={styles.username}>{username}</Text>
-            <Text style={styles.sub}>{username}</Text>
+            <Text style={styles.username}>{post.user.name}</Text>
+            <Text style={styles.sub}>@{post.user.username}</Text>
           </View>
-        </View>
+        </Pressable>
 
         {/* Right Section */}
         <View style={styles.right}>
-          <Text style={styles.time}>1h ago</Text>
+          <Text style={styles.time}>{timeAgo(post.created_at)}</Text>
 
           <Pressable ref={iconRef} onPress={openMenu} hitSlop={10}>
             <Feather name="more-horizontal" size={22} color="#000" />
@@ -157,6 +169,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
+    // backgroundColor: "red",
   },
   avatarWrapper: {
     height: 44,

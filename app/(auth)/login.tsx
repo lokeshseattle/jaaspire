@@ -23,18 +23,18 @@ export default function Login() {
   const authStore = useAuth();
 
   const onSubmit = (data: FormData) => {
-    // login.mutate(data, {
-    //   onSuccess: (d) => {
-    //     authStore.login(d.data.token);
-    //   },
-    //   onError: (e) => {
-    //     console.log(e.message);
-    //     setError("email", { message: e.message });
-    //   },
-    // });
+    login.mutate(data, {
+      onSuccess: (d) => {
+        authStore.login(d.data.token);
+      },
+      onError: (e) => {
+        console.log(e.message);
+        setError("email", { message: e.message });
+      },
+    });
 
     // Bypass login
-    authStore.login("");
+    // authStore.login("");
   };
   return (
     <ThemedView style={styles.container}>
@@ -65,11 +65,7 @@ export default function Login() {
           placeholder="Enter your email"
           Left={<Fontisto name="email" size={24} color="black" />}
           rules={{
-            required: "Email is required",
-            pattern: {
-              value: /\S+@\S+\.\S+/,
-              message: "Invalid email format",
-            },
+            required: "It is required",
           }}
         />
         <FormInput

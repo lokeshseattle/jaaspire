@@ -1,45 +1,33 @@
+import { useMediaPicker } from "@/hooks/use-media-picker";
 import { Colors } from "@/src/constants/theme";
+import { useGetProfile } from "@/src/features/profile/profile.hooks";
+import { useGetAllStories } from "@/src/features/story/story.hooks";
+import { useTheme } from "@/src/theme/ThemeProvider";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
-import { useState } from "react";
 import {
-    Alert,
-    FlatList,
-    Image,
-    Linking,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Image,
+  Linking,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
-
-const STORIES = [
-  {
-    id: "story_1",
-    username: "your.story",
-    avatar: "https://randomuser.me/api/portraits/men/10.jpg",
-  },
-  {
-    id: "story_2",
-    username: "mila.design",
-    avatar: "https://randomuser.me/api/portraits/women/44.jpg",
-  },
-  {
-    id: "story_3",
-    username: "jay.dev",
-    avatar: "https://randomuser.me/api/portraits/men/33.jpg",
-  },
-  {
-    id: "story_4",
-    username: "zoe.art",
-    avatar: "https://randomuser.me/api/portraits/women/12.jpg",
-  },
-];
 
 function Stories() {
   const router = useRouter();
+  const theme = useTheme();
 
-  const [image, setImage] = useState<string | null>(null);
+  const storiesQuery = useGetAllStories();
+
+  const { data } = useGetProfile();
+
+  const { openMediaPicker } = useMediaPicker();
+
+  // const { username } = data!.data;
 
   //   const requestPermission = async () => {
   //     const { status, canAskAgain } = await MediaLibrary.getPermissionsAsync();
@@ -84,52 +72,111 @@ function Stories() {
       return;
     }
 
-      const result = await ImagePicker.launchImageLibraryAsync({
-        // Use string media type values instead of deprecated MediaTypeOptions enum
-        mediaTypes: ["images", "videos"],
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 1,
-      });
+    const result = await ImagePicker.launchImageLibraryAsync({
+      // Use string media type values instead of deprecated MediaTypeOptions enum
+      mediaTypes: ["images", "videos"],
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 1,
+    });
 
     if (!result.canceled) {
-      setImage(result.assets[0].uri);
+      router.push({
+        pathname: "/story-editor",
+        params: { uri: result.assets[0].uri },
+      });
     }
   };
 
-  function openStory() {
+  const handleStory = () => {
+    openMediaPicker({
+      mediaTypes: ["images", "videos"],
+      onChange: (file) => {
+        // router.push({
+        //   pathname: "/story-editor",
+        //   params: { uri: file.uri },
+        // });
+        console.log(file);
+      },
+    });
+  };
+
+  function openStory(username: string) {
     router.push({
-      pathname: "/story-viewer",
+      pathname: "/story/[username]",
+      params: { username },
     });
   }
-  return (
-    <View style={styles.container}>
-      <FlatList
-        data={STORIES}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <Pressable onPress={openStory} style={styles.storyItem}>
-            <View style={styles.avatarWrapper}>
-              <Image source={{ uri: item.avatar }} style={styles.avatar} />
+  if (storiesQuery.isLoading) return <ActivityIndicator />;
 
-              {/* {item.isCurrentUser && ( */}
-              {true && (
-                <Pressable onPress={pickImage} style={styles.addButton}>
-                  <Text style={styles.addText}>+</Text>
-                </Pressable>
-              )}
-            </View>
+  const profile = data?.data;
+  const stories = storiesQuery.data?.data.stories || [];
 
-            <Text style={styles.username} numberOfLines={1}>
-              {item.username}
-            </Text>
-          </Pressable>
-        )}
-      />
-    </View>
+  const displayStories = [...stories];
+  const userStoryIndex = displayStories.findIndex(
+    (s) => s.username === profile?.username,
   );
+
+  if (userStoryIndex !== -1) {
+    // Move user story to front and rename to "You"
+    const [userStory] = displayStories.splice(userStoryIndex, 1);
+    displayStories.unshift({ ...userStory, name: "You" });
+  } else if (profile) {
+    // Prepend profile as a "You" placeholder if no story exists
+    displayStories.unshift({
+      id: -1,
+      userId: profile.id,
+      name: "You",
+      username: profile.username,
+      avatar: profile.avatar,
+      stories: [],
+      is_viewed: 0,
+    } as any);
+  }
+
+  if (storiesQuery.isSuccess)
+    return (
+      <View style={styles.container}>
+        <FlatList
+          data={displayStories}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyExtractor={(item) => item.username}
+          renderItem={({ item }) => (
+            <Pressable
+              onPress={() =>
+                item.stories && item.stories.length > 0
+                  ? openStory(item.username)
+                  : null
+              }
+              style={styles.storyItem}
+            >
+              <View
+                style={[
+                  styles.avatarWrapper,
+                  item.is_viewed === 1 || (item.stories && item.stories.length === 0)
+                    ? { borderColor: theme.colors.textSecondary }
+                    : { borderColor: Colors.primaryColor },
+                  item.stories && item.stories.length === 0 && { borderColor: "transparent" },
+                ]}
+              >
+                <Image source={{ uri: item.avatar }} style={styles.avatar} />
+
+                {item.name === "You" && (!item.stories || item.stories.length === 0) && (
+                  <Pressable onPress={handleStory} style={styles.addButton}>
+                    <Text style={styles.addText}>+</Text>
+                  </Pressable>
+                )}
+              </View>
+
+              <Text style={styles.username} numberOfLines={1}>
+                {item.name}
+              </Text>
+            </Pressable>
+          )}
+        />
+      </View>
+    );
 }
 
 export default Stories;

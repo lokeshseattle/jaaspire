@@ -25,7 +25,22 @@ export default function AppLayout() {
       />
 
       <Stack.Screen
-        name="story-viewer"
+        name="story/[username]"
+        options={{
+          // presentation: "fullScreenModal",
+          animation: "fade",
+          headerShown: false,
+        }}
+      />
+
+      <Stack.Screen
+        name="user/[username]"
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="story-editor"
         options={{
           headerShown: false,
           // Present as a modal that comes up from the bottom and fades
