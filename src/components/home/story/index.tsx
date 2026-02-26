@@ -3,13 +3,13 @@ import { Colors } from "@/src/constants/theme";
 import { useGetProfile } from "@/src/features/profile/profile.hooks";
 import { useGetAllStories } from "@/src/features/story/story.hooks";
 import { useTheme } from "@/src/theme/ThemeProvider";
+import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Image,
   Linking,
   Pressable,
   StyleSheet,
@@ -91,11 +91,12 @@ function Stories() {
   const handleStory = () => {
     openMediaPicker({
       mediaTypes: ["images", "videos"],
+      allowsEditing: false,
       onChange: (file) => {
-        // router.push({
-        //   pathname: "/story-editor",
-        //   params: { uri: file.uri },
-        // });
+        router.push({
+          pathname: "/story-editor",
+          params: { uri: file.uri },
+        });
         console.log(file);
       },
     });
@@ -134,49 +135,54 @@ function Stories() {
     } as any);
   }
 
-  if (storiesQuery.isSuccess)
-    return (
-      <View style={styles.container}>
-        <FlatList
-          data={displayStories}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          keyExtractor={(item) => item.username}
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() =>
-                item.stories && item.stories.length > 0
-                  ? openStory(item.username)
-                  : null
-              }
-              style={styles.storyItem}
+  return (
+    <View style={styles.container}>
+      <FlatList
+        data={displayStories}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        keyExtractor={(item) => item.username}
+        renderItem={({ item }) => (
+          <Pressable
+            onPress={() =>
+              item.stories && item.stories.length > 0
+                ? openStory(item.username)
+                : null
+            }
+            style={styles.storyItem}
+          >
+            <View
+              style={[
+                styles.avatarWrapper,
+                item.is_viewed === 1 ||
+                (item.stories && item.stories.length === 0)
+                  ? { borderColor: theme.colors.textSecondary }
+                  : { borderColor: Colors.primaryColor },
+                item.stories &&
+                  item.stories.length === 0 && { borderColor: "transparent" },
+              ]}
             >
-              <View
-                style={[
-                  styles.avatarWrapper,
-                  item.is_viewed === 1 || (item.stories && item.stories.length === 0)
-                    ? { borderColor: theme.colors.textSecondary }
-                    : { borderColor: Colors.primaryColor },
-                  item.stories && item.stories.length === 0 && { borderColor: "transparent" },
-                ]}
-              >
-                <Image source={{ uri: item.avatar }} style={styles.avatar} />
+              <Image
+                cachePolicy={"disk"}
+                source={{ uri: item.avatar }}
+                style={styles.avatar}
+              />
 
-                {item.name === "You" && (!item.stories || item.stories.length === 0) && (
-                  <Pressable onPress={handleStory} style={styles.addButton}>
-                    <Text style={styles.addText}>+</Text>
-                  </Pressable>
-                )}
-              </View>
+              {item.name === "You" && (
+                <Pressable onPress={handleStory} style={styles.addButton}>
+                  <Text style={styles.addText}>+</Text>
+                </Pressable>
+              )}
+            </View>
 
-              <Text style={styles.username} numberOfLines={1}>
-                {item.name}
-              </Text>
-            </Pressable>
-          )}
-        />
-      </View>
-    );
+            <Text style={styles.username} numberOfLines={1}>
+              {item.name}
+            </Text>
+          </Pressable>
+        )}
+      />
+    </View>
+  );
 }
 
 export default Stories;

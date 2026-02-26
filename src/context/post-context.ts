@@ -3,8 +3,9 @@ import { createContext, useContext } from "react";
 
 type PostContextType = {
   post: PostItem;
-  //   isLiked: boolean;
-  //   toggleLike: () => void;
+  isLiked: boolean;
+  toggleLike: () => void;
+  onPressComments: () => void;
 };
 
 const PostContext = createContext<PostContextType | null>(null);

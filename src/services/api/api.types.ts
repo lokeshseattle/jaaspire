@@ -290,3 +290,56 @@ export type StoryImageUpload = {
   };
   trim_story: string;
 };
+
+export type TComment = {
+  id: number
+  message: string
+  user: {
+    id: number
+    name: string
+    username: string
+    avatar: string
+    verified_user: boolean
+    story_status: {
+      has_stories: boolean
+      all_viewed: boolean
+      story_count: number
+    }
+  }
+  reactions: number
+  replies: Array<{
+    id: number
+    message: string
+    user: {
+      id: number
+      name: string
+      username: string
+      avatar: string
+      verified_user: boolean
+      story_status: {
+        has_stories: boolean
+        all_viewed: boolean
+        story_count: number
+      }
+    }
+    reactions: number
+    created_at: string
+  }>
+  reply_count: number
+  created_at: string
+}
+
+export type CommentsResponse = {
+  success: boolean
+  message: string
+  data: {
+    comments: Array<TComment>
+    pagination: {
+      current_page: number
+      last_page: number
+      per_page: number
+      total: number
+      has_more: boolean
+    }
+  }
+}

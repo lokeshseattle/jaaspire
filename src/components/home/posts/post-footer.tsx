@@ -15,7 +15,8 @@ const PostFooter = () => {
 export default PostFooter;
 
 const PostActions = () => {
-  const { post } = usePost();
+  const { isLiked, toggleLike, post } = usePost();
+  // const isLikedByUser = post.user_reaction === "love";
 
   const loveCount = post.reactions.find((r) => r.name === "love")?.count ?? 0;
 
@@ -29,7 +30,7 @@ const PostActions = () => {
             gap: 4,
           }}
         >
-          <Heart />
+          <Heart isLiked={isLiked} onPress={toggleLike} />
           {loveCount > 0 && <Text>{loveCount}</Text>}
         </View>
         <View
@@ -51,12 +52,31 @@ const PostActions = () => {
   );
 };
 
-const Heart = () => {
-  return <Feather name="heart" size={24} style={styles.icon} />;
+const Heart = ({ isLiked, onPress }: {
+  isLiked: boolean;
+  onPress: () => void;
+}) => {
+  return (
+    <Pressable onPress={onPress}>
+      <FontAwesome
+        name={isLiked ? "heart" : "heart-o"}
+        size={24}
+        style={[
+          styles.icon,
+          { color: isLiked ? "#ff3040" : "#000" },
+        ]}
+      />
+    </Pressable>
+  );
 };
 
 const Comments = () => {
-  return <Feather name="message-circle" size={24} style={styles.icon} />;
+  const { onPressComments } = usePost();
+  return (
+    <Pressable onPress={onPressComments}>
+      <Feather name="message-circle" size={24} style={styles.icon} />
+    </Pressable>
+  );
 };
 
 const Tip = () => {
@@ -76,6 +96,7 @@ const Views = () => {
 ========================= */
 
 import { usePost } from "@/src/context/post-context";
+import { FontAwesome } from "@expo/vector-icons";
 import { useState } from "react";
 import { Animated, Pressable } from "react-native";
 

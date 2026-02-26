@@ -14,25 +14,21 @@ export default function StoryMedia({
   onVideoLoad,
   paused = false,
 }: StoryMediaProps) {
-  // ✅ ALWAYS call hook
-  const player = useVideoPlayer(story.type === "video" ? story.uri : null);
+  const { type, uri } = story;
 
-  // Handle playback
+  // ✅ Always called, never conditional
+  const player = useVideoPlayer(type === "video" ? uri : null);
+
+  // Video play / pause control
   useEffect(() => {
-    if (!player) return;
+    if (!player || type !== "video") return;
 
-    if (story.type === "video") {
-      if (paused) {
-        player.pause();
-      } else {
-        player.play();
-      }
-    }
-  }, [player, paused, story.type]);
+    paused ? player.pause() : player.play();
+  }, [player, paused, type]);
 
-  // Get duration once ready
+  // Video duration listener
   useEffect(() => {
-    if (!player || story.type !== "video") return;
+    if (!player || type !== "video") return;
 
     const sub = player.addListener("statusChange", (status) => {
       if (status.status === "readyToPlay") {
@@ -40,31 +36,24 @@ export default function StoryMedia({
       }
     });
 
-    return () => {
-      sub.remove();
-    };
-  }, [player, story.type]);
+    return () => sub.remove();
+  }, [player, type, onVideoLoad]);
 
-  // Prefetch images
+  // Image prefetch
   useEffect(() => {
-    if (story.type === "image") {
-      Image.prefetch(story.uri);
+    if (type === "image") {
+      Image.prefetch(uri);
     }
-  }, [story]);
+  }, [type, uri]);
 
-  if (story.type === "video" && player) {
+  // Render
+  if (type === "video" && player) {
     return (
       <VideoView player={player} style={styles.media} contentFit="cover" />
     );
   }
 
-  return (
-    <Image
-      source={{ uri: story.uri }}
-      style={styles.media}
-      resizeMode="cover"
-    />
-  );
+  return <Image source={{ uri }} style={styles.media} resizeMode="cover" />;
 }
 
 const styles = StyleSheet.create({

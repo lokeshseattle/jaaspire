@@ -1,3 +1,4 @@
+import { queryClient } from "@/src/lib/query-client";
 import { apiClient } from "@/src/services/api/api.client";
 import {
   PossibleErrorResponse,
@@ -12,7 +13,6 @@ import {
   useQuery,
   UseQueryResult,
 } from "@tanstack/react-query";
-import { ImagePickerAsset } from "expo-image-picker";
 
 export const useGetStoryByUsername = (
   username: string,
@@ -48,6 +48,9 @@ export const useDeleteStory = (): UseMutationResult<
   return useMutation({
     mutationFn: (payload) =>
       apiClient.delete(`/stories/${payload.id}`).then((d) => d.data),
+    onSuccess: () => {
+      queryClient.refetchQueries({ queryKey: ["story"] });
+    },
   });
 };
 
@@ -65,18 +68,18 @@ export const useGetStoryViewers = (
 export const usePostStoryImage = (): UseMutationResult<
   StoryImageUpload,
   PossibleErrorResponse,
-  ImagePickerAsset
+  { uri: string }
 > => {
   return useMutation({
-    mutationFn: async (image: ImagePickerAsset) => {
+    mutationFn: async (image: { uri: string }) => {
       const formData = new FormData();
 
       formData.append("file", {
         uri: image.uri,
-        name: image.fileName ?? "photo.jpg",
-        type: image.mimeType ?? "image/jpeg",
+        name: "photo.png",
+        type: "image/jpeg",
       } as any);
-      const { data } = await apiClient.post("/stories", image);
+      const { data } = await apiClient.post("/stories", formData);
       return data;
     },
   });

@@ -7,6 +7,7 @@ import NetworkListener from "@/src/components/toast/NetworkListener";
 import { ToastProvider } from "@/src/components/toast/ToastProvider";
 import { queryClient } from "@/src/lib/query-client";
 import { ActionSheetProvider } from "@expo/react-native-action-sheet";
+import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { Stack } from "expo-router";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -33,8 +34,8 @@ export default function RootLayout() {
                   // only persist queries marked with meta.persist
                   if (!query.meta?.persist) return false;
 
-                  // only persist if we have data (success state)
-                  return query.state.status === "success";
+                  //As long as there is something useful to show, persist it.
+                  return !!query.state.data;
                 },
               },
             }}
@@ -42,13 +43,15 @@ export default function RootLayout() {
           >
             <KeyboardProvider>
               <GestureHandlerRootView style={{ flex: 1 }}>
-                <Stack screenOptions={{ headerShown: false }}>
-                  <Stack.Screen name="(app)" />
-                  <Stack.Screen
-                    name="(auth)"
-                    options={{ animation: "slide_from_left" }}
-                  />
-                </Stack>
+                <BottomSheetModalProvider>
+
+                  <Stack screenOptions={{ headerShown: false }}>
+                    <Stack.Screen name="(app)" />
+                    <Stack.Screen
+                      name="(auth)"
+                      options={{ animation: "slide_from_left" }}
+                    />
+                  </Stack></BottomSheetModalProvider>
               </GestureHandlerRootView>
             </KeyboardProvider>
           </PersistQueryClientProvider>

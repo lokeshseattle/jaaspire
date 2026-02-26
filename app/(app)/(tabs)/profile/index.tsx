@@ -8,7 +8,9 @@ import { getMediaType } from "@/src/utils/helpers";
 import { FlashList } from "@shopify/flash-list";
 import { useState } from "react";
 
-import { Dimensions, Image, StyleSheet, View } from "react-native";
+import { Image } from "expo-image";
+
+import { Dimensions, StyleSheet, View } from "react-native";
 
 const { width } = Dimensions.get("window");
 const ITEM_SIZE = width / 3;
@@ -23,7 +25,11 @@ export default function ProfileScreen() {
   const userFeedQuery = useGetUserFeedQuery(username, activeTab);
 
   const renderItem = ({ item }: any) => (
-    <Image source={{ uri: item.image }} style={styles.gridImage} />
+    <Image
+      cachePolicy={"disk"}
+      source={{ uri: item.image }}
+      style={styles.gridImage}
+    />
   );
 
   const onRefresh = () => {

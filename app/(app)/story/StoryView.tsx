@@ -3,8 +3,10 @@ import {
   useDeleteStory,
   useGetStoryByUsername,
 } from "@/src/features/story/story.hooks";
+import { queryClient } from "@/src/lib/query-client";
+import { router } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Alert, StyleSheet, View } from "react-native";
 import Animated, {
   cancelAnimation,
   Easing,
@@ -118,7 +120,50 @@ const StoryView = ({ username, onClose, isPanning = false }: TProps) => {
   }, [isPaused, isPanning]);
 
   const handleDeleteStory = () => {
-    mutate({ id: currentStory.id });
+    if (!currentStory?.id) return;
+
+    // Pause story immediately
+    setIsPaused(true);
+
+    const isLastStory: boolean = safeIndex === 0 && stories.length === 1;
+
+    Alert.alert(
+      "Delete Story",
+      "Are you sure you want to delete this story? This action cannot be undone.",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+          onPress: () => {
+            setIsPaused(false); // Resume if cancelled
+          },
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            mutate(
+              { id: currentStory.id },
+              {
+                onSuccess: () => {
+                  //navigate back if last story deleted and refresh the stories
+                  if (isLastStory) {
+                    router.back();
+                    queryClient.invalidateQueries({
+                      queryKey: ["all_stories"],
+                    });
+                  }
+                },
+                onSettled: () => {
+                  setIsPaused(false); // Resume after delete finishes
+                },
+              },
+            );
+          },
+        },
+      ],
+      { cancelable: true },
+    );
   };
 
   if (isLoading) {

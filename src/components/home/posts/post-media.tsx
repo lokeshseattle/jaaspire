@@ -57,12 +57,13 @@ function PostMedia({ type, media, isVisible, isLiked, onLike }: Props) {
   };
 
   const handleDoubleTap = () => {
-    // if (isLiked) return; // 🚫 prevent spam
-
-    onLike(); // optimistic update
+    triggerHeartAnimation();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    triggerHeartAnimation();
+    if (isLiked) return; //prevent spam
+
+    onLike(); // optimistic update
+
   };
 
   const player = useVideoPlayer(type === "video" ? media : null, (p) => {
@@ -122,9 +123,13 @@ function PostMedia({ type, media, isVisible, isLiked, onLike }: Props) {
           />
         ) : player ? (
           <Pressable
-            onLongPress={() => player?.pause()}
-            onPressOut={() => player?.play()}
-            style={{ flex: 1 }}
+            onPress={handleTap}
+            onLongPress={() => {
+              if (type === "video") player?.pause();
+            }}
+            onPressOut={() => {
+              if (type === "video") player?.play();
+            }}
           >
             <VideoView
               style={[styles.media, { aspectRatio: 9 / 14 }]}
