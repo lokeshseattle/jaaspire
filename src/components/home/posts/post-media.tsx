@@ -1,9 +1,16 @@
+// src/components/home/posts/PostMedia.tsx
+import { useManagedVideoPlayer } from "@/hooks/use-video-player";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
-import { VideoView, useVideoPlayer } from "expo-video";
-import { memo, useEffect, useRef, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { VideoView } from "expo-video";
+import { memo, useRef } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  View,
+} from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -12,16 +19,27 @@ import Animated, {
 } from "react-native-reanimated";
 
 interface Props {
+  postId: number;
   type: string;
   media: string;
+  thumbnail?: string;
   isVisible: boolean;
   isLiked: boolean;
   onLike: () => void;
 }
 
-function PostMedia({ type, media, isVisible, isLiked, onLike }: Props) {
+function PostMedia({
+  postId,
+  type,
+  media,
+  thumbnail,
+  isVisible,
+  isLiked,
+  onLike,
+}: Props) {
   const lastTap = useRef<number | null>(null);
 
+  // Animation values
   const scale = useSharedValue(0);
   const opacity = useSharedValue(0);
 
@@ -30,27 +48,32 @@ function PostMedia({ type, media, isVisible, isLiked, onLike }: Props) {
     opacity: opacity.value,
   }));
 
+  // Video player hook
+  const {
+    player,
+    isBuffering,
+    isPlaying,
+    isMuted,
+    togglePlayPause,
+    toggleMute,
+    pause,
+    play,
+  } = useManagedVideoPlayer(
+    postId,
+    type === "video" ? media : null,
+    isVisible
+  );
+
   const triggerHeartAnimation = () => {
     scale.value = 0.6;
     opacity.value = 1;
-
-    // Faster, tighter pop
     scale.value = withSpring(
       1.3,
-      {
-        damping: 8,
-        stiffness: 300,
-        mass: 0.5,
-      },
+      { damping: 8, stiffness: 300, mass: 0.5 },
       () => {
-        scale.value = withSpring(1, {
-          damping: 10,
-          stiffness: 250,
-        });
-      },
+        scale.value = withSpring(1, { damping: 10, stiffness: 250 });
+      }
     );
-
-    // Shorter visible time
     setTimeout(() => {
       opacity.value = withTiming(0, { duration: 300 });
     }, 350);
@@ -59,61 +82,43 @@ function PostMedia({ type, media, isVisible, isLiked, onLike }: Props) {
   const handleDoubleTap = () => {
     triggerHeartAnimation();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    if (isLiked) return; //prevent spam
-
-    onLike(); // optimistic update
-
-  };
-
-  const player = useVideoPlayer(type === "video" ? media : null, (p) => {
-    if (!p) return;
-    p.loop = true;
-    p.muted = true;
-  });
-
-  const [isPlaying, setIsPlaying] = useState(true);
-  const [isMuted, setIsMuted] = useState(true);
-
-  const toggleAudio = () => {
-    if (!player) return;
-    const newMutedState = !isMuted;
-    player.muted = newMutedState;
-    setIsMuted(newMutedState);
-  };
-
-  const handleVideoPress = () => {
-    if (!player) return;
-
-    if (isPlaying) player.pause();
-    else player.play();
-
-    setIsPlaying(!isPlaying);
+    if (!isLiked) onLike();
   };
 
   const handleTap = () => {
     const now = Date.now();
 
     if (lastTap.current && now - lastTap.current < 300) {
+      // Double tap - like
       handleDoubleTap();
     } else {
-      if (type === "video") handleVideoPress();
+      // Single tap - toggle play/pause
+      // if (type === "video") {
+      //   togglePlayPause();
+      // }
     }
 
     lastTap.current = now;
   };
 
-  useEffect(() => {
-    if (type !== "video" || !player) return;
+  // Long press to pause (like Instagram)
+  const handleLongPressIn = () => {
+    if (type === "video") {
+      pause();
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
 
-    if (isVisible) player.play();
-    else player.pause();
-  }, [isVisible, player, type]);
+  const handleLongPressOut = () => {
+    if (type === "video") {
+      play();
+    }
+  };
 
   return (
-    <Pressable onPress={handleTap} onLongPress={toggleAudio}>
-      <View style={styles.container}>
-        {type === "image" ? (
+    <View style={styles.container}>
+      {type === "image" ? (
+        <Pressable onPress={handleTap}>
           <Image
             source={{ uri: media }}
             style={[styles.media, { aspectRatio: 4 / 5 }]}
@@ -121,33 +126,49 @@ function PostMedia({ type, media, isVisible, isLiked, onLike }: Props) {
             cachePolicy="disk"
             transition={200}
           />
-        ) : player ? (
-          <Pressable
-            onPress={handleTap}
-            onLongPress={() => {
-              if (type === "video") player?.pause();
-            }}
-            onPressOut={() => {
-              if (type === "video") player?.play();
-            }}
-          >
-            <VideoView
-              style={[styles.media, { aspectRatio: 9 / 14 }]}
-              player={player}
-              contentFit="cover"
-              nativeControls={false}
-              allowsPictureInPicture={false}
-            />
+        </Pressable>
+      ) : (
+        <Pressable
+          onPress={handleTap}
+          onLongPress={handleLongPressIn}
+          onPressOut={handleLongPressOut}
+          delayLongPress={200}
+        >
+          <View style={[styles.media, { aspectRatio: 9 / 14 }]}>
+            {/* Thumbnail while loading */}
+            {thumbnail && isBuffering && (
+              <Image
+                source={{ uri: thumbnail }}
+                style={StyleSheet.absoluteFill}
+                contentFit="cover"
+              />
+            )}
+
+            {/* Video */}
+            {player && (
+              <VideoView
+                style={StyleSheet.absoluteFill}
+                player={player}
+                contentFit="cover"
+                nativeControls={false}
+                allowsPictureInPicture={false}
+              />
+            )}
+
+            {/* Buffering indicator */}
+            {isBuffering && (
+              <View style={styles.centerOverlay}>
+                <ActivityIndicator color="white" size="large" />
+              </View>
+            )}
+
+            {/* Mute button */}
             <Pressable
-              onPress={toggleAudio}
-              style={{
-                position: "absolute",
-                bottom: 20,
-                right: 16,
-                backgroundColor: "rgba(0,0,0,0.4)",
-                padding: 6,
-                borderRadius: 20,
+              onPress={(e) => {
+                e.stopPropagation?.();
+                toggleMute();
               }}
+              style={styles.muteButton}
             >
               <Ionicons
                 name={isMuted ? "volume-mute" : "volume-high"}
@@ -155,25 +176,21 @@ function PostMedia({ type, media, isVisible, isLiked, onLike }: Props) {
                 color="white"
               />
             </Pressable>
-          </Pressable>
-        ) : (
-          <View style={[styles.media, styles.placeholder]} />
-        )}
+          </View>
+        </Pressable>
+      )}
 
-        {/* HEART OVERLAY */}
-        <Animated.View style={[styles.heartContainer, animatedStyle]}>
-          <Ionicons
-            name="heart"
-            size={120}
-            color={isLiked ? "#ff3040" : "white"}
-          />
-        </Animated.View>
-      </View>
-    </Pressable>
+      {/* Heart overlay */}
+      <Animated.View style={[styles.heartContainer, animatedStyle]} pointerEvents="none">
+        <Ionicons
+          name="heart"
+          size={120}
+          color={isLiked ? "#ff3040" : "white"}
+        />
+      </Animated.View>
+    </View>
   );
 }
-
-export default memo(PostMedia);
 
 const styles = StyleSheet.create({
   container: {
@@ -181,15 +198,29 @@ const styles = StyleSheet.create({
   },
   media: {
     width: "100%",
-    // height: "100%",
-    backgroundColor: "black",
+    backgroundColor: "#000",
   },
-  placeholder: {
-    backgroundColor: "#1a1a1a",
+  centerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.3)",
+  },
+  muteButton: {
+    position: "absolute",
+    bottom: 16,
+    right: 16,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    padding: 8,
+    borderRadius: 20,
   },
   heartContainer: {
     position: "absolute",
-    alignSelf: "center",
-    top: "35%",
+    top: "50%",
+    left: "50%",
+    marginLeft: -60,
+    marginTop: -60,
   },
 });
+
+export default memo(PostMedia);

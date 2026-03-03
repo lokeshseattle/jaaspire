@@ -7,6 +7,7 @@ const ProfileLayout = () => {
       <Stack.Screen name="index" />
       <Stack.Screen name="edit-profile" />
       <Stack.Screen name="profile-crop" />
+      <Stack.Screen name="settings" />
     </Stack>
   );
 };

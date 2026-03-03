@@ -3,7 +3,7 @@ import { useCommentsSheet } from "@/hooks/use-comment-sheet";
 import { CommentsBottomSheet } from "@/src/components/comments/CommentsBottomSheet";
 import Post from "@/src/components/home/posts/post";
 import Stories from "@/src/components/home/story";
-import { useGetUserFeedQuery } from "@/src/features/post/post.hooks";
+import { useGetFeedQuery } from "@/src/features/post/post.hooks";
 import { useGetAllStories } from "@/src/features/story/story.hooks";
 import type { Post as TPOST } from "@/src/services/api/api.types";
 import { FlashList } from "@shopify/flash-list";
@@ -19,7 +19,7 @@ export default function Home() {
   const { bottomSheetRef, selectedPostId, openComments, onDismiss } = useCommentsSheet();
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isSuccess, refetch, isRefetching } =
-    useGetUserFeedQuery("style_insider");
+    useGetFeedQuery();
 
   const { refetch: storyRefetch } = useGetAllStories();
 

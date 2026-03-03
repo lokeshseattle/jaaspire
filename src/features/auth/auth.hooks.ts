@@ -1,4 +1,5 @@
 import { asyncStoragePersister } from "@/src/lib/persister";
+import { queryClient } from "@/src/lib/query-client";
 import { tokenStorage } from "@/src/lib/secure-storage";
 import { apiClient } from "@/src/services/api/api.client";
 import {
@@ -12,11 +13,11 @@ import {
   useMutation,
   UseMutationResult,
   useQuery,
-  useQueryClient,
-  UseQueryResult,
+  UseQueryResult
 } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { useCallback } from "react";
+import { Alert } from "react-native";
 import { useAuthStore } from "./auth.store";
 
 export const useLogin = (): UseMutationResult<
@@ -42,12 +43,7 @@ export const useRegister = (): UseMutationResult<
   });
 };
 
-export const useLogout = () => {
-  return useMutation({
-    mutationFn: (d) =>
-      apiClient.post("/api/v1/auth/logout", d).then((d) => d.data),
-  });
-};
+
 
 export const useAuth = () => {
   const accessToken = useAuthStore((s) => s.accessToken);
@@ -55,6 +51,21 @@ export const useAuth = () => {
   const isLoading = useAuthStore((s) => s.isLoading);
   const setLoading = useAuthStore((s) => s.setLoading);
   const setToken = useAuthStore((s) => s.setToken);
+
+  // const logoutMutation = useMutation({
+  //   mutationFn: () =>
+  //     apiClient.post("/api/v1/auth/logout").then((res) => res.data),
+  //   onSuccess: async () => {
+  //     await tokenStorage.remove();
+  //     setToken(null);
+  //     queryClient.clear();
+  //     await asyncStoragePersister.removeClient();
+  //     router.replace("/(auth)/login");
+  //   },
+  //   onError: () => {
+  //     Alert.alert("Error", "Something went wrong. Try restarting the app.");
+  //   },
+  // });
 
   // Restore session on app start
   const restoreSession = useCallback(async (): Promise<void> => {
@@ -87,14 +98,18 @@ export const useAuth = () => {
 
   // Logout
   const logout = useCallback(async (): Promise<void> => {
-    const queryClient = useQueryClient();
-    await tokenStorage.remove();
-    setToken(null);
-    queryClient.clear();
-    await asyncStoragePersister.removeClient();
-    router.replace("/(auth)/login");
-  }, [setToken]);
+    try {
+      await apiClient.post("/auth/logout");
 
+      await tokenStorage.remove();
+      setToken(null);
+      queryClient.clear();
+      await asyncStoragePersister.removeClient();
+      router.replace("/(auth)/login");
+    } catch (error) {
+      Alert.alert("Error", "Something went wrong. Try restarting the app.");
+    }
+  }, [setToken]);
   return {
     accessToken,
     isAuthenticated,

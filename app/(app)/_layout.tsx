@@ -48,6 +48,8 @@ export default function AppLayout() {
           animation: "fade",
         }}
       />
+
+      <Stack.Screen name="followers_following" />
     </Stack>
     // </Stack>
   );

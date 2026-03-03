@@ -25,6 +25,7 @@ import {
   useUpdateProfile,
 } from "@/src/features/profile/profile.hooks";
 import { UpdateProfileRequest } from "@/src/services/api/api.types";
+import { setServerErrors } from "@/src/utils/form-errors";
 import { getDirtyValues } from "@/src/utils/helpers";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as ImagePicker from "expo-image-picker";
@@ -36,16 +37,29 @@ type EditProfileFormValues = {
   name: string;
   bio: string;
   birthdate: Date | undefined;
-  gender: string;
-  pronoun: string;
-  country: string;
+  gender_id: string;
+  gender_pronoun: string;
+  country_id: string;
   location: string;
   website: string;
 };
 
+const FIELD_MAP = {
+  email: "email",
+  username: "username",
+  name: "name",
+  bio: "bio",
+  birthdate: "birthdate",
+  gender: "gender_id",
+  pronoun: "gender_pronoun",
+  country: "country_id",
+  location: "location",
+  website: "website",
+};
+
 export default function EditProfileScreen() {
   const toast = useToast();
-  const theme = useTheme();
+  const { theme } = useTheme();
   const styles = createStyles(theme);
   const updateProfile = useUpdateProfile();
 
@@ -58,16 +72,16 @@ export default function EditProfileScreen() {
 
   const countryOptions = countryQuery.isSuccess
     ? countryQuery.data.data.countries.map((item) => ({
-        label: item.name,
-        value: item.id.toString(),
-      }))
+      label: item.name,
+      value: item.id.toString(),
+    }))
     : [];
 
   const genderOptions = genderQuery.isSuccess
     ? genderQuery.data.data.genders.map((item) => ({
-        label: item.gender_name,
-        value: item.id.toString(),
-      }))
+      label: item.gender_name,
+      value: item.id.toString(),
+    }))
     : [];
 
   const profile = data?.data;
@@ -104,6 +118,7 @@ export default function EditProfileScreen() {
     control,
     handleSubmit,
     reset,
+    setError,
     formState: { dirtyFields, isDirty },
   } = useForm<EditProfileFormValues>({
     defaultValues: {
@@ -112,9 +127,9 @@ export default function EditProfileScreen() {
       name: "",
       bio: "",
       birthdate: undefined,
-      gender: "",
-      pronoun: "",
-      country: "",
+      gender_id: "",
+      gender_pronoun: "",
+      country_id: "",
       location: "",
       website: "",
     },
@@ -128,9 +143,9 @@ export default function EditProfileScreen() {
         name: profile.name ?? "",
         bio: profile.bio ?? "",
         birthdate: profile.birthdate ? new Date(profile.birthdate) : undefined,
-        gender: profile.gender_id?.toString() ?? "",
-        pronoun: profile.gender_pronoun ?? "",
-        country: profile.country_id?.toString() ?? "",
+        gender_id: profile.gender_id?.toString() ?? "",
+        gender_pronoun: profile.gender_pronoun ?? "",
+        country_id: profile.country_id?.toString() ?? "",
         location: profile.location ?? "",
         website: profile.website ?? "",
       });
@@ -154,7 +169,7 @@ export default function EditProfileScreen() {
         router.back();
       },
       onError: (e) => {
-        toast.trigger(e.message || "Unexpected error occured");
+        setServerErrors<EditProfileFormValues>(e.data?.errors, setError, FIELD_MAP);
       },
     });
   };
@@ -316,7 +331,7 @@ export default function EditProfileScreen() {
 
             <FormInput
               control={control}
-              name="gender"
+              name="gender_id"
               label="Gender"
               pickerType="select"
               options={genderOptions}
@@ -325,7 +340,7 @@ export default function EditProfileScreen() {
             <FormInput
               control={control}
               pickerType="select"
-              name="pronoun"
+              name="gender_pronoun"
               label="Pronoun"
               options={[
                 { label: "He/Him", value: "he/him" },
@@ -336,7 +351,7 @@ export default function EditProfileScreen() {
 
             <FormInput
               control={control}
-              name="country"
+              name="country_id"
               pickerType="select"
               label="Country"
               options={countryOptions}

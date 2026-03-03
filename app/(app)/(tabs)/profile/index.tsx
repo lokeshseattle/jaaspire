@@ -16,7 +16,7 @@ const { width } = Dimensions.get("window");
 const ITEM_SIZE = width / 3;
 
 export default function ProfileScreen() {
-  const theme = useTheme();
+  const { theme } = useTheme();
   const styles = createStyles(theme);
 
   const { refetch, data } = useGetProfile();

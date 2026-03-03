@@ -34,6 +34,7 @@ export default function Post({ isVisible, onPressComments, ...post }: Props) {
     >
       <PostHeader />
       <PostMedia
+        postId={post.id}
         media={attachments[0]?.path}
         type={getMediaType(attachments[0]?.type)}
         isVisible={isVisible}

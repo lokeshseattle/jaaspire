@@ -7,7 +7,7 @@ import axios, {
 } from "axios";
 import { normalizeApiError } from "./api.error";
 
-const baseURL = "https://jaaspire.com/api/v1";
+const baseURL = "https://stgx.jaaspire.com/api/v1";
 
 // Logger helper
 const logger = {

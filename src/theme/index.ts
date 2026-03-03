@@ -1,5 +1,24 @@
 import { Platform } from "react-native";
 
+type ThemeShape = {
+  colors: {
+    background: string;
+    surface: string;
+    card: string;
+    textPrimary: string;
+    textSecondary: string;
+    border: string;
+    tint: string;
+    primary: string;
+    icon: string;
+    tabIconDefault: string;
+    tabIconSelected: string;
+  };
+  spacing: typeof spacing;
+  radius: typeof radius;
+  typography: typeof typography;
+};
+
 const spacing = {
   xs: 4,
   sm: 8,
@@ -32,7 +51,7 @@ const typography = {
   }),
 } as const;
 
-const lightTheme = {
+const lightTheme: ThemeShape = {
   colors: {
     background: "#FFFFFF",
     surface: "#F9FAFB",
@@ -51,7 +70,7 @@ const lightTheme = {
   typography,
 } as const;
 
-const darkTheme = {
+const darkTheme: ThemeShape = {
   colors: {
     background: "#0F172A",
     surface: "#111827",
@@ -75,5 +94,5 @@ export const appThemes = {
   dark: darkTheme,
 };
 
-export type AppTheme = typeof lightTheme;
-export type ThemeMode = keyof typeof appThemes;
+export type AppTheme = ThemeShape;
+export type ThemeMode = "light" | "dark" | "system";

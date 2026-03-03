@@ -1,15 +1,14 @@
 import { ThemedText as Text } from "@/src/components/themed-text";
-import { forceLogout } from "@/src/features/auth/auth.utils";
 import { useGetProfile } from "@/src/features/profile/profile.hooks";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
-import { Feather, Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { Feather } from "@expo/vector-icons";
+import { Link, router } from "expo-router";
 import React, { useState } from "react";
 import { Image, Pressable, StyleSheet, View } from "react-native";
 
 const ProfileHeader = () => {
-  const theme = useTheme();
+  const { theme } = useTheme();
   const styles = createStyles(theme);
 
   const { data, isLoading, isSuccess, refetch } = useGetProfile();
@@ -19,6 +18,15 @@ const ProfileHeader = () => {
     "posts",
   );
 
+  const navigateToFollowersFollowing = (type: "followers" | "following") => {
+    router.push({
+      pathname: "/(app)/followers-following",
+      params: {
+        type,
+      },
+    });
+  };
+
   if (profile)
     return (
       <>
@@ -26,11 +34,13 @@ const ProfileHeader = () => {
         <View style={styles.header}>
           <Text style={styles.username}>{profile.username}</Text>
           <View style={styles.headerIcons}>
-            <Pressable onPress={forceLogout}>
+            {/* <Pressable onPress={forceLogout}>
               <Text>Logout</Text>
             </Pressable>
-            <Ionicons name="add-circle-outline" size={24} />
-            <Feather name="menu" size={24} style={{ marginLeft: 16 }} />
+            <Ionicons name="add-circle-outline" size={24} /> */}
+            <Link href="/profile/settings">
+              <Feather name="menu" size={24} style={{ marginLeft: 16 }} />
+            </Link>
           </View>
         </View>
 
@@ -49,15 +59,19 @@ const ProfileHeader = () => {
               <Text style={styles.statLabel}>Posts</Text>
             </View>
 
-            <View style={styles.stat}>
+            {/* <Link href="/(app)/followers-following?type=followers" asChild> */}
+            <Pressable onPress={() => navigateToFollowersFollowing("followers")} style={styles.stat}>
               <Text style={styles.statNumber}>{profile.counts.followers}</Text>
               <Text style={styles.statLabel}>{`Followers`}</Text>
-            </View>
+            </Pressable>
+            {/* </Link> */}
 
-            <View style={styles.stat}>
+            {/* <Link href="/(app)/followers-following?type=following" asChild> */}
+            <Pressable onPress={() => navigateToFollowersFollowing("following")} style={styles.stat}>
               <Text style={styles.statNumber}>{profile.counts.following}</Text>
               <Text style={styles.statLabel}>Following</Text>
-            </View>
+            </Pressable>
+            {/* </Link> */}
           </View>
         </View>
 

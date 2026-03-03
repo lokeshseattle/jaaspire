@@ -14,7 +14,7 @@ export const SkeletonBlock = ({
   borderRadius = 8,
   style,
 }: SkeletonBlockProps) => {
-  const theme = useTheme();
+  const { theme } = useTheme();
 
   return (
     <View

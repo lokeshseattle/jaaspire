@@ -20,7 +20,7 @@ export default function StoryAvatar({
   seen = false,
   username,
 }: Props) {
-  const theme = useTheme();
+  const { theme } = useTheme();
   const styles = createStyles(theme);
 
   if (!hasStory) {
@@ -30,12 +30,12 @@ export default function StoryAvatar({
   const gradientColors = seen
     ? [theme.colors.textSecondary, theme.colors.textSecondary]
     : [
-        "#FFD700", // subtle gold
-        theme.colors.tint,
-        theme.colors.primary,
-        theme.colors.tint,
-        "#FFD700",
-      ];
+      "#FFD700", // subtle gold
+      theme.colors.tint,
+      theme.colors.primary,
+      theme.colors.tint,
+      "#FFD700",
+    ];
 
   const navigateToStory = () => {
     router.push({

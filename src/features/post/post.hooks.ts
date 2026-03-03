@@ -1,15 +1,15 @@
 import { queryClient } from "@/src/lib/query-client";
 import { apiClient } from "@/src/services/api/api.client";
-import { FeedResponse } from "@/src/services/api/api.types";
+import { FeedResponse, SinglePostResponse } from "@/src/services/api/api.types";
 import { useInfiniteQuery, useMutation } from "@tanstack/react-query";
 
-export const useGetFeedQuery = () => {
+export const useGetFeedQuery = (postId?: string) => {
   return useInfiniteQuery({
-    queryKey: ["feed"],
+    queryKey: ["feed", postId],
     queryFn: ({ pageParam }) =>
       apiClient
         .get<FeedResponse>("/feed", {
-          params: { page: pageParam },
+          params: { page: pageParam, post_id: postId },
         })
         .then((d) => d.data),
     getNextPageParam: (lastPage) =>
@@ -137,5 +137,22 @@ export const useToggleLikeMutation = () => {
     },
 
 
+  });
+};
+
+export const useGetSinglePost = (postId: string, mode: "explore" | "profile" = "explore") => {
+  return useInfiniteQuery({
+    queryKey: ["single-post", postId, mode],
+    queryFn: ({ pageParam = 1 }) =>
+      apiClient.get<SinglePostResponse>(`/posts/${postId}`, {
+        params: { page: pageParam, mode },
+      }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => {
+      const pagination = lastPage.data.data.recommended.pagination;
+      return pagination.has_more
+        ? pagination.current_page + 1
+        : undefined;
+    },
   });
 };

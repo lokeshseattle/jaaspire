@@ -70,7 +70,7 @@ type FormInputProps<T extends FieldValues> =
 function FormInput<T extends FieldValues>(props: FormInputProps<T>) {
   const { control, name, label, rules, Left, pickerType, placeholder } = props;
 
-  const theme = useTheme();
+  const { theme } = useTheme();
   const styles = createStyles(theme);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
 
@@ -112,10 +112,10 @@ function FormInput<T extends FieldValues>(props: FormInputProps<T>) {
                   >
                     {value
                       ? new Date(value).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "2-digit",
-                          year: "numeric",
-                        })
+                        month: "short",
+                        day: "2-digit",
+                        year: "numeric",
+                      })
                       : placeholder || "Select date"}
                   </Text>
                 </Pressable>

@@ -1,6 +1,8 @@
 import { apiClient } from "@/src/services/api/api.client";
 import {
   CountriesResponse,
+  FollowersResponse,
+  FollowingResponse,
   GendersResponse,
   PossibleErrorResponse,
   ProfileResponse,
@@ -9,6 +11,7 @@ import {
   UpdateProfileResponse,
 } from "@/src/services/api/api.types";
 import {
+  useInfiniteQuery,
   useMutation,
   UseMutationResult,
   useQuery,
@@ -98,6 +101,57 @@ export const useDeleteAvatar = (): UseMutationResult => {
       apiClient.delete("/profile/assets/avatar").then((d) => d.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["profile"] });
+    },
+  });
+};
+
+
+export const useGetFollowersQuery = (username: string, enabled: boolean) => {
+  return useInfiniteQuery({
+    queryKey: ["followers", username],
+    queryFn: async ({ pageParam = 1 }) => {
+      const { data } = await apiClient.get<FollowersResponse>(
+        `users/${username}/followers`,
+        {
+          params: { page: pageParam },
+        }
+      );
+
+      return data;
+    },
+
+    initialPageParam: 1,
+
+    getNextPageParam: (lastPage) => {
+      if (lastPage.data.pagination.has_more) {
+        return lastPage.data.pagination.current_page + 1;
+      }
+      return undefined;
+    },
+  });
+};
+
+export const useGetFollowingQuery = (username: string, enabled: boolean) => {
+  return useInfiniteQuery({
+    queryKey: ["following", username],
+    queryFn: async ({ pageParam = 1 }) => {
+      const { data } = await apiClient.get<FollowingResponse>(
+        `users/${username}/following`,
+        {
+          params: { page: pageParam },
+        }
+      );
+
+      return data;
+    },
+
+    initialPageParam: 1,
+
+    getNextPageParam: (lastPage) => {
+      if (lastPage.data.pagination.has_more) {
+        return lastPage.data.pagination.current_page + 1;
+      }
+      return undefined;
     },
   });
 };

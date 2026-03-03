@@ -19,7 +19,7 @@ import {
 
 function Stories() {
   const router = useRouter();
-  const theme = useTheme();
+  const { theme } = useTheme();
 
   const storiesQuery = useGetAllStories();
 
@@ -155,11 +155,11 @@ function Stories() {
               style={[
                 styles.avatarWrapper,
                 item.is_viewed === 1 ||
-                (item.stories && item.stories.length === 0)
+                  (item.stories && item.stories.length === 0)
                   ? { borderColor: theme.colors.textSecondary }
                   : { borderColor: Colors.primaryColor },
                 item.stories &&
-                  item.stories.length === 0 && { borderColor: "transparent" },
+                item.stories.length === 0 && { borderColor: "transparent" },
               ]}
             >
               <Image

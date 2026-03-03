@@ -101,3 +101,20 @@ export function getDirtyValues<T>(
 
   return result;
 }
+
+
+/**
+ * Determines if an item should be large based on the pattern:
+ * 
+ * Pattern A (index 0-4): Large at position 0 (left)
+ * Pattern B (index 5-9): Large at position 9 (right)
+ * 
+ * Repeats every 10 items
+ */
+export const isLargeItem = (index: number): boolean => {
+  const cycleIndex = index % 10;
+
+  // Pattern A: First item of first 5 is large (position 0)
+  // Pattern B: Last item of next 5 is large (position 9)
+  return cycleIndex === 0 || cycleIndex === 9;
+};

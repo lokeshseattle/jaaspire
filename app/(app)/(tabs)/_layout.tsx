@@ -5,11 +5,11 @@ import { Platform, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const TAB_BAR_HEIGHT = 48;
-const TAB_BAR_PADDING_BOTTOM = Platform.OS === "ios" ? 6 : 12;
+const TAB_BAR_PADDING_BOTTOM = Platform.OS === "ios" ? 24 : 12;
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
-  
+
   return (
     <View style={{ flex: 1, backgroundColor: "white", paddingTop: insets.top }}>
       <Tabs
