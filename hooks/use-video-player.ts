@@ -10,42 +10,84 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export function useManagedVideoPlayer(
     postId: number,
     url: string | null,
-    isVisible: boolean
+    isVisible: boolean,
+    nextPostUrl?: string,
+    nextPostId?: number
 ) {
     const [isReady, setIsReady] = useState(false);
     const [isBuffering, setIsBuffering] = useState(true);
     const [isPlaying, setIsPlaying] = useState(false);
     const [isMuted, setIsMuted] = useState(true);
+    const [player, setPlayer] = useState<VideoPlayer | null>(null);
 
-    // Ref to track latest visibility (avoids stale closure)
+    // Refs to avoid stale closures in event listeners
     const isVisibleRef = useRef(isVisible);
+    const postIdRef = useRef(postId);
+    const urlRef = useRef(url);
+    const playerRef = useRef<VideoPlayer | null>(null);
+
+    // Keep refs in sync
     isVisibleRef.current = isVisible;
+    postIdRef.current = postId;
+    urlRef.current = url;
 
-    // Get or create player
-    const player: VideoPlayer | null = url
-        ? videoManager.getOrCreatePlayer(postId, url)
-        : null;
-
-    // Listen for player events
+    // --- Setup current video player + event listeners in ONE effect ---
+    // This prevents the race condition where player is ready before listener attaches
     useEffect(() => {
-        if (!player) return;
+        if (!url) {
+            setPlayer(null);
+            playerRef.current = null;
+            return;
+        }
 
-        console.log(`🎬 [${postId}] Setting up listeners, visible: ${isVisibleRef.current}`);
+        const currentPostId = postId;
+        const p = videoManager.getOrCreatePlayer(currentPostId, url);
 
-        // Listen to status changes
-        const statusSub = player.addListener(
+        setPlayer(p);
+        playerRef.current = p;
+
+        // Mark as mounted IMMEDIATELY so manager knows not to evict
+        videoManager.mount(currentPostId);
+
+        // --- CHECK INITIAL STATUS (fixes race condition) ---
+        // The player might already be ready if it was preloaded or cached
+        const initialStatus = p.status;
+        console.log(`🎬 [${currentPostId}] Initial status: ${initialStatus}`);
+
+        if (initialStatus === "readyToPlay") {
+            setIsReady(true);
+            setIsBuffering(false);
+            // Auto-play if visible
+            if (isVisibleRef.current) {
+                videoManager.play(currentPostId);
+            }
+        } else if (initialStatus === "loading") {
+            setIsBuffering(true);
+            setIsReady(false);
+        } else {
+            setIsReady(false);
+            setIsBuffering(false);
+        }
+
+        // Sync initial playing state
+        setIsPlaying(p.playing);
+
+        // --- ATTACH LISTENERS ---
+        const statusSub = p.addListener(
             "statusChange",
             ({ status, error }: StatusChangeEventPayload) => {
-                console.log(`📺 [${postId}] Status: ${status}`);
+                // Use ref to get current postId (avoids stale closure)
+                const pid = postIdRef.current;
+
+                console.log(`📺 [${pid}] Status: ${status}`);
 
                 switch (status) {
                     case "readyToPlay":
                         setIsReady(true);
                         setIsBuffering(false);
-                        // Auto-play if visible
-                        if (isVisibleRef.current) {
-                            console.log(`▶️ [${postId}] Ready & visible, playing...`);
-                            videoManager.play(postId);
+                        // Auto-play if this post is currently visible
+                        if (isVisibleRef.current && postIdRef.current === currentPostId) {
+                            videoManager.play(currentPostId);
                         }
                         break;
                     case "loading":
@@ -57,88 +99,102 @@ export function useManagedVideoPlayer(
                         break;
                     case "error":
                         setIsBuffering(false);
-                        console.error(`❌ [${postId}] Error:`, error);
+                        setIsReady(false);
+                        console.error(`❌ [${pid}] Video error:`, error);
                         break;
                 }
             }
         );
 
-        // 🔥 Listen to ACTUAL playing state from player
-        const playingSub = player.addListener(
+        const playingSub = p.addListener(
             "playingChange",
             ({ isPlaying: playing }: PlayingChangeEventPayload) => {
-                console.log(`🎵 [${postId}] Playing changed: ${playing}`);
                 setIsPlaying(playing);
             }
         );
 
-        // Check if already ready (preloaded videos)
-        if (player.status === "readyToPlay") {
-            console.log(`🎬 [${postId}] Already ready on mount`);
-            setIsReady(true);
-            setIsBuffering(false);
-
-            if (isVisibleRef.current) {
-                console.log(`▶️ [${postId}] Already ready & visible, playing...`);
-                videoManager.play(postId);
-            }
-        }
-
-        // Sync initial playing state
-        setIsPlaying(player.playing);
-
+        // --- CLEANUP ---
         return () => {
+            console.log(`🧹 [${currentPostId}] Cleaning up player hook`);
             statusSub.remove();
             playingSub.remove();
+
+            // Mark as unmounted - manager can now safely evict if needed
+            videoManager.unmount(currentPostId);
+
+            // Pause if this player was playing
+            videoManager.pause(currentPostId);
         };
-    }, [player, postId]);
+    }, [postId, url]); // Re-run if postId or url changes
 
-    // 🔥 Handle visibility changes - THIS IS THE KEY!
+    // --- Handle visibility changes ---
     useEffect(() => {
-        if (!player) return;
+        const p = playerRef.current;
+        if (!p) return;
 
-        console.log(`👁️ [${postId}] Visibility: ${isVisible}, Status: ${player.status}`);
+        const currentPostId = postIdRef.current;
 
-        // Play if visible and ready
-        if (isVisible && player.status === "readyToPlay") {
-            console.log(`▶️ [${postId}] Visible & ready, playing...`);
-            videoManager.play(postId);
-        }
-
-        // Pause if not visible
-        if (!isVisible && player.playing) {
-            console.log(`⏸️ [${postId}] Not visible, pausing...`);
-            videoManager.pause(postId);
-        }
-    }, [isVisible, player, postId]);
-
-    const togglePlayPause = useCallback(() => {
-        if (!player || player.status !== "readyToPlay") return;
-
-        if (player.playing) {
-            videoManager.pause(postId);
+        if (isVisible) {
+            // Only play if ready
+            if (p.status === "readyToPlay") {
+                console.log(`👁️ [${currentPostId}] Visible & ready, playing`);
+                videoManager.play(currentPostId);
+            } else {
+                console.log(`👁️ [${currentPostId}] Visible but status: ${p.status}`);
+            }
         } else {
-            videoManager.play(postId);
+            // Pause when not visible
+            if (p.playing) {
+                console.log(`👁️ [${currentPostId}] Not visible, pausing`);
+                videoManager.pause(currentPostId);
+            }
         }
-    }, [player, postId]);
+    }, [isVisible]);
+
+    // --- Preload next video ---
+    useEffect(() => {
+        if (nextPostUrl && nextPostId) {
+            console.log(`⏳ Preloading next post ${nextPostId}`);
+            videoManager.preload(nextPostId, nextPostUrl);
+        }
+    }, [nextPostUrl, nextPostId]);
+
+    // --- Actions ---
+    const togglePlayPause = useCallback(() => {
+        const p = playerRef.current;
+        if (!p || p.status !== "readyToPlay") return;
+
+        const currentPostId = postIdRef.current;
+        if (p.playing) {
+            videoManager.pause(currentPostId);
+        } else {
+            videoManager.play(currentPostId);
+        }
+    }, []);
 
     const toggleMute = useCallback(() => {
-        if (!player) return;
-        const newMuted = !isMuted;
-        videoManager.setMuted(postId, newMuted);
-        setIsMuted(newMuted);
-    }, [isMuted, player, postId]);
+        const p = playerRef.current;
+        if (!p) return;
 
-    // For long press pause
+        const currentPostId = postIdRef.current;
+        setIsMuted((prev) => {
+            const newMuted = !prev;
+            videoManager.setMuted(currentPostId, newMuted);
+            return newMuted;
+        });
+    }, []);
+
     const pause = useCallback(() => {
-        if (!player) return;
-        videoManager.pause(postId);
-    }, [player, postId]);
+        const p = playerRef.current;
+        if (!p) return;
+        videoManager.pause(postIdRef.current);
+    }, []);
 
     const play = useCallback(() => {
-        if (!player || player.status !== "readyToPlay") return;
-        videoManager.play(postId);
-    }, [player, postId]);
+        const p = playerRef.current;
+        if (!p || p.status !== "readyToPlay") return;
+        videoManager.play(postIdRef.current);
+    }, []);
 
     return {
         player,

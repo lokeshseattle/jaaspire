@@ -49,6 +49,15 @@ export default function AppLayout() {
         }}
       />
 
+      <Stack.Screen
+        name="post/[postId]"
+        options={{
+          // headerShown: false,
+          // presentation: "fullScreenModal",
+          animation: "fade_from_bottom",
+        }}
+      />
+
       <Stack.Screen name="followers_following" />
     </Stack>
     // </Stack>

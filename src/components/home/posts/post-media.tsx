@@ -1,10 +1,10 @@
-// src/components/home/posts/PostMedia.tsx
+// src/components/home/posts/post-media.tsx
 import { useManagedVideoPlayer } from "@/hooks/use-video-player";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { VideoView } from "expo-video";
-import { memo, useRef } from "react";
+import { memo, useCallback, useRef } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -15,7 +15,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
-  withTiming,
+  withTiming
 } from "react-native-reanimated";
 
 interface Props {
@@ -26,7 +26,12 @@ interface Props {
   isVisible: boolean;
   isLiked: boolean;
   onLike: () => void;
+  nextPostId?: number;   // For preloading
+  nextPostUrl?: string;  // For preloading
 }
+
+// Double-tap detection window (ms)
+const DOUBLE_TAP_DELAY = 300;
 
 function PostMedia({
   postId,
@@ -36,10 +41,14 @@ function PostMedia({
   isVisible,
   isLiked,
   onLike,
+  nextPostId,
+  nextPostUrl,
 }: Props) {
-  const lastTap = useRef<number | null>(null);
+  // Refs for tap handling
+  const lastTapRef = useRef<number>(0);
+  const singleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Animation values
+  // Animation values for heart
   const scale = useSharedValue(0);
   const opacity = useSharedValue(0);
 
@@ -48,72 +57,120 @@ function PostMedia({
     opacity: opacity.value,
   }));
 
-  // Video player hook
+  // Video player hook - now with preloading support
   const {
     player,
+    isReady,
     isBuffering,
     isPlaying,
     isMuted,
-    togglePlayPause,
     toggleMute,
+    togglePlayPause,
     pause,
     play,
   } = useManagedVideoPlayer(
     postId,
     type === "video" ? media : null,
-    isVisible
+    isVisible,
+    nextPostUrl,  // Pass for preloading
+    nextPostId    // Pass for preloading
   );
 
-  const triggerHeartAnimation = () => {
+  // Heart animation
+  const triggerHeartAnimation = useCallback(() => {
     scale.value = 0.6;
     opacity.value = 1;
     scale.value = withSpring(
       1.3,
       { damping: 8, stiffness: 300, mass: 0.5 },
-      () => {
-        scale.value = withSpring(1, { damping: 10, stiffness: 250 });
+      (finished) => {
+        if (finished) {
+          scale.value = withSpring(1, { damping: 10, stiffness: 250 });
+        }
       }
     );
-    setTimeout(() => {
-      opacity.value = withTiming(0, { duration: 300 });
-    }, 350);
-  };
+    // Fade out after delay
+    opacity.value = withTiming(0, { duration: 600 }, undefined);
+  }, []);
 
-  const handleDoubleTap = () => {
+  // Double-tap handler (like)
+  const handleDoubleTap = useCallback(() => {
     triggerHeartAnimation();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (!isLiked) onLike();
-  };
+    if (!isLiked) {
+      onLike();
+    }
+  }, [isLiked, onLike, triggerHeartAnimation]);
 
-  const handleTap = () => {
+  // Single-tap handler (toggle play/pause for video, nothing for image)
+  const handleSingleTap = useCallback(() => {
+    if (type === "video") {
+      togglePlayPause();
+    }
+    // For images, single tap does nothing (could open fullscreen later)
+  }, [type, togglePlayPause]);
+
+  // Unified tap handler with debounce to distinguish single vs double
+  const handleTap = useCallback(() => {
     const now = Date.now();
+    const timeSinceLastTap = now - lastTapRef.current;
 
-    if (lastTap.current && now - lastTap.current < 300) {
-      // Double tap - like
-      handleDoubleTap();
-    } else {
-      // Single tap - toggle play/pause
-      // if (type === "video") {
-      //   togglePlayPause();
-      // }
+    // Clear any pending single-tap action
+    if (singleTapTimerRef.current) {
+      clearTimeout(singleTapTimerRef.current);
+      singleTapTimerRef.current = null;
     }
 
-    lastTap.current = now;
-  };
+    if (timeSinceLastTap < DOUBLE_TAP_DELAY) {
+      // Double tap detected
+      lastTapRef.current = 0; // Reset to prevent triple-tap issues
+      handleDoubleTap();
+    } else {
+      // Potential single tap - wait to see if another tap comes
+      lastTapRef.current = now;
+      singleTapTimerRef.current = setTimeout(() => {
+        handleSingleTap();
+        singleTapTimerRef.current = null;
+      }, DOUBLE_TAP_DELAY);
+    }
+  }, [handleDoubleTap, handleSingleTap]);
 
-  // Long press to pause (like Instagram)
-  const handleLongPressIn = () => {
-    if (type === "video") {
+  // Long press handlers (pause video while held)
+  const handleLongPressIn = useCallback(() => {
+    // Cancel any pending single-tap action when long press starts
+    if (singleTapTimerRef.current) {
+      clearTimeout(singleTapTimerRef.current);
+      singleTapTimerRef.current = null;
+    }
+
+    if (type === "video" && isPlaying) {
       pause();
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-  };
+  }, [type, isPlaying, pause]);
 
-  const handleLongPressOut = () => {
-    if (type === "video") {
+  const handleLongPressOut = useCallback(() => {
+    if (type === "video" && isVisible) {
       play();
     }
-  };
+  }, [type, isVisible, play]);
+
+  // Mute button handler - stop propagation to prevent tap handler
+  const handleMutePress = useCallback(() => {
+    toggleMute();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [toggleMute]);
+
+  // Don't render if no media
+  if (!media) return null;
+
+  // Determine if we should show the video player
+  // Show VideoView as soon as player exists (not gated on isReady)
+  // VideoView handles its own loading state internally
+  const showVideoView = player !== null;
+
+  // Show loading overlay when buffering or not ready
+  const showLoadingOverlay = type === "video" && (isBuffering || !isReady);
 
   return (
     <View style={styles.container}>
@@ -121,7 +178,7 @@ function PostMedia({
         <Pressable onPress={handleTap}>
           <Image
             source={{ uri: media }}
-            style={[styles.media, { aspectRatio: 4 / 5 }]}
+            style={[styles.media, styles.imageAspect]}
             contentFit="cover"
             cachePolicy="disk"
             transition={200}
@@ -134,18 +191,23 @@ function PostMedia({
           onPressOut={handleLongPressOut}
           delayLongPress={200}
         >
-          <View style={[styles.media, { aspectRatio: 9 / 14 }]}>
-            {/* Thumbnail while loading */}
-            {thumbnail && isBuffering && (
+          <View style={[styles.media, styles.videoAspect]}>
+            {/* Thumbnail as background while loading */}
+            {thumbnail && (
               <Image
                 source={{ uri: thumbnail }}
-                style={StyleSheet.absoluteFill}
+                style={[
+                  StyleSheet.absoluteFill,
+                  // Hide thumbnail once video is ready and playing
+                  { opacity: isReady && isPlaying ? 0 : 1 }
+                ]}
                 contentFit="cover"
+                cachePolicy="disk"
               />
             )}
 
-            {/* Video */}
-            {player && (
+            {/* Video player - render as soon as player exists */}
+            {showVideoView && (
               <VideoView
                 style={StyleSheet.absoluteFill}
                 player={player}
@@ -155,20 +217,25 @@ function PostMedia({
               />
             )}
 
-            {/* Buffering indicator */}
-            {isBuffering && (
-              <View style={styles.centerOverlay}>
+            {/* Loading overlay */}
+            {showLoadingOverlay && (
+              <View style={styles.loadingOverlay}>
                 <ActivityIndicator color="white" size="large" />
+              </View>
+            )}
+
+            {/* Play/Pause indicator (briefly shows on tap) */}
+            {!isPlaying && isReady && isVisible && (
+              <View style={styles.playIndicator}>
+                <Ionicons name="play" size={50} color="white" />
               </View>
             )}
 
             {/* Mute button */}
             <Pressable
-              onPress={(e) => {
-                e.stopPropagation?.();
-                toggleMute();
-              }}
+              onPress={handleMutePress}
               style={styles.muteButton}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <Ionicons
                 name={isMuted ? "volume-mute" : "volume-high"}
@@ -180,12 +247,16 @@ function PostMedia({
         </Pressable>
       )}
 
-      {/* Heart overlay */}
-      <Animated.View style={[styles.heartContainer, animatedStyle]} pointerEvents="none">
+      {/* Heart overlay for double-tap like */}
+      <Animated.View
+        style={[styles.heartContainer, animatedStyle]}
+        pointerEvents="none"
+      >
         <Ionicons
           name="heart"
           size={120}
           color={isLiked ? "#ff3040" : "white"}
+          style={styles.heartIcon}
         />
       </Animated.View>
     </View>
@@ -200,17 +271,29 @@ const styles = StyleSheet.create({
     width: "100%",
     backgroundColor: "#000",
   },
-  centerOverlay: {
+  imageAspect: {
+    aspectRatio: 4 / 5,
+  },
+  videoAspect: {
+    aspectRatio: 9 / 14,
+  },
+  loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.3)",
+    backgroundColor: "rgba(0, 0, 0, 0.3)",
+  },
+  playIndicator: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.2)",
   },
   muteButton: {
     position: "absolute",
     bottom: 16,
     right: 16,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
     padding: 8,
     borderRadius: 20,
   },
@@ -220,6 +303,14 @@ const styles = StyleSheet.create({
     left: "50%",
     marginLeft: -60,
     marginTop: -60,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  heartIcon: {
+    // Shadow for visibility on light backgrounds
+    textShadowColor: "rgba(0, 0, 0, 0.3)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
 });
 

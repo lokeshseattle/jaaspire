@@ -87,10 +87,11 @@ export type Post = {
   }>;
   attachments_count: number;
   reactions: Array<{
-    name: string;
+    name: "love";
     count: number;
   }>;
-  user_reaction?: string;
+  user_reaction: "love" | null;
+  reactions_count: number | null;
   comments_count: number;
   is_bookmarked: boolean;
   viewer: {

@@ -2,6 +2,7 @@ import { queryClient } from "@/src/lib/query-client";
 import { apiClient } from "@/src/services/api/api.client";
 import { FeedResponse, SinglePostResponse } from "@/src/services/api/api.types";
 import { useInfiniteQuery, useMutation } from "@tanstack/react-query";
+import { usePostStore } from "./post.store";
 
 export const useGetFeedQuery = (postId?: string) => {
   return useInfiniteQuery({
@@ -18,84 +19,151 @@ export const useGetFeedQuery = (postId?: string) => {
         : undefined,
 
     initialPageParam: 1,
+
+    select: (data) => {
+      const allPosts = data.pages.flatMap(
+        (page) => page.data.posts // adjust if your structure differs
+      );
+
+      // Normalize into Zustand
+      usePostStore.getState().upsertPosts(allPosts);
+
+      //Return only IDs instead of full post objects
+      return {
+        ...data,
+        pages: data.pages.map((page) => ({
+          ...page,
+          data: {
+            ...page.data,
+            posts: page.data.posts.map((post) => post.id),
+          },
+        })),
+      };
+    },
   });
 };
 
-export const useGetUserFeedQuery = (
-  username: string | undefined,
-  type: "video" | "" = "",
-) => {
-  return useInfiniteQuery({
-    queryKey: ["user_feed", username, type],
-    queryFn: ({ pageParam }) =>
-      apiClient
-        .get<FeedResponse>(`/users/${username}/posts`, {
-          params: { page: pageParam, type },
-        })
-        .then((d) => d.data),
-    getNextPageParam: (lastPage) =>
-      lastPage.data.pagination.has_more
-        ? lastPage.data.pagination.current_page + 1
-        : undefined,
+// export const useGetUserFeedQuery = (
+//   username: string | undefined,
+//   type: "video" | "" = "",
+// ) => {
+//   return useInfiniteQuery({
+//     queryKey: ["user_feed", username, type],
+//     queryFn: ({ pageParam }) =>
+//       apiClient
+//         .get<FeedResponse>(`/users/${username}/posts`, {
+//           params: { page: pageParam, type },
+//         })
+//         .then((d) => d.data),
+//     getNextPageParam: (lastPage) =>
+//       lastPage.data.pagination.has_more
+//         ? lastPage.data.pagination.current_page + 1
+//         : undefined,
 
-    initialPageParam: 1,
-    enabled: !!username,
-  });
-};
+//     initialPageParam: 1,
+//     enabled: !!username,
+//   });
+// };
+
+// export const useToggleLikeMutation = () => {
+//   // const queryClient = useQueryClient();
+
+//   const updateInfiniteFeed = (oldData: any, postId: number) => {
+//     if (!oldData) return oldData;
+
+//     return {
+//       ...oldData,
+//       pages: oldData.pages.map((page: any) => ({
+//         ...page,
+//         data: {
+//           ...page.data,
+//           posts: page.data.posts.map((post: any) => {
+//             if (post.id !== postId) return post;
+
+//             const isLiked = post.user_reaction === "love";
+
+//             let updatedReactions;
+
+//             if (isLiked) {
+//               // UNLIKE
+//               updatedReactions = post.reactions
+//                 .map((r: any) =>
+//                   r.name === "love"
+//                     ? { ...r, count: Math.max(r.count - 1, 0) }
+//                     : r
+//                 )
+//                 .filter((r: any) => r.count > 0);
+//             } else {
+//               // LIKE
+//               const hasLove = post.reactions.some(
+//                 (r: any) => r.name === "love"
+//               );
+
+//               updatedReactions = hasLove
+//                 ? post.reactions.map((r: any) =>
+//                   r.name === "love"
+//                     ? { ...r, count: r.count + 1 }
+//                     : r
+//                 )
+//                 : [...post.reactions, { name: "love", count: 1 }];
+//             }
+
+//             return {
+//               ...post,
+//               user_reaction: isLiked ? null : "love",
+//               reactions: updatedReactions,
+//             };
+//           }),
+//         },
+//       })),
+//     };
+//   };
+
+//   return useMutation({
+//     mutationFn: (postId: number) =>
+//       apiClient.post(`/posts/${postId}/react`, {
+//         reaction_type: "love",
+//       }),
+
+//     onMutate: async (postId) => {
+//       await queryClient.cancelQueries({ queryKey: ["feed"] });
+
+//       const previousFeed = queryClient.getQueryData(["feed"]);
+//       const previousUserFeeds = queryClient.getQueriesData({
+//         queryKey: ["user_feed"],
+//       });
+
+//       // Update home feed
+//       queryClient.setQueryData(["feed"], (old: any) =>
+//         updateInfiniteFeed(old, postId)
+//       );
+
+//       // Update all user_feed variations
+//       previousUserFeeds.forEach(([key]) => {
+//         queryClient.setQueryData(key, (old: any) =>
+//           updateInfiniteFeed(old, postId)
+//         );
+//       });
+
+//       return { previousFeed, previousUserFeeds };
+//     },
+
+//     onError: (_err, _postId, context) => {
+//       if (!context) return;
+
+//       queryClient.setQueryData(["feed"], context.previousFeed);
+
+//       context.previousUserFeeds.forEach(([key, data]: any) => {
+//         queryClient.setQueryData(key, data);
+//       });
+//     },
+
+
+//   });
+// };
 
 export const useToggleLikeMutation = () => {
-  // const queryClient = useQueryClient();
 
-  const updateInfiniteFeed = (oldData: any, postId: number) => {
-    if (!oldData) return oldData;
-
-    return {
-      ...oldData,
-      pages: oldData.pages.map((page: any) => ({
-        ...page,
-        data: {
-          ...page.data,
-          posts: page.data.posts.map((post: any) => {
-            if (post.id !== postId) return post;
-
-            const isLiked = post.user_reaction === "love";
-
-            let updatedReactions;
-
-            if (isLiked) {
-              // UNLIKE
-              updatedReactions = post.reactions
-                .map((r: any) =>
-                  r.name === "love"
-                    ? { ...r, count: Math.max(r.count - 1, 0) }
-                    : r
-                )
-                .filter((r: any) => r.count > 0);
-            } else {
-              // LIKE
-              const hasLove = post.reactions.some(
-                (r: any) => r.name === "love"
-              );
-
-              updatedReactions = hasLove
-                ? post.reactions.map((r: any) =>
-                  r.name === "love"
-                    ? { ...r, count: r.count + 1 }
-                    : r
-                )
-                : [...post.reactions, { name: "love", count: 1 }];
-            }
-
-            return {
-              ...post,
-              user_reaction: isLiked ? null : "love",
-              reactions: updatedReactions,
-            };
-          }),
-        },
-      })),
-    };
-  };
 
   return useMutation({
     mutationFn: (postId: number) =>
@@ -104,46 +172,90 @@ export const useToggleLikeMutation = () => {
       }),
 
     onMutate: async (postId) => {
+      // 1️⃣ Cancel running feed queries
       await queryClient.cancelQueries({ queryKey: ["feed"] });
 
-      const previousFeed = queryClient.getQueryData(["feed"]);
-      const previousUserFeeds = queryClient.getQueriesData({
-        queryKey: ["user_feed"],
-      });
+      const { posts, updatePost } = usePostStore.getState();
+      const previousPost = posts[postId];
 
-      // Update home feed
-      queryClient.setQueryData(["feed"], (old: any) =>
-        updateInfiniteFeed(old, postId)
-      );
+      if (!previousPost) return;
 
-      // Update all user_feed variations
-      previousUserFeeds.forEach(([key]) => {
-        queryClient.setQueryData(key, (old: any) =>
-          updateInfiniteFeed(old, postId)
+      // 2️⃣ Optimistic update in Zustand ONLY
+      updatePost(postId, (post) => {
+        const isLiked = post.user_reaction === "love";
+
+        const currentTotal = post.reactions_count ?? 0;
+
+        let updatedReactions;
+        let updatedTotal;
+
+        if (isLiked) {
+          // UNLIKE
+
+          updatedReactions = post.reactions
+            .map((r: any) =>
+              r.name === "love"
+                ? { ...r, count: r.count - 1 }
+                : r
+            )
+            .filter((r: any) => r.count > 0);
+
+          updatedTotal = currentTotal - 1;
+
+          return {
+            ...post,
+            user_reaction: null,
+            reactions: updatedReactions,
+            reactions_count: updatedTotal === 0 ? null : updatedTotal,
+          };
+        }
+
+        // LIKE
+
+        const hasLove = post.reactions.some(
+          (r: any) => r.name === "love"
         );
+
+        updatedReactions = hasLove
+          ? post.reactions.map((r: any) =>
+            r.name === "love"
+              ? { ...r, count: r.count + 1 }
+              : r
+          )
+          : [...post.reactions, { name: "love", count: 1 }];
+
+        updatedTotal = currentTotal + 1;
+
+        return {
+          ...post,
+          user_reaction: "love",
+          reactions: updatedReactions,
+          reactions_count: updatedTotal,
+        };
       });
 
-      return { previousFeed, previousUserFeeds };
+      // 3️⃣ Return rollback snapshot
+      return { previousPost };
     },
 
-    onError: (_err, _postId, context) => {
-      if (!context) return;
+    onError: (_err, postId, context) => {
+      if (!context?.previousPost) return;
 
-      queryClient.setQueryData(["feed"], context.previousFeed);
-
-      context.previousUserFeeds.forEach(([key, data]: any) => {
-        queryClient.setQueryData(key, data);
-      });
+      // Rollback
+      usePostStore.getState().upsertPosts([context.previousPost]);
     },
 
-
+    onSettled: () => {
+      // Optional: refetch to ensure server truth
+      // queryClient.invalidateQueries({ queryKey: ["feed"] });
+    },
   });
 };
 
 export const useGetSinglePost = (postId: string, mode: "explore" | "profile" = "explore") => {
   return useInfiniteQuery({
     queryKey: ["single-post", postId, mode],
-    queryFn: ({ pageParam = 1 }) =>
+    queryFn: ({ pageParam }) =>
       apiClient.get<SinglePostResponse>(`/posts/${postId}`, {
         params: { page: pageParam, mode },
       }),
@@ -153,6 +265,35 @@ export const useGetSinglePost = (postId: string, mode: "explore" | "profile" = "
       return pagination.has_more
         ? pagination.current_page + 1
         : undefined;
+    },
+
+    select: (data) => {
+      const store = usePostStore.getState();
+
+      const allRecommended: number[] = [];
+      let mainPostId: number | null = null;
+
+      for (const page of data.pages) {
+        const mainPost = page.data.data.post;
+        const recommended = page.data.data.recommended.posts;
+
+        // 1️⃣ Normalize everything
+        store.upsertPosts([mainPost, ...recommended]);
+
+        // 2️⃣ Capture main post ID (same every page)
+        mainPostId = mainPost.id;
+
+        // 3️⃣ Collect recommended IDs
+        allRecommended.push(
+          ...recommended.map((p) => p.id)
+        );
+      }
+
+      return {
+        mainPostId,
+        recommendedIds: allRecommended,
+        pageParams: data.pageParams,
+      };
     },
   });
 };

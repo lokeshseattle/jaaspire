@@ -5,6 +5,7 @@ import { ProfileSuggestion, ProfileSuggestions } from '@/src/components/explore/
 import { useGetExploreQuery } from '@/src/features/post/explore.hooks';
 import { AppTheme } from '@/src/theme';
 import { useTheme } from '@/src/theme/ThemeProvider';
+import { router } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { Keyboard, StyleSheet, View } from 'react-native';
 
@@ -49,7 +50,12 @@ export default function SearchScreen() {
   const handlePostPress = useCallback((postId: number) => {
     // Navigate to post detail screen
     console.log('Post pressed:', postId);
-    // router.push(`/post/${postId}`);
+    router.push({
+      pathname: '/post/[postId]',
+      params: {
+        postId: postId.toString(),
+      },
+    });
   }, []);
 
   const handleRefresh = useCallback(() => {

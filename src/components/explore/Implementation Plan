@@ -1,0 +1,105 @@
+# Fix Instagram-Like Video Feed: Autoplay, Preloading & Stability
+
+The feed has multiple interrelated bugs causing videos to not autoplay, go black after 1 second (NativeSharedObjectNotFoundException), and show infinite spinners. Root causes span 6 files.
+
+---
+
+## Root Cause Analysis
+
+| Bug | Root Cause | File(s) |
+|-----|-----------|---------|
+| Videos require a tap to play | `viewabilityConfig.itemVisiblePercentThreshold: 100` — in a mixed feed with partial posts, items rarely reach 100% visibility | `index.tsx` |
+| Black screen + NativeSharedObjectNotFoundException | `video-manager.releaseOldest()` calls `player.release()` on a player still mounted in a `<VideoView>`, destroying the native object while JS still holds a ref | `video-manager.ts`, `post-media.tsx` |
+| Infinite ActivityIndicator | Player created but never becomes `readyToPlay` because the status listener is attached *after* the status change fires (race condition) | `use-video-player.ts` |
+| Only one video should play, but doesn't | `onViewableItemsChanged` only fires for the first viewable item, and stale closures in the hook miss visibility transitions | `index.tsx`, `use-video-player.ts` |
+| Preloading not working | `nextPost` is passed to `Post` but never forwarded to `PostMedia`/`useManagedVideoPlayer` | `post.tsx` |
+| Conditional hook violation | `usePostStore` called conditionally: `nextId ? usePostStore(...) : undefined` — breaks Rules of Hooks | `PostWrapper.tsx` |
+| Double-tap/long-press interfere with playback | `handleTap` fires on *every* press (including the first tap of a double-tap), no debounce to distinguish single vs. double | `post-media.tsx` |
+
+---
+
+## Proposed Changes
+
+### Video Manager
+
+#### [MODIFY] [video-manager.ts](file:///Users/flickios/Desktop/jaaspire/src/lib/video-manager.ts)
+
+Rewrite with these fixes:
+
+- **Safe eviction**: `releaseOldest()` must skip players currently rendered in a `<VideoView>`. Add a `mountedPlayers` set that tracks which postIds have an active VideoView. Only evict unmounted players.
+- **`replace()` instead of `release()`**: When evicting, call `player.replace(null)` to clear the source without destroying the native object, then `release()` only on truly unmounted players.
+- **Single-play guarantee**: `play()` always pauses the previous player first (already done, but add guard for edge cases).
+- **`hasPlayer()`**: Add a method to check if a player exists without creating one.
+- **`mount()`/`unmount()`**: Track mounted VideoView lifecycle to inform eviction safety.
+- **Raise max players to 5**: to accommodate preloading one extra without evicting a visible player.
+
+---
+
+### Video Player Hook
+
+#### [MODIFY] [use-video-player.ts](file:///Users/flickios/Desktop/jaaspire/hooks/use-video-player.ts)
+
+- **Fix race condition**: After `getOrCreatePlayer()`, immediately check `player.status` and if already `readyToPlay`, set `isReady = true` and trigger play if visible — don't rely solely on the `statusChange` listener.
+- **Fix stale closure**: Use `useRef` for all mutable state the event listeners depend on (`isVisible`, `postId`). Already using `isVisibleRef` but the `statusChange` callback still captures stale `postId`.
+- **Cleanup on unmount**: Call `videoManager.unmount(postId)` in cleanup so the manager knows the player's VideoView is gone.
+- **Mount tracking**: Call `videoManager.mount(postId)` when player is assigned.
+- **Preload integration**: Keep the existing `nextPostUrl`/`nextPostId` useEffect (it works correctly).
+
+---
+
+### Feed Screen (FlatList)
+
+#### [MODIFY] [index.tsx](file:///Users/flickios/Desktop/jaaspire/app/(app)/(tabs)/index.tsx)
+
+- **Lower viewability threshold**: Change `itemVisiblePercentThreshold` from `100` to `50` — this is Instagram's behavior; the most-visible post wins.
+- **Pass `nextId`**: Compute and pass the next post ID to each `PostItem` for preloading.
+- **Use `viewabilityConfigCallbackPairs`** instead of `onViewableItemsChanged` + `viewabilityConfig` to avoid the stale ref / recreation issue.
+- **Add `removeClippedSubviews={true}`** for memory optimization.
+- **Add `windowSize={5}`** to limit off-screen rendering.
+
+---
+
+### Post Wrapper
+
+#### [MODIFY] [PostWrapper.tsx](file:///Users/flickios/Desktop/jaaspire/src/components/home/posts/PostWrapper.tsx)
+
+- **Fix conditional hook**: Always call `usePostStore` for `nextPost` (pass `null` selector when no `nextId`), never conditionally.
+
+---
+
+### Post Component
+
+#### [MODIFY] [post.tsx](file:///Users/flickios/Desktop/jaaspire/src/components/home/posts/post.tsx)
+
+- **Forward next video info** to `PostMedia`: pass `nextPostId` and `nextPostUrl` props so `useManagedVideoPlayer` can preload.
+
+---
+
+### Post Media
+
+#### [MODIFY] [post-media.tsx](file:///Users/flickios/Desktop/jaaspire/src/components/home/posts/post-media.tsx)
+
+- **Guard against released players**: Always render `<VideoView>` when `player` exists (don't gate on `isReady`). `VideoView` can handle a player that's still loading — it just shows blank. Wrap in try-catch or guard with `player.status !== 'error'`.
+- **Fix tap/double-tap conflict**: Use a `setTimeout` timer to distinguish single tap vs. double tap. Only fire single-tap action after the 300ms window if no second tap occurs.
+- **Pass `nextPostUrl` and `nextPostId`** to `useManagedVideoPlayer`.
+
+---
+
+## Verification Plan
+
+### Manual Verification
+
+Since this is a React Native mobile app (Expo), verification must be done on device/simulator:
+
+1. **Run the app**: `npx expo start` then open on iOS simulator or device
+2. **Autoplay test**: Scroll the feed slowly — each video should auto-play as soon as ~50% is visible, without tapping
+3. **Single playback**: Only one video should play at a time; scrolling to a new video should pause the previous
+4. **Preloading**: Scroll to a video post — the *next* video in the feed should start instantly (no spinner) when it scrolls into view
+5. **No black screens**: Scroll rapidly up and down 10+ times — no videos should go black or show the NativeSharedObjectNotFoundException error
+6. **Double-tap like**: Double-tap an image/video — heart animation should appear, post should be liked
+7. **Long-press pause**: Long-press a playing video — it should pause; releasing should resume
+8. **Mute button**: Tap the mute/unmute button on a video — should toggle audio
+9. **Screen unfocus**: Navigate to another tab and back — video should pause on leave and resume on return
+
+> [!IMPORTANT]
+> Please confirm you can test on an iOS simulator or physical device, and let me know if any of the above changes need adjustment before I proceed.
