@@ -1,20 +1,22 @@
 import { AnimatedTabBar } from "@/src/components/ui/animated-tabbar";
-import { useGetFollowersQuery, useGetFollowingQuery, useGetProfile } from "@/src/features/profile/profile.hooks";
+import { useFollowToggleMutation, useGetFollowersQuery, useGetFollowingQuery, useGetProfile } from "@/src/features/profile/profile.hooks";
 import { FollowUser } from "@/src/services/api/api.types";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
+import { capitalize } from "@/src/utils/helpers";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
 import {
     ActivityIndicator,
+    Alert,
     // Dimensions,
     FlatList,
     Image,
+    Pressable,
     StyleSheet,
     Text,
-    TouchableOpacity,
-    View,
+    View
 } from "react-native";
 import Animated, {
     useAnimatedStyle,
@@ -42,10 +44,11 @@ const FollowersFollowingScreen = () => {
     const { theme } = useTheme();
     const styles = createStyles(theme);
     const { data: profile } = useGetProfile();
-    const { type } = useLocalSearchParams<{
+    const { type, username } = useLocalSearchParams<{
         type: "followers" | "following";
         username: string;
     }>();
+    const toggleFollowMutation = useFollowToggleMutation();
 
     // const translateX = useSharedValue(0);
     const opacity = useSharedValue(1);
@@ -56,12 +59,12 @@ const FollowersFollowingScreen = () => {
 
 
     const followersQuery = useGetFollowersQuery(
-        profile?.data.username!,
+        username!,
         activeTab === "followers"
     );
 
     const followingQuery = useGetFollowingQuery(
-        profile?.data.username!,
+        username!,
         activeTab === "following"
     );
 
@@ -124,6 +127,29 @@ const FollowersFollowingScreen = () => {
         opacity: opacity.value,
     }));
 
+    const toggleFollow = (username: string) => {
+        toggleFollowMutation.mutate(username)
+    }
+
+    const dispatchAlert = (username: string, type: "follow" | "unfollow", name: string) => {
+        Alert.alert(
+            type === "follow" ? "Follow" : "Unfollow",
+            type === "follow" ? `Are you sure you want to follow ${name}?` : `Are you sure you want to unfollow ${name}?`,
+            [
+                {
+                    text: "Cancel",
+                    onPress: () => console.log("Cancel Pressed"),
+                    style: "cancel",
+                },
+                {
+                    text: type === "follow" ? "Follow" : "Unfollow",
+                    style: "destructive",
+                    onPress: () => toggleFollow(username),
+                },
+            ]
+        );
+    }
+
     const renderItem = ({ item }: { item: FollowUser }) => (
         <View style={styles.row}>
             <Image
@@ -145,7 +171,8 @@ const FollowersFollowingScreen = () => {
                 <Text style={styles.username}>@{item.username}</Text>
             </View>
 
-            <TouchableOpacity
+            <Pressable
+                onPress={() => dispatchAlert(item.username, item.follow_status === "follow" ? "follow" : "unfollow", item.name)}
                 style={[
                     styles.followButton,
                     item.follow_status === "following" &&
@@ -159,9 +186,9 @@ const FollowersFollowingScreen = () => {
                         styles.followingText,
                     ]}
                 >
-                    {item.follow_status.toLocaleUpperCase()}
+                    {capitalize(item.follow_status)}
                 </Text>
-            </TouchableOpacity>
+            </Pressable>
         </View>
     );
 

@@ -16,7 +16,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 type TabConfig = {
-    label: string;
+    label?: string;
     icon?: keyof typeof Ionicons.glyphMap;
     activeIcon?: keyof typeof Ionicons.glyphMap;
 };
@@ -91,9 +91,7 @@ function AnimatedTab<T extends string>({
                 <Animated.View style={animatedIconStyle}>
                     <Ionicons
                         name={
-                            isActive && config.activeIcon
-                                ? config.activeIcon
-                                : config.icon
+                            isActive && config.activeIcon ? config.activeIcon : config.icon
                         }
                         size={22}
                         color={isActive ? "#000" : "#999"}
@@ -101,9 +99,12 @@ function AnimatedTab<T extends string>({
                 </Animated.View>
             )}
 
-            <Animated.Text style={[styles.tabText, animatedTextStyle]}>
-                {config.label}
-            </Animated.Text>
+            {/* ✅ only render label if provided */}
+            {config.label ? (
+                <Animated.Text style={[styles.tabText, animatedTextStyle]}>
+                    {config.label}
+                </Animated.Text>
+            ) : null}
         </Pressable>
     );
 }

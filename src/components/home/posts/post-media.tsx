@@ -1,4 +1,3 @@
-// src/components/home/posts/post-media.tsx
 import { useManagedVideoPlayer } from "@/hooks/use-video-player";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";

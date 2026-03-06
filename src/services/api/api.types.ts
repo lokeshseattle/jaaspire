@@ -161,6 +161,20 @@ export type ProfileResponse = {
   message: string;
   data: TUserProfile;
 };
+
+export type TUserViewer = {
+  viewer: {
+    is_following: boolean;
+    follow_status: "follow" | "unfollow" | "requested";
+    is_subscribed: boolean;
+  }
+}
+
+export type TUserProfileResponse = ProfileResponse & {
+  data: TUserProfile & TUserViewer;
+}
+
+
 export type OptimisticComment = TComment & { _isOptimistic?: boolean };
 export type OptimisticReply = TComment["replies"][0] & { _isOptimistic?: boolean };
 export type TGender = {
@@ -535,3 +549,13 @@ export type SinglePostResponse = {
 
   };
 };
+
+export type FollowUserResponse = {
+  success: boolean,
+  message: string,
+  data: {
+    follow_status: "unfollow" | "follow" | "requested",
+    is_following: boolean,
+    is_pending: boolean
+  }
+}

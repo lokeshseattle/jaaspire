@@ -43,27 +43,48 @@ export const useGetFeedQuery = (postId?: string) => {
   });
 };
 
-// export const useGetUserFeedQuery = (
-//   username: string | undefined,
-//   type: "video" | "" = "",
-// ) => {
-//   return useInfiniteQuery({
-//     queryKey: ["user_feed", username, type],
-//     queryFn: ({ pageParam }) =>
-//       apiClient
-//         .get<FeedResponse>(`/users/${username}/posts`, {
-//           params: { page: pageParam, type },
-//         })
-//         .then((d) => d.data),
-//     getNextPageParam: (lastPage) =>
-//       lastPage.data.pagination.has_more
-//         ? lastPage.data.pagination.current_page + 1
-//         : undefined,
+export const useGetUserFeedQuery = (
+  username: string | undefined,
+  type: "video" | "" = "",
+) => {
+  return useInfiniteQuery({
+    queryKey: ["user_feed", username, type],
+    queryFn: ({ pageParam }) =>
+      apiClient
+        .get<FeedResponse>(`/users/${username}/posts`, {
+          params: { page: pageParam, type },
+        })
+        .then((d) => d.data),
+    getNextPageParam: (lastPage) =>
+      lastPage.data.pagination.has_more
+        ? lastPage.data.pagination.current_page + 1
+        : undefined,
 
-//     initialPageParam: 1,
-//     enabled: !!username,
-//   });
-// };
+    initialPageParam: 1,
+    enabled: !!username,
+
+    select: (data) => {
+      const allPosts = data.pages.flatMap(
+        (page) => page.data.posts // adjust if your structure differs
+      );
+
+      // Normalize into Zustand
+      usePostStore.getState().upsertPosts(allPosts);
+
+      //Return only IDs instead of full post objects
+      return {
+        ...data,
+        pages: data.pages.map((page) => ({
+          ...page,
+          data: {
+            ...page.data,
+            posts: page.data.posts.map((post) => post.id),
+          },
+        })),
+      };
+    },
+  });
+};
 
 // export const useToggleLikeMutation = () => {
 //   // const queryClient = useQueryClient();

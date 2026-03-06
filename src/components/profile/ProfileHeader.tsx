@@ -7,15 +7,18 @@ import { Link, router } from "expo-router";
 import React, { useState } from "react";
 import { Image, Pressable, StyleSheet, View } from "react-native";
 
-const ProfileHeader = () => {
+const ProfileHeader = ({ username, isOwnProfile }: { username: string, isOwnProfile?: boolean }) => {
   const { theme } = useTheme();
   const styles = createStyles(theme);
 
   const { data, isLoading, isSuccess, refetch } = useGetProfile();
+  console.log(data)
   const profile = isSuccess ? data.data : null;
 
-  const [activeTab, setActiveTab] = useState<"posts" | "reels" | "tagged">(
-    "posts",
+  // console.log(profile)
+
+  const [activeTab, setActiveTab] = useState<"gallery" | "home_feed" | "premium">(
+    "gallery",
   );
 
   const navigateToFollowersFollowing = (type: "followers" | "following") => {
@@ -23,6 +26,7 @@ const ProfileHeader = () => {
       pathname: "/(app)/followers-following",
       params: {
         type,
+        username
       },
     });
   };
@@ -32,7 +36,7 @@ const ProfileHeader = () => {
       <>
         {/* HEADER */}
         <View style={styles.header}>
-          <Text style={styles.username}>{profile.username}</Text>
+          <Text style={styles.username}>{profile?.username}</Text>
           <View style={styles.headerIcons}>
             {/* <Pressable onPress={forceLogout}>
               <Text>Logout</Text>

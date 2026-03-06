@@ -69,9 +69,6 @@ const PostHeader: React.FC = () => {
       <View style={styles.container}>
         {/* Left Section */}
         <Pressable onPress={navigateToUser} style={styles.left}>
-          {/* <View style={styles.avatarWrapper}>
-            <Image source={post.user.avatar} style={styles.avatar} />
-          </View> */}
           <StoryAvatar
             username={post.user.username}
             hasStory={post.user.story_status.has_stories}

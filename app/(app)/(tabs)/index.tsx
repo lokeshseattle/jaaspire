@@ -6,8 +6,8 @@ import Stories from "@/src/components/home/story";
 import { useGetFeedQuery } from "@/src/features/post/post.hooks";
 import { useGetAllStories } from "@/src/features/story/story.hooks";
 import { videoManager } from "@/src/lib/video-manager";
-import { useFocusEffect } from "expo-router";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useFocusEffect, useNavigation } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -25,6 +25,16 @@ const VIEWABILITY_CONFIG: ViewabilityConfig = {
 export default function Home() {
   const [visiblePostId, setVisiblePostId] = useState<number | null>(null);
   const [isScreenFocused, setIsScreenFocused] = useState(true);
+  const flatListRef = useRef<FlatList>(null);
+  const scrollOffsetRef = useRef(0);
+  const navigation = useNavigation();
+
+  // Track scroll position
+  const handleScroll = useCallback((event: any) => {
+    scrollOffsetRef.current = event.nativeEvent.contentOffset.y;
+  }, []);
+
+
 
   // Comments hook
   const { bottomSheetRef, selectedPostId, openComments, onDismiss } =
@@ -47,6 +57,15 @@ export default function Home() {
 
   const { refetch: storyRefetch } = useGetAllStories();
 
+  // useEffect(() => {
+  //   const unsubscribe = navigation.addListener('focus', () => {
+
+  //   })
+
+  //   return unsubscribe
+
+  // }, [navigation])
+
   // Track screen focus for pausing videos when navigating away
   useFocusEffect(
     useCallback(() => {
@@ -62,6 +81,22 @@ export default function Home() {
   const handleRefresh = async () => {
     await Promise.all([refetch(), storyRefetch()]);
   };
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("tabPress" as any, () => {
+      if (navigation.isFocused()) {
+        if (scrollOffsetRef.current <= 10) {
+          // Already at top - refresh feed
+          handleRefresh();
+        } else {
+          // Scroll to top
+          flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+        }
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation, handleRefresh])
 
   // Stable callback using useCallback + ref pattern for viewability
   const onViewableItemsChanged = useCallback(
@@ -154,6 +189,9 @@ export default function Home() {
   return (
     <View style={{ flex: 1 }}>
       <FlatList
+        ref={flatListRef}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
         data={postIds}
         keyExtractor={keyExtractor}
         renderItem={renderItem}

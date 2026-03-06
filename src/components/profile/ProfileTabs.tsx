@@ -1,8 +1,8 @@
+import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef } from "react";
 import { Animated, Dimensions, Pressable, View } from "react-native";
-import { ThemedText as Text } from "../themed-text";
 
-const TABS = ["posts", "video", "tagged"];
+const TABS = ["gallery", "home_feed", "premium"];
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const TAB_WIDTH = SCREEN_WIDTH / TABS.length;
 
@@ -38,7 +38,9 @@ function ProfileTabs({
               alignItems: "center",
             }}
           >
-            <Text>{tab}</Text>
+            {tab === "gallery" && <Ionicons name="grid-outline" size={24} />}
+            {tab === "home_feed" && <Ionicons name="layers-outline" size={24} />}
+            {tab === "premium" && <Ionicons name="heart-circle-outline" size={24} />}
           </Pressable>
         ))}
       </View>

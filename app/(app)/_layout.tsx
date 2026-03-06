@@ -35,8 +35,12 @@ export default function AppLayout() {
 
       <Stack.Screen
         name="user/[username]"
-        options={{
-          headerShown: false,
+        options={({ route }) => {
+          const { username } = route.params as { username: string };
+          return {
+            headerShown: true,
+            headerBackButtonDisplayMode: "minimal",
+          };
         }}
       />
       <Stack.Screen
@@ -52,8 +56,9 @@ export default function AppLayout() {
       <Stack.Screen
         name="post/[postId]"
         options={{
-          // headerShown: false,
-          // presentation: "fullScreenModal",
+          headerShown: true,
+          headerTitle: "Explore",
+          headerBackButtonDisplayMode: "minimal",
           animation: "fade_from_bottom",
         }}
       />

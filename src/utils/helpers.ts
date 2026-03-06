@@ -118,3 +118,16 @@ export const isLargeItem = (index: number): boolean => {
   // Pattern B: Last item of next 5 is large (position 9)
   return cycleIndex === 0 || cycleIndex === 9;
 };
+
+export const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1);
+
+export type TButtonStatus = "follow" | "unfollow" | "requested"
+
+export const getNextButtonStatus = (isOpenProfile: boolean, status: TButtonStatus): TButtonStatus => {
+  if (status === "unfollow") return "follow"
+  if (status === "requested") return "unfollow"
+
+  if (status === "follow") return isOpenProfile ? "unfollow" : "requested"
+
+  return status
+}
