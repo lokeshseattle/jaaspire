@@ -93,11 +93,15 @@ function Stories() {
       mediaTypes: ["images", "videos"],
       allowsEditing: false,
       onChange: (file) => {
-        router.push({
+        if (file.type.startsWith("image/")) router.push({
           pathname: "/story-editor",
           params: { uri: file.uri },
         });
-        console.log(file);
+
+        if (file.type.startsWith("video/")) router.push({
+          pathname: "/video-editor",
+          params: { uri: file.uri },
+        });
       },
     });
   };

@@ -2,6 +2,7 @@ import { useAuth } from "@/src/features/auth/auth.hooks";
 import { AppTheme, ThemeMode } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import React from "react";
 import {
     StyleSheet,
@@ -77,8 +78,8 @@ const SettingsScreen = ({ mode, onToggleTheme }: Props) => {
     return (
         <View style={styles.container}>
             <View style={styles.section}>
-                <Item theme={theme} icon="card-outline" label="Subscriptions" />
-                <Item theme={theme} icon="bookmark-outline" label="Bookmarks" />
+                <Item theme={theme} onPress={() => router.push("/bookmarks")} icon="card-outline" label="Subscriptions" />
+                <Item theme={theme} onPress={() => router.push("/bookmarks")} icon="bookmark-outline" label="Bookmarks" />
                 <Item theme={theme} icon="ban-outline" label="Blocked Users" />
                 <Item theme={theme} icon="wallet-outline" label="Wallet" />
             </View>

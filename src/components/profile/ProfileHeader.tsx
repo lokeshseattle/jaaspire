@@ -85,13 +85,21 @@ const ProfileHeader = ({ username, isOwnProfile }: { username: string, isOwnProf
           <Text style={styles.bio}>{profile.bio}</Text>
         </View>
 
-        {/* EDIT BUTTON */}
-        <Pressable
-          onPress={() => router.push("/profile/edit-profile")}
-          style={styles.editButton}
-        >
-          <Text style={styles.editText}>Edit Profile</Text>
-        </Pressable>
+        {/* ACTION BUTTONS */}
+        <View style={styles.buttonContainer}>
+          <Pressable
+            onPress={() => router.push("/profile/edit-profile")}
+            style={styles.button}
+          >
+            <Text style={styles.editText}>Edit Profile</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => { }}
+            style={styles.button}
+          >
+            <Text style={styles.editText}>Share Profile</Text>
+          </Pressable>
+        </View>
 
         {/* HIGHLIGHTS */}
         {/* <ScrollView
@@ -210,14 +218,22 @@ const createStyles = (theme: AppTheme) =>
       marginTop: 4,
     },
 
-    editButton: {
-      marginHorizontal: 16,
-      marginTop: 12,
-      borderWidth: 1,
-      borderColor: "#ccc",
-      paddingVertical: 6,
+    buttonContainer: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      paddingHorizontal: 16,
+      marginTop: 10,
+      gap: 10,
+    },
+
+    button: {
+      flex: 1,
+      height: 40,
       borderRadius: 6,
       alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: "#ccc",
     },
 
     editText: {

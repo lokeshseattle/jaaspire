@@ -54,6 +54,16 @@ export default function AppLayout() {
       />
 
       <Stack.Screen
+        name="video-editor"
+        options={{
+          headerShown: false,
+          // Present as a modal that comes up from the bottom and fades
+          // presentation: "transparentModal",
+          animation: "fade",
+        }}
+      />
+
+      <Stack.Screen
         name="post/[postId]"
         options={{
           headerShown: true,
@@ -64,6 +74,12 @@ export default function AppLayout() {
       />
 
       <Stack.Screen name="followers_following" />
+      <Stack.Screen name="bookmarks" options={{
+        headerShown: true,
+        headerTitle: "Bookmarks",
+        headerBackButtonDisplayMode: "minimal",
+        // animation: "fade_from_bottom",
+      }} />
     </Stack>
     // </Stack>
   );

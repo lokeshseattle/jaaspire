@@ -3,6 +3,7 @@ import ExploreGrid from '@/src/components/explore/ExploreGrid';
 import { ExploreSearchBar } from '@/src/components/explore/ExploreSearchBar';
 import { ProfileSuggestion, ProfileSuggestions } from '@/src/components/explore/ProfileSuggestions';
 import { useGetExploreQuery } from '@/src/features/post/explore.hooks';
+import { useSearchUserQuery } from '@/src/features/profile/profile.hooks';
 import { AppTheme } from '@/src/theme';
 import { useTheme } from '@/src/theme/ThemeProvider';
 import { router } from 'expo-router';
@@ -16,6 +17,8 @@ export default function SearchScreen() {
   const [searchText, setSearchText] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const debouncedSearch = useDebounce(searchText, 500);
+
+  const searchUserQuery = useSearchUserQuery(debouncedSearch);
 
   const {
     gridItems,
@@ -44,7 +47,12 @@ export default function SearchScreen() {
     // Handle profile selection - navigate to profile screen
     console.log('Selected profile:', profile);
     handleSearchBlur();
-    // router.push(`/profile/${profile.id}`);
+    router.push({
+      pathname: '/user/[username]',
+      params: {
+        username: profile.username
+      }
+    });
   }, [handleSearchBlur]);
 
   const handlePostPress = useCallback((postId: number) => {
@@ -82,8 +90,8 @@ export default function SearchScreen() {
         {isSearchFocused && (
           <ProfileSuggestions
             query={debouncedSearch}
-            suggestions={[]} // Pass real data when API is ready
-            isLoading={false} // Pass real loading state when API is ready
+            suggestions={searchUserQuery.data?.data.users ?? []}
+            isLoading={searchUserQuery.isLoading}
             onSelect={handleProfileSelect}
           />
         )}

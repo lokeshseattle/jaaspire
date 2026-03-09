@@ -1,7 +1,8 @@
+import { AppTheme } from '@/src/theme';
+import { useTheme } from '@/src/theme/ThemeProvider';
 import { Image } from 'expo-image';
 import React from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-
 // Placeholder type - update when API is ready
 export interface ProfileSuggestion {
     id: number;
@@ -23,6 +24,8 @@ export const ProfileSuggestions: React.FC<ProfileSuggestionsProps> = ({
     isLoading,
     onSelect,
 }) => {
+    const { theme } = useTheme()
+    const styles = createStyles(theme)
     // Placeholder data - remove when API is ready
     const placeholderSuggestions: ProfileSuggestion[] = query.length > 0 ? [
         { id: 1, name: 'John Doe', username: 'johndoe', avatar: 'https://i.pravatar.cc/150?img=1' },
@@ -70,17 +73,17 @@ export const ProfileSuggestions: React.FC<ProfileSuggestionsProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
     container: {
         position: 'absolute',
         top: 0,
         left: 0,
         right: 0,
-        backgroundColor: '#000000',
+        backgroundColor: theme.colors.background,
         maxHeight: 300,
         zIndex: 10,
         borderBottomWidth: 1,
-        borderBottomColor: '#2c2c2e',
+        borderBottomColor: theme.colors.border,
     },
     suggestionItem: {
         flexDirection: 'row',
@@ -88,13 +91,13 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 12,
         borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: '#2c2c2e',
+        borderBottomColor: theme.colors.border,
     },
     avatar: {
         width: 44,
         height: 44,
         borderRadius: 22,
-        backgroundColor: '#1c1c1e',
+        backgroundColor: theme.colors.background,
     },
     textContainer: {
         marginLeft: 12,
@@ -103,11 +106,11 @@ const styles = StyleSheet.create({
     name: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#ffffff',
+        color: theme.colors.textPrimary,
     },
     username: {
         fontSize: 13,
-        color: '#8e8e93',
+        color: theme.colors.textSecondary,
         marginTop: 2,
     },
     loadingContainer: {
@@ -115,7 +118,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     loadingText: {
-        color: '#8e8e93',
+        color: theme.colors.textSecondary,
         fontSize: 14,
     },
     emptyContainer: {
@@ -123,7 +126,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     emptyText: {
-        color: '#8e8e93',
+        color: theme.colors.textSecondary,
         fontSize: 14,
     },
 });

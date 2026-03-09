@@ -131,3 +131,39 @@ export const getNextButtonStatus = (isOpenProfile: boolean, status: TButtonStatu
 
   return status
 }
+
+export const getMentionQuery = (text: string, cursorPosition: number) => {
+  // Find the @ before cursor
+  const textBeforeCursor = text.slice(0, cursorPosition);
+  const lastAtIndex = textBeforeCursor.lastIndexOf("@");
+
+  if (lastAtIndex === -1) return null;
+
+  const textAfterAt = textBeforeCursor.slice(lastAtIndex + 1);
+
+  // If there's a space after @, we're not in mention mode
+  if (textAfterAt.includes(" ")) return null;
+
+  return {
+    query: textAfterAt,
+    startIndex: lastAtIndex,
+    endIndex: cursorPosition,
+  };
+};
+
+export function debounce<T extends (...args: any[]) => void>(
+  func: T,
+  wait: number
+): T {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+
+  return ((...args: Parameters<T>) => {
+    if (timeout) clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  }) as T;
+}
+
+const uriToBlob = async (uri: string): Promise<Blob> => {
+  const res = await fetch(uri);
+  return await res.blob();
+};

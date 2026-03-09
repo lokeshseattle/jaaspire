@@ -559,3 +559,38 @@ export type FollowUserResponse = {
     is_pending: boolean
   }
 }
+
+export type MentionSearchResponse = {
+  success: boolean;
+  message: string;
+  data: {
+    users: MentionUser[];
+  };
+};
+
+export type MentionUser = {
+  id: number;
+  value: string;
+  name: string;
+  username: string;
+  avatar: string;
+  verified_user: boolean;
+  story_status: StoryStatus;
+};
+
+export type BookmarkPostResponse = {
+  success: boolean;
+  message: string;
+  data: {
+    is_bookmarked: boolean;
+  };
+};
+
+export type BookmarksResponse = {
+  success: boolean;
+  message: string;
+  data: {
+    posts: Post[];
+    pagination: Pagination;
+  };
+};

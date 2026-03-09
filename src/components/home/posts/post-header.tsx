@@ -1,5 +1,7 @@
 import { usePost } from "@/src/context/post-context";
+import { useBookmarkPostMutation } from "@/src/features/post/post.hooks";
 import { timeAgo } from "@/src/utils/helpers";
+import { Ionicons } from "@expo/vector-icons";
 import Feather from "@expo/vector-icons/Feather";
 import { router } from "expo-router";
 import React, { useRef, useState } from "react";
@@ -19,11 +21,16 @@ import StoryAvatar from "../story/StoryAvatar";
 const MENU_WIDTH = 180;
 
 const PostHeader: React.FC = () => {
-  const { post } = usePost();
+  const { post } = usePost()
+
+  console.log("6565", post.is_bookmarked)
+  const { mutateAsync: bookmarkPost } = useBookmarkPostMutation()
   const iconRef = useRef<View>(null);
 
   const [menuVisible, setMenuVisible] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+
+  const savePost = useBookmarkPostMutation()
 
   const closeMenu = () => setMenuVisible(false);
 
@@ -52,8 +59,10 @@ const PostHeader: React.FC = () => {
   };
 
   const handleAction = (action: string) => {
-    console.log("Action:", action);
-    closeMenu();
+    if (action === "save") {
+      savePost.mutate({ action: !post.is_bookmarked ? "add" : "remove", postId: post.id })
+    }
+    // closeMenu();
   };
 
   const navigateToUser = () => {
@@ -110,12 +119,12 @@ const PostHeader: React.FC = () => {
             ]}
           >
             <MenuItem
-              icon="edit-2"
-              label="Edit"
-              onPress={() => handleAction("edit")}
+              icon={post.is_bookmarked ? "bookmark" : "bookmark-outline"}
+              label={post.is_bookmarked ? "Saved" : "Save"}
+              onPress={() => handleAction("save")}
             />
             <MenuItem
-              icon="share"
+              icon="share-social-outline"
               label="Share"
               onPress={() => handleAction("share")}
             />
@@ -148,7 +157,7 @@ const MenuItem: React.FC<MenuItemProps> = ({
 }) => {
   return (
     <TouchableOpacity style={styles.menuItem} onPress={onPress}>
-      <Feather name={icon} size={18} color={danger ? "#e53935" : "#222"} />
+      <Ionicons name={icon} size={18} color={danger ? "#e53935" : "#222"} />
       <Text style={[styles.menuText, danger && { color: "#e53935" }]}>
         {label}
       </Text>

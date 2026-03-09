@@ -1,16 +1,16 @@
 import { queryClient } from "@/src/lib/query-client";
 import { apiClient } from "@/src/services/api/api.client";
-import { FeedResponse, SinglePostResponse } from "@/src/services/api/api.types";
-import { useInfiniteQuery, useMutation } from "@tanstack/react-query";
+import { BookmarkPostResponse, BookmarksResponse, FeedResponse, PossibleErrorResponse, SinglePostResponse } from "@/src/services/api/api.types";
+import { useInfiniteQuery, useMutation, UseMutationResult, useQuery } from "@tanstack/react-query";
 import { usePostStore } from "./post.store";
 
-export const useGetFeedQuery = (postId?: string) => {
+export const useGetFeedQuery = () => {
   return useInfiniteQuery({
-    queryKey: ["feed", postId],
+    queryKey: ["feed"],
     queryFn: ({ pageParam }) =>
       apiClient
         .get<FeedResponse>("/feed", {
-          params: { page: pageParam, post_id: postId },
+          params: { page: pageParam },
         })
         .then((d) => d.data),
     getNextPageParam: (lastPage) =>
@@ -318,3 +318,86 @@ export const useGetSinglePost = (postId: string, mode: "explore" | "profile" = "
     },
   });
 };
+
+export const useBookmarkPostMutation = (): UseMutationResult<BookmarkPostResponse, PossibleErrorResponse, { postId: number, action: "add" | "remove" }> => {
+  return useMutation({
+    mutationFn: ({ postId, action }: { postId: number, action: "add" | "remove" }) =>
+      apiClient.post<BookmarkPostResponse>(`/posts/${postId}/bookmark`, { action }).then((d) => d.data),
+    onMutate: async ({ postId, action }) => {
+      await queryClient.cancelQueries({ queryKey: ["feed"] });
+      const { posts, updatePost } = usePostStore.getState();
+      const previousPost = posts[postId];
+
+      if (!previousPost) return;
+
+      updatePost(postId, (post) => {
+        if (action === "add") {
+          return {
+            ...post,
+            is_bookmarked: true,
+          };
+        }
+
+        return {
+          ...post,
+          is_bookmarked: false,
+        };
+      });
+
+      return { previousPost };
+    },
+    onError: (_err, { postId }, context) => {
+      if (!context?.previousPost) return;
+
+      // Rollback
+      usePostStore.getState().upsertPosts([context.previousPost]);
+    },
+
+  });
+};
+
+
+export const useGetBookmarksQuery = (type?: "all" | "image" | "video") => {
+  return useInfiniteQuery({
+    queryKey: ["bookmarks", type],
+    queryFn: ({ pageParam }) =>
+      apiClient
+        .get<BookmarksResponse>("/bookmarks", {
+          params: { page: pageParam, type },
+        })
+        .then((d) => d.data),
+    getNextPageParam: (lastPage) =>
+      lastPage.data.pagination.has_more
+        ? lastPage.data.pagination.current_page + 1
+        : undefined,
+
+    initialPageParam: 1,
+
+    select: (data) => {
+      const allPosts = data.pages.flatMap(
+        (page) => page.data.posts // adjust if your structure differs
+      );
+
+      // Normalize into Zustand
+      usePostStore.getState().upsertPosts(allPosts);
+
+      //Return only IDs instead of full post objects
+      return {
+        ...data,
+        pages: data.pages.map((page) => ({
+          ...page,
+          data: {
+            ...page.data,
+            posts: page.data.posts.map((post) => post.id),
+          },
+        })),
+      };
+    },
+  });
+};
+
+export const useGetReport = () => {
+  return useQuery({
+    queryKey: []
+  })
+}

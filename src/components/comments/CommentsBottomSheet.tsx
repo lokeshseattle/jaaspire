@@ -5,8 +5,8 @@ import {
     useLikeComment,
 } from "@/src/features/post/comments.hooks";
 import { queryClient } from "@/src/lib/query-client";
-import type { ProfileResponse, TComment } from "@/src/services/api/api.types";
-import { timeAgo } from "@/src/utils/helpers";
+import type { MentionUser, ProfileResponse, TComment } from "@/src/services/api/api.types";
+import { debounce, getMentionQuery, timeAgo } from "@/src/utils/helpers";
 import { Ionicons } from "@expo/vector-icons";
 import type { BottomSheetFooterProps } from "@gorhom/bottom-sheet";
 import {
@@ -17,7 +17,7 @@ import {
     BottomSheetTextInput,
 } from "@gorhom/bottom-sheet";
 import { Image } from "expo-image";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
@@ -28,6 +28,7 @@ import {
     View
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import MentionSuggestionsList from "./MentionSuggestionList";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -220,80 +221,136 @@ const CommentItem = ({
 interface FooterInputProps {
     postId: number | null;
     bottomInset: number;
-    replyTo: { commentId: number; username: string } | null;  // 👈 Changed id to commentId
+    replyTo: { commentId: number; username: string } | null;
     onCancelReply: () => void;
+    onMessageChange: (text: string) => void;
+    onCursorChange: (position: number) => void;
 }
 
-const FooterInput = ({ postId, bottomInset, replyTo, onCancelReply }: FooterInputProps) => {
-    const addComment = useAddComment();
-    const [message, setMessage] = useState("");
+interface FooterInputRef {
+    updateMessage: (msg: string, cursor: number) => void;
+}
 
-    React.useEffect(() => {
-        if (replyTo) {
-            setMessage(`@${replyTo.username} `);
-        }
-    }, [replyTo]);
+const FooterInput = forwardRef<FooterInputRef, FooterInputProps>(
+    (
+        {
+            postId,
+            bottomInset,
+            replyTo,
+            onCancelReply,
+            onMessageChange,
+            onCursorChange,
+        },
+        ref
+    ) => {
+        const addComment = useAddComment();
 
-    const handleSend = () => {
-        if (!message.trim() || !postId) return;
-        addComment.mutate(
-            { postId, message, reply_id: replyTo?.commentId ?? null },
-            {
-                onSuccess: () => {
-                    setMessage("");
-                    onCancelReply();
-                    // Keyboard.dismiss();
-                },
-            }
+        // 👇 Local state for controlled input
+        const [message, setMessage] = useState("");
+        const inputRef = useRef<any>(null);
+
+        // 👇 Expose method to parent for updating after mention select
+        useImperativeHandle(ref, () => ({
+            updateMessage: (msg: string, cursor: number) => {
+                setMessage(msg);
+                // Set cursor position after state update
+                setTimeout(() => {
+                    inputRef.current?.setNativeProps({
+                        selection: { start: cursor, end: cursor },
+                    });
+                }, 0);
+            },
+        }));
+
+        // 👇 Handle text changes locally AND notify parent
+        const handleTextChange = useCallback((text: string) => {
+            setMessage(text);
+            onMessageChange(text);
+        }, [onMessageChange]);
+
+        // 👇 Handle selection changes
+        const handleSelectionChange = useCallback(
+            (e: any) => {
+                onCursorChange(e.nativeEvent.selection.end);
+            },
+            [onCursorChange]
         );
-    };
 
-    const handleCancel = () => {
-        setMessage("");
-        onCancelReply();
-    };
+        React.useEffect(() => {
+            if (replyTo) {
+                const replyText = `@${replyTo.username} `;
+                setMessage(replyText);
+                onMessageChange(replyText);
+            }
+        }, [replyTo, onMessageChange]);
 
-    return (
-        <View style={[styles.footerWrapper, { paddingBottom: bottomInset || 12 }]}>
-            {replyTo && (
-                <View style={styles.replyIndicator}>
-                    <Text style={styles.replyIndicatorText}>
-                        Replying to <Text style={styles.replyUsername}>@{replyTo.username}</Text>
-                    </Text>
-                    <Pressable onPress={handleCancel} hitSlop={8}>
-                        <Ionicons name="close" size={18} color="#8E8E8E" />
+        const handleSend = () => {
+            if (!message.trim() || !postId) return;
+            addComment.mutate(
+                { postId, message, reply_id: replyTo?.commentId ?? null },
+                {
+                    onSuccess: () => {
+                        setMessage("");
+                        onMessageChange("");
+                        onCancelReply();
+                    },
+                }
+            );
+        };
+
+        const handleCancel = () => {
+            setMessage("");
+            onMessageChange("");
+            onCancelReply();
+        };
+
+        return (
+            <View style={[styles.footerWrapper, { paddingBottom: bottomInset || 12 }]}>
+                {replyTo && (
+                    <View style={styles.replyIndicator}>
+                        <Text style={styles.replyIndicatorText}>
+                            Replying to{" "}
+                            <Text style={styles.replyUsername}>@{replyTo.username}</Text>
+                        </Text>
+                        <Pressable onPress={handleCancel} hitSlop={8}>
+                            <Ionicons name="close" size={18} color="#8E8E8E" />
+                        </Pressable>
+                    </View>
+                )}
+
+                <View style={styles.inputContainer}>
+                    <BottomSheetTextInput
+                        ref={inputRef}
+                        style={styles.input}
+                        placeholder={
+                            replyTo ? `Reply to @${replyTo.username}...` : "Add a comment..."
+                        }
+                        placeholderTextColor="#8E8E8E"
+                        value={message}
+                        onChangeText={handleTextChange}
+                        onSelectionChange={handleSelectionChange}
+                        onSubmitEditing={handleSend}
+                        returnKeyType="send"
+                        maxLength={500}
+                    />
+                    <Pressable
+                        onPress={handleSend}
+                        disabled={!message.trim() || addComment.isPending}
+                        style={[
+                            styles.sendButton,
+                            (!message.trim() || addComment.isPending) &&
+                            styles.sendButtonDisabled,
+                        ]}
+                    >
+                        <Text style={styles.sendButtonText}>
+                            {addComment.isPending ? "..." : "Post"}
+                        </Text>
                     </Pressable>
                 </View>
-            )}
-
-            <View style={styles.inputContainer}>
-                <BottomSheetTextInput
-                    style={styles.input}
-                    placeholder={replyTo ? `Reply to @${replyTo.username}...` : "Add a comment..."}
-                    placeholderTextColor="#8E8E8E"
-                    value={message}
-                    onChangeText={setMessage}
-                    onSubmitEditing={handleSend}
-                    returnKeyType="send"
-                    maxLength={500}
-                    autoFocus={!!replyTo}
-                />
-                <Pressable
-                    onPress={handleSend}
-                    disabled={!message.trim() || addComment.isPending}
-                    style={[
-                        styles.sendButton,
-                        (!message.trim() || addComment.isPending) && styles.sendButtonDisabled,
-                    ]}
-                >
-                    <Text style={styles.sendButtonText}>
-                        {addComment.isPending ? "..." : "Post"}
-                    </Text>
-                </Pressable>
             </View>
-        </View>
-    );
-};
+        );
+    }
+);
 
 // ============ Comments List Content ============
 interface CommentsListProps {
@@ -407,30 +464,95 @@ export const CommentsBottomSheet = ({
 
     const likeComment = useLikeComment();
 
+    // Reply state
+    const [replyTo, setReplyTo] = useState<{ commentId: number; username: string } | null>(null);
+    const handleReply = useCallback((commentId: number, username: string) => {
+        setReplyTo({ commentId, username });
+    }, []);
+    const handleCancelReply = useCallback(() => setReplyTo(null), []);
+
+    // Delete state
+    const [deletingId, setDeletingId] = useState<number | null>(null);
+    const deleteComment = useDeleteComment();
+
+    // Current user
+    const profileData = queryClient.getQueryData<ProfileResponse>(["profile"]);
+    const currentUserId = profileData?.data?.id ?? null;
+
+    // 👇 Use REFS for message & cursor (no re-renders)
+    const messageRef = useRef("");
+    const cursorRef = useRef(0);
+
+    // 👇 Debounced state ONLY for mention detection (triggers list swap)
+    const [mentionState, setMentionState] = useState<{
+        isSearching: boolean;
+        query: string;
+        startIndex: number;
+        endIndex: number;
+    } | null>(null);
+
+    // 👇 Debounced mention detection
+    const debouncedMentionCheck = useMemo(
+        () =>
+            debounce((text: string, cursor: number) => {
+                const result = getMentionQuery(text, cursor);
+                if (result) {
+                    setMentionState({
+                        isSearching: true,
+                        query: result.query,
+                        startIndex: result.startIndex,
+                        endIndex: result.endIndex,
+                    });
+                } else {
+                    setMentionState(null);
+                }
+            }, 150),
+        []
+    );
+
+    // 👇 Called from FooterInput on text change
+    const handleMessageChange = useCallback((text: string) => {
+        messageRef.current = text;
+        debouncedMentionCheck(text, cursorRef.current);
+    }, [debouncedMentionCheck]);
+
+    // 👇 Called from FooterInput on cursor change
+    const handleCursorChange = useCallback((position: number) => {
+        cursorRef.current = position;
+        debouncedMentionCheck(messageRef.current, position);
+    }, [debouncedMentionCheck]);
+
+    // 👇 Handle mention selection
+    const handleSelectMention = useCallback((user: MentionUser) => {
+        if (!mentionState) return;
+
+        const before = messageRef.current.slice(0, mentionState.startIndex);
+        const after = messageRef.current.slice(mentionState.endIndex);
+        const newMessage = `${before}@${user.username} ${after}`;
+
+        messageRef.current = newMessage;
+        cursorRef.current = before.length + user.username.length + 2;
+
+        // Clear mention state to go back to comments
+        setMentionState(null);
+
+        // Force footer to update with new message
+        // We need a way to sync - see FooterInput updates below
+        footerRef.current?.updateMessage(newMessage, cursorRef.current);
+    }, [mentionState]);
+
+    // 👇 Ref to communicate with footer
+    const footerRef = useRef<{ updateMessage: (msg: string, cursor: number) => void } | null>(null);
+
+    // Like handler
     const handleLike = useCallback((commentId: number) => {
         if (!postId) return;
         likeComment.mutate({ postId, commentId });
     }, [postId, likeComment]);
 
-    const [replyTo, setReplyTo] = useState<{ commentId: number; username: string } | null>(null);
-
-    const handleReply = useCallback((commentId: number, username: string) => {
-        setReplyTo({ commentId, username });
-    }, []);
-
-    const handleCancelReply = useCallback(() => setReplyTo(null), []);
-
-    const [deletingId, setDeletingId] = useState<number | null>(null);
-    const deleteComment = useDeleteComment();
-
-    // Get current user
-    const profileData = queryClient.getQueryData<ProfileResponse>(["profile"]);
-    const currentUserId = profileData?.data?.id ?? null;
-
-    // Add delete handler
+    // Delete handler
     const handleDelete = useCallback((commentId: number) => {
         if (!postId) return;
-
         Alert.alert(
             "Delete Comment",
             "Are you sure you want to delete this comment?",
@@ -464,20 +586,22 @@ export const CommentsBottomSheet = ({
         []
     );
 
-
+    // 👇 STABLE renderFooter - no message/cursor in deps
     const renderFooter = useCallback(
         (props: BottomSheetFooterProps) => (
             <BottomSheetFooter {...props}>
                 <FooterInput
+                    ref={footerRef}
                     replyTo={replyTo}
                     onCancelReply={handleCancelReply}
-                    // inputRef={inputRef}
                     postId={postId}
                     bottomInset={insets.bottom}
+                    onMessageChange={handleMessageChange}
+                    onCursorChange={handleCursorChange}
                 />
             </BottomSheetFooter>
         ),
-        [postId, insets.bottom, replyTo, handleCancelReply]  // Add replyTo, handleCancelReply
+        [postId, insets.bottom, replyTo, handleCancelReply, handleMessageChange, handleCursorChange]
     );
 
     return (
@@ -494,17 +618,24 @@ export const CommentsBottomSheet = ({
             onDismiss={onDismiss}
             backgroundStyle={styles.sheetBackground}
             handleIndicatorStyle={styles.handleIndicator}
-            keyboardBehavior={"extend"}
+            keyboardBehavior="extend"
             keyboardBlurBehavior="none"
         >
-            <CommentsList
-                onDelete={handleDelete}
-                deletingId={deletingId}
-                currentUserId={currentUserId}
-                postId={postId}
-                onReply={handleReply}
-                onLike={handleLike}
-            />
+            {mentionState?.isSearching ? (
+                <MentionSuggestionsList
+                    query={mentionState.query}
+                    onSelect={handleSelectMention}
+                />
+            ) : (
+                <CommentsList
+                    onDelete={handleDelete}
+                    deletingId={deletingId}
+                    currentUserId={currentUserId}
+                    postId={postId}
+                    onReply={handleReply}
+                    onLike={handleLike}
+                />
+            )}
         </BottomSheetModal>
     );
 };

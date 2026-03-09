@@ -6,6 +6,7 @@ import {
   FollowingResponse,
   FollowUserResponse,
   GendersResponse,
+  MentionSearchResponse,
   PossibleErrorResponse,
   ProfileResponse,
   TUserProfileResponse,
@@ -224,5 +225,13 @@ export const useFollowToggleMutation = () => {
       queryClient.invalidateQueries({ queryKey: ["following"] });
       queryClient.invalidateQueries({ queryKey: ["profile", username] });
     },
+  });
+};
+
+export const useSearchUserQuery = (q: string): UseQueryResult<MentionSearchResponse, PossibleErrorResponse> => {
+  return useQuery({
+    queryKey: ["user_search", q],
+    queryFn: () => apiClient.get(`search/mention`, { params: { q } }).then((d) => d.data),
+    enabled: q.length > 2,
   });
 };
