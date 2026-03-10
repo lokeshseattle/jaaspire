@@ -1,94 +1,36 @@
 // hooks/useVideoUpload.ts
+import { queryClient } from '@/src/lib/query-client';
 import { apiClient } from '@/src/services/api/api.client';
-import { useMutation } from '@tanstack/react-query';
+import { CreateStoryResponse, PossibleErrorResponse, StoryTrimResult } from '@/src/services/api/api.types';
+import { useMutation, UseMutationResult, useMutationState } from '@tanstack/react-query';
+import { File, Paths } from 'expo-file-system';
 
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB per chunk
 
-async function uploadChunk({
-    fileUri,
-    chunk,
-    chunkIndex,
-    totalChunks,
-    uploadId,
-    fileName,
-}: {
-    fileUri: string;
-    chunk: Blob;
-    chunkIndex: number;
-    totalChunks: number;
-    uploadId: string;
-    fileName: string;
-}) {
-    const formData = new FormData();
-    formData.append('chunk', chunk, fileUri);
-    formData.append('chunkIndex', String(chunkIndex));
-    formData.append('totalChunks', String(totalChunks));
-    formData.append('videoUID', uploadId);
-    formData.append('fileName', fileName);
+// ✅ Separate keys for different flows
+export const VIDEO_UPLOAD_KEY = ['video-upload'];
+export const STORY_UPLOAD_KEY = ['story-upload'];
+export const POST_UPLOAD_KEY = ['post-upload'];
 
-    return apiClient.post('/stories/upload-chunk', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-    });
+export interface MergeChunksResponse {
+    success: boolean;
+    message: string;
+    mergedFile: string;
+    videoUID: string;
+    totalSize: number;
+    isComplete?: boolean;
 }
 
-// async function uploadVideoInChunks(
-//     fileUri: string,
-//     fileName: string,
-//     onProgress?: (progress: number) => void
-// ) {
-//     console.log({ fileUri }, "fileUri")
-//     const file = new FileSystem.File(fileUri);
-//     // console.log({ size: file.size, exists: file.exists });
-//     const totalSize = file.size;
-//     const totalChunks = Math.ceil(totalSize / CHUNK_SIZE);
-
-//     console.log({ totalSize, totalChunks });
-//     const uploadId = `upload_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-
-//     for (let i = 0; i < totalChunks; i++) {
-//         const start = i * CHUNK_SIZE;
-//         const end = Math.min(start + CHUNK_SIZE, totalSize);
-
-//         const info = file.info()
-
-//         console.log({ info }, "info");
-//         const chunk = file.slice(start, end) as unknown as Blob;
-
-//         console.log({ chunk }, "chunk");
-
-//         await uploadChunk({
-//             fileUri,
-//             chunk,
-//             chunkIndex: i,
-//             totalChunks,
-//             uploadId,
-//             fileName,
-//         });
-
-//         onProgress?.(Math.round(((i + 1) / totalChunks) * 100));
-//     }
-
-//     const finalizeRes = await apiClient.post('/stories/merge-chunks', {
-//         videoUID: uploadId,
-//         fileName,
-//     });
-
-//     return finalizeRes.data;
-// }
-
-import { File, Paths } from 'expo-file-system';
-
-async function uploadVideoInChunks(
+// ✅ Reusable upload function (not a hook)
+export async function uploadVideoInChunks(
     fileUri: string,
     fileName: string,
-    onProgress?: (progress: number) => void
-) {
+): Promise<MergeChunksResponse> {
     const file = new File(fileUri);
     const totalSize = file.size;
     const totalChunks = Math.ceil(totalSize / CHUNK_SIZE);
     const uploadId = `upload_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-
-    // Open a file handle for sequential reads
+    let isComplete = false;
     const handle = file.open();
 
     try {
@@ -96,11 +38,9 @@ async function uploadVideoInChunks(
             const start = i * CHUNK_SIZE;
             const length = Math.min(CHUNK_SIZE, totalSize - start);
 
-            // Seek to position and read bytes directly — no slice, no arrayBuffer
             handle.offset = start;
             const bytes = handle.readBytes(length);
 
-            // Write to temp file
             const tempFile = new File(Paths.cache, `chunk_${i}_${uploadId}.bin`);
             tempFile.write(bytes);
 
@@ -120,8 +60,6 @@ async function uploadVideoInChunks(
             });
 
             tempFile.delete();
-
-            onProgress?.(Math.round(((i + 1) / totalChunks) * 100));
         }
     } finally {
         handle.close();
@@ -132,19 +70,133 @@ async function uploadVideoInChunks(
         fileName,
     });
 
-    return finalizeRes.data;
+    isComplete = true;
+    console.log(isComplete, finalizeRes.data);
+
+    return { ...finalizeRes.data, isComplete };
 }
 
-export function useVideoUpload() {
+// ✅ Basic upload hook (if you ever need just upload without create)
+export function useVideoUpload(): UseMutationResult<
+    MergeChunksResponse,
+    PossibleErrorResponse,
+    { fileUri: string; fileName: string },
+    unknown
+> {
     return useMutation({
-        mutationFn: ({
-            fileUri,
-            fileName,
-            onProgress,
-        }: {
-            fileUri: string;
-            fileName: string;
-            onProgress?: (progress: number) => void;
-        }) => uploadVideoInChunks(fileUri, fileName, onProgress),
+        mutationKey: VIDEO_UPLOAD_KEY,
+        mutationFn: ({ fileUri, fileName }) => uploadVideoInChunks(fileUri, fileName),
     });
+}
+
+// ============================================
+// STORY
+// ============================================
+
+interface UploadAndCreateStoryParams {
+    fileUri: string;
+    fileName: string;
+    trimVideoData: string
+}
+
+interface UploadAndCreateStoryResponse extends MergeChunksResponse {
+    story: StoryTrimResult;
+}
+
+export function useUploadAndCreateStory(): UseMutationResult<
+    UploadAndCreateStoryResponse,
+    PossibleErrorResponse,
+    UploadAndCreateStoryParams,
+    unknown
+> {
+    return useMutation({
+        mutationKey: STORY_UPLOAD_KEY,
+        mutationFn: async ({ fileUri, fileName, trimVideoData }) => {
+            // Step 1: Reusable upload
+            const mergeResult = await uploadVideoInChunks(fileUri, fileName);
+
+            // Step 2: Create story
+            const { data } = await apiClient.post<CreateStoryResponse>('/stories/create-chunk-story', {
+                videoUID: mergeResult.videoUID,
+                fileName: mergeResult.mergedFile,
+                trimVideoData
+            });
+
+            return {
+                ...mergeResult,
+                story: data.trimResult,
+            };
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["all_stories"] })
+        }
+    });
+}
+
+export function useIsStoryUploading(): boolean {
+    const mutations = useMutationState({
+        filters: { mutationKey: STORY_UPLOAD_KEY, status: 'pending' },
+        select: (mutation) => mutation.state.status,
+    });
+    return mutations.length > 0;
+}
+
+// ============================================
+// POST (for future use)
+// ============================================
+
+interface UploadAndCreatePostParams {
+    fileUri: string;
+    fileName: string;
+    caption?: string;
+    // Add other post-specific fields
+}
+
+interface UploadAndCreatePostResponse extends MergeChunksResponse {
+    post: any; // Replace with your Post type
+}
+
+export function useUploadAndCreatePost(): UseMutationResult<
+    UploadAndCreatePostResponse,
+    PossibleErrorResponse,
+    UploadAndCreatePostParams,
+    unknown
+> {
+    return useMutation({
+        mutationKey: POST_UPLOAD_KEY,
+        mutationFn: async ({ fileUri, fileName, caption }) => {
+            // Step 1: Reusable upload
+            const mergeResult = await uploadVideoInChunks(fileUri, fileName);
+
+            // Step 2: Create post
+            const { data } = await apiClient.post('/posts/create', {
+                videoUID: mergeResult.videoUID,
+                fileName: mergeResult.mergedFile,
+                caption,
+            });
+
+            return {
+                ...mergeResult,
+                post: data,
+            };
+        },
+    });
+}
+
+export function useIsPostUploading(): boolean {
+    const mutations = useMutationState({
+        filters: { mutationKey: POST_UPLOAD_KEY, status: 'pending' },
+        select: (mutation) => mutation.state.status,
+    });
+    return mutations.length > 0;
+}
+
+// ============================================
+// Combined check (any upload in progress)
+// ============================================
+
+export function useIsAnyUploadInProgress(): boolean {
+    const storyUploading = useIsStoryUploading();
+    const postUploading = useIsPostUploading();
+    return storyUploading || postUploading;
 }

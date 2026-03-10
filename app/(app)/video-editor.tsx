@@ -1,14 +1,16 @@
 // app/video-editor.tsx
 
-import { useVideoUpload } from '@/src/features/upload/upload.hooks';
+import { useStoryStore } from '@/src/features/story/story.store';
+import { useUploadAndCreateStory, useVideoUpload } from '@/src/features/upload/upload.hooks';
 import { VideoEditorScreen } from '@/src/features/videoEditor/screen/VideoEditor';
 import { VideoEditorResult } from '@/src/features/videoEditor/types';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { BackHandler, StyleSheet, Text, View } from 'react-native';
+
 export default function VideoEditorPage() {
     const router = useRouter();
-    const { uri } = useLocalSearchParams<{ uri: string }>();
+    const { uri, fileName } = useLocalSearchParams<{ uri: string, fileName: string }>();
 
     // Handle Android back button
     useEffect(() => {
@@ -21,22 +23,41 @@ export default function VideoEditorPage() {
     }, []);
 
     const [progress, setProgress] = useState(0);
+    const storyMutation = useUploadAndCreateStory()
 
-    const { mutate, isPending, isSuccess, isError } = useVideoUpload();
+    console.log("line23", progress)
+    const { setUploadProgress } = useStoryStore();
+
+    const videoUploadMutation = useVideoUpload();
+
+    // console.log("isSuccess", isSuccess)
+    // console.log("data", data)
+
+    // useEffect(() => {
+    //     console.log("progress878", progress)
+    //     // setIsLoading(progress > 0 && progress < 1)
+    // }, [progress])
 
     const handleUpload = () => {
-        mutate(
+        videoUploadMutation.mutate(
             {
                 fileUri: uri,
-                fileName: 'video.mp4',
-                onProgress: setProgress,
+                fileName: fileName,
             },
             {
-                onSuccess: (data) => console.log('Upload complete:', data),
-                onError: (err) => console.error('Upload failed:', err),
+                onSuccess: (data) => {
+                    // setIsLoading(false);
+
+                    console.log("success566")
+                },
                 onSettled: () => {
-                    console.warn('Upload settled');
-                }
+                    // setIsLoading(false);
+
+                    console.log("settled566")
+                },
+                onError: () => {
+                    // setIsLoading(false);
+                },
             }
         );
     };
@@ -45,8 +66,19 @@ export default function VideoEditorPage() {
 
     const handleConfirm = useCallback((result: VideoEditorResult) => {
         console.log('Trim result:', result);
+        console.log("Before handle Upload78978")
+        // handleUpload()
 
-        handleUpload()
+        storyMutation.mutate({
+            fileUri: uri,
+            fileName: fileName,
+            trimVideoData: JSON.stringify({
+                start: result.startTime,
+                // divide by 1000 to make in decimal seconds
+                end: result.endTime / 1000
+            })
+        });
+        console.log("after handle Upload78978")
 
         // Option 1: Go back with params
         router.back();

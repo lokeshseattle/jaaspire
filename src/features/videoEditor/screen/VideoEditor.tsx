@@ -4,7 +4,6 @@ import { useVideoPlayer } from 'expo-video';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
-    SafeAreaView,
     StatusBar,
     StyleSheet,
     Text,
@@ -12,6 +11,7 @@ import {
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { ControlBar } from '../components/ControlBar';
 import { TrimmerBar } from '../components/Trimmerbar/index';
 import { VideoPreview } from '../components/VideoPreview';

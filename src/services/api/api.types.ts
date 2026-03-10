@@ -594,3 +594,23 @@ export type BookmarksResponse = {
     pagination: Pagination;
   };
 };
+
+export type CreateStoryRequest = {
+  videoUID: string,
+  fileName: string,
+  trimVideoData: string
+}
+
+export type CreateStoryResponse = {
+  success: boolean;
+  message: string;
+  videoUID: string;
+  trimResult: StoryTrimResult;
+};
+
+export type StoryTrimResult = {
+  fileId: string;
+  filePath: string;
+  url: string;
+  format: string;
+};

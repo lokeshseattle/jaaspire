@@ -1,25 +1,91 @@
 import { useMediaPicker } from "@/hooks/use-media-picker";
-import { Colors } from "@/src/constants/theme";
 import { useGetProfile } from "@/src/features/profile/profile.hooks";
 import { useGetAllStories } from "@/src/features/story/story.hooks";
+import { useIsStoryUploading } from "@/src/features/upload/upload.hooks";
 import { useTheme } from "@/src/theme/ThemeProvider";
+import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
-import * as ImagePicker from "expo-image-picker";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import { useEffect } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
-  Linking,
   Pressable,
   StyleSheet,
   Text,
-  View,
+  View
 } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
+
+function StoryAvatar({
+  avatar,
+  hasStory,
+  isViewed,
+  isLoading,
+  animatedStyle,
+}: {
+  avatar: string;
+  hasStory: boolean;
+  isViewed: boolean;
+  isLoading: boolean;
+  animatedStyle: any;
+}) {
+  if (isLoading) {
+    return (
+      <Animated.View style={[styles.ring, animatedStyle]}>
+        <LinearGradient
+          colors={["#feda75", "#fa7e1e", "#d62976", "#962fbf", "#4f5bd5"]}
+          style={styles.gradient}
+        />
+      </Animated.View>
+    );
+  }
+
+  if (!hasStory) {
+    return (
+      <Image
+        cachePolicy="disk"
+        source={{ uri: avatar }}
+        style={styles.avatar}
+      />
+    );
+  }
+
+  if (isViewed) {
+    return (
+      <View style={[styles.ring, styles.greyRing]}>
+        <Image
+          cachePolicy="disk"
+          source={{ uri: avatar }}
+          style={styles.avatar}
+        />
+      </View>
+    );
+  }
+
+  return (
+    <LinearGradient
+      colors={["#feda75", "#fa7e1e", "#d62976", "#962fbf", "#4f5bd5"]}
+      style={styles.ring}
+    >
+      <View style={styles.innerRing}>
+        <Image
+          cachePolicy="disk"
+          source={{ uri: avatar }}
+          style={styles.avatar}
+        />
+      </View>
+    </LinearGradient>
+  );
+}
 
 function Stories() {
   const router = useRouter();
   const { theme } = useTheme();
+  const isLoading = useIsStoryUploading();
+
+  console.log("isLoading", isLoading)
 
   const storiesQuery = useGetAllStories();
 
@@ -27,66 +93,21 @@ function Stories() {
 
   const { openMediaPicker } = useMediaPicker();
 
-  // const { username } = data!.data;
+  const rotation = useSharedValue(0);
 
-  //   const requestPermission = async () => {
-  //     const { status, canAskAgain } = await MediaLibrary.getPermissionsAsync();
+  useEffect(() => {
+    rotation.value = withRepeat(
+      withTiming(360, { duration: 1200 }),
+      -1,
+      false
+    );
+  }, []);
 
-  //     if (status === "granted") {
-  //       return true;
-  //     }
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotation.value}deg` }],
+  }));
 
-  //     if (canAskAgain) {
-  //       const permissionResult = await MediaLibrary.requestPermissionsAsync();
 
-  //       if (permissionResult.status === "granted") {
-  //         return true;
-  //       }
-  //     }
-
-  //     Alert.alert(
-  //       "Permission required",
-  //       "Please enable media library access in Settings.",
-  //       [
-  //         { text: "Cancel", style: "cancel" },
-  //         { text: "Open Settings", onPress: () => Linking.openSettings() },
-  //       ],
-  //     );
-
-  //     return false;
-  //   };
-
-  const pickImage = async () => {
-    // Request permission from ImagePicker
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-    if (status !== "granted") {
-      Alert.alert(
-        "Permission required",
-        "Please enable media library access in Settings.",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Open Settings", onPress: () => Linking.openSettings() },
-        ],
-      );
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      // Use string media type values instead of deprecated MediaTypeOptions enum
-      mediaTypes: ["images", "videos"],
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 1,
-    });
-
-    if (!result.canceled) {
-      router.push({
-        pathname: "/story-editor",
-        params: { uri: result.assets[0].uri },
-      });
-    }
-  };
 
   const handleStory = () => {
     openMediaPicker({
@@ -100,7 +121,7 @@ function Stories() {
 
         if (file.type.startsWith("video/")) router.push({
           pathname: "/video-editor",
-          params: { uri: file.uri },
+          params: { uri: file.uri, fileName: file.name },
         });
       },
     });
@@ -139,6 +160,8 @@ function Stories() {
     } as any);
   }
 
+
+
   return (
     <View style={styles.container}>
       <FlatList
@@ -146,44 +169,37 @@ function Stories() {
         horizontal
         showsHorizontalScrollIndicator={false}
         keyExtractor={(item) => item.username}
-        renderItem={({ item }) => (
-          <Pressable
-            onPress={() =>
-              item.stories && item.stories.length > 0
-                ? openStory(item.username)
-                : null
-            }
-            style={styles.storyItem}
-          >
-            <View
-              style={[
-                styles.avatarWrapper,
-                item.is_viewed === 1 ||
-                  (item.stories && item.stories.length === 0)
-                  ? { borderColor: theme.colors.textSecondary }
-                  : { borderColor: Colors.primaryColor },
-                item.stories &&
-                item.stories.length === 0 && { borderColor: "transparent" },
-              ]}
+        renderItem={({ item }) => {
+          const hasStory = item.stories?.length > 0;
+          const isViewed = item.is_viewed === 1;
+
+          return (
+            <Pressable
+              onPress={() => (hasStory ? openStory(item.username) : null)}
+              style={styles.storyItem}
             >
-              <Image
-                cachePolicy={"disk"}
-                source={{ uri: item.avatar }}
-                style={styles.avatar}
-              />
+              <View style={styles.avatarWrapper}>
+                <StoryAvatar
+                  avatar={item.avatar}
+                  hasStory={hasStory}
+                  isViewed={isViewed}
+                  isLoading={isLoading}
+                  animatedStyle={animatedStyle}
+                />
 
-              {item.name === "You" && (
-                <Pressable onPress={handleStory} style={styles.addButton}>
-                  <Text style={styles.addText}>+</Text>
-                </Pressable>
-              )}
-            </View>
+                {item.name === "You" && (
+                  <Pressable onPress={handleStory} style={{ position: "absolute", backgroundColor: "white", borderRadius: 12, bottom: 0, right: 0 }}>
+                    <Ionicons name="add-circle" size={24} color={theme.colors.primary} />
+                  </Pressable>
+                )}
+              </View>
 
-            <Text style={styles.username} numberOfLines={1}>
-              {item.name}
-            </Text>
-          </Pressable>
-        )}
+              <Text style={styles.username} numberOfLines={1}>
+                {item.name}
+              </Text>
+            </Pressable>
+          );
+        }}
       />
     </View>
   );
@@ -201,8 +217,8 @@ const styles = StyleSheet.create({
     width: 70,
   },
   avatarWrapper: {
-    borderWidth: 2,
-    borderColor: Colors.primaryColor, // story ring color
+    // borderWidth: 2,
+    // borderColor: Colors.primaryColor, // story ring color
     borderRadius: 40,
     padding: 3,
   },
@@ -233,5 +249,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "bold",
     marginTop: -1,
+  }, ring: {
+    padding: 3,
+    borderRadius: 40,
   },
+
+  greyRing: {
+    borderWidth: 2,
+    borderColor: "#B8B8B8",
+    padding: 3,
+    borderRadius: 40,
+  },
+  gradient: {
+    width: 66,
+    height: 66,
+    borderRadius: 40,
+    padding: 13
+  },
+  innerRing: {
+    backgroundColor: "white",
+    padding: 3,
+    borderRadius: 40,
+  },
+
 });
