@@ -17,6 +17,7 @@ export const TRIMMER = {
     HANDLE_WIDTH: 16,
     BAR_HEIGHT: 60,
     MIN_TRIM_DURATION_MS: 1000, // 1 second minimum
+    MAX_TRIM_DURATION_MS: 60000, // 1 minute maximum
     HANDLE_HIT_SLOP: 20,
 };
 

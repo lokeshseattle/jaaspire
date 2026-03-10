@@ -17,6 +17,8 @@ interface UseVideoTrimmerProps {
     initialEndTime?: number;
 }
 
+const MAX_DURATION = 1000 * 60 * 1; // 1 minute
+
 interface UseVideoTrimmerReturn {
     trimRange: TrimRange;
     leftHandleGesture: ReturnType<typeof Gesture.Pan>;
@@ -33,7 +35,11 @@ export const useVideoTrimmer = ({
     initialStartTime = 0,
     initialEndTime,
 }: UseVideoTrimmerProps): UseVideoTrimmerReturn => {
-    const effectiveEndTime = initialEndTime ?? duration;
+    // CAP effectiveEndTime at MAX_DURATION (1 minute)
+    const effectiveEndTime = Math.min(
+        initialEndTime ?? duration,
+        MAX_DURATION
+    );
 
     const [trimRange, setTrimRange] = useState<TrimRange>({
         startTime: initialStartTime,
@@ -42,7 +48,11 @@ export const useVideoTrimmer = ({
 
     const trackWidth = LAYOUT.TRIMMER_WIDTH - TRIMMER.HANDLE_WIDTH * 2;
 
-    // Animated positions
+    // Calculate distances
+    const minDistancePx = (TRIMMER.MIN_TRIM_DURATION_MS / duration) * trackWidth;
+    const maxDistancePx = (MAX_DURATION / duration) * trackWidth;
+
+    // Animated positions - rightPosition now uses capped effectiveEndTime
     const leftPosition = useSharedValue(
         (initialStartTime / duration) * trackWidth
     );
@@ -53,10 +63,6 @@ export const useVideoTrimmer = ({
     // Store starting position when gesture begins
     const leftStartPosition = useSharedValue(0);
     const rightStartPosition = useSharedValue(0);
-
-    const minDistancePx = useMemo(() => {
-        return (TRIMMER.MIN_TRIM_DURATION_MS / duration) * trackWidth;
-    }, [duration, trackWidth]);
 
     const positionToTime = useCallback(
         (position: number) => {
@@ -80,24 +86,21 @@ export const useVideoTrimmer = ({
         () =>
             Gesture.Pan()
                 .onStart(() => {
-                    // Store current position when gesture starts
                     leftStartPosition.value = leftPosition.value;
                 })
                 .onUpdate((event) => {
-                    // Calculate new position based on START position + translation
-                    const newPosition = Math.max(
-                        0,
-                        Math.min(
-                            leftStartPosition.value + event.translationX,
-                            rightPosition.value - minDistancePx
-                        )
-                    );
+                    const candidatePosition = leftStartPosition.value + event.translationX;
+
+                    const lowerBound = Math.max(0, rightPosition.value - maxDistancePx);
+                    const upperBound = rightPosition.value - minDistancePx;
+
+                    const newPosition = Math.min(upperBound, Math.max(lowerBound, candidatePosition));
                     leftPosition.value = newPosition;
                 })
                 .onEnd(() => {
                     runOnJS(updateTrimRange)(leftPosition.value, rightPosition.value);
                 }),
-        [minDistancePx, updateTrimRange]
+        [minDistancePx, maxDistancePx, updateTrimRange]
     );
 
     // Right handle gesture
@@ -105,24 +108,21 @@ export const useVideoTrimmer = ({
         () =>
             Gesture.Pan()
                 .onStart(() => {
-                    // Store current position when gesture starts
                     rightStartPosition.value = rightPosition.value;
                 })
                 .onUpdate((event) => {
-                    // Calculate new position based on START position + translation
-                    const newPosition = Math.min(
-                        trackWidth,
-                        Math.max(
-                            rightStartPosition.value + event.translationX,
-                            leftPosition.value + minDistancePx
-                        )
-                    );
+                    const candidatePosition = rightStartPosition.value + event.translationX;
+
+                    const lowerBound = leftPosition.value + minDistancePx;
+                    const upperBound = Math.min(trackWidth, leftPosition.value + maxDistancePx);
+
+                    const newPosition = Math.min(upperBound, Math.max(lowerBound, candidatePosition));
                     rightPosition.value = newPosition;
                 })
                 .onEnd(() => {
                     runOnJS(updateTrimRange)(leftPosition.value, rightPosition.value);
                 }),
-        [minDistancePx, trackWidth, updateTrimRange]
+        [minDistancePx, maxDistancePx, trackWidth, updateTrimRange]
     );
 
     // Middle section gesture (moves both handles together)
@@ -130,7 +130,6 @@ export const useVideoTrimmer = ({
         () =>
             Gesture.Pan()
                 .onStart(() => {
-                    // Store both positions when gesture starts
                     leftStartPosition.value = leftPosition.value;
                     rightStartPosition.value = rightPosition.value;
                 })
@@ -140,7 +139,6 @@ export const useVideoTrimmer = ({
                     let newLeft = leftStartPosition.value + event.translationX;
                     let newRight = rightStartPosition.value + event.translationX;
 
-                    // Clamp to boundaries
                     if (newLeft < 0) {
                         newLeft = 0;
                         newRight = currentWidth;
@@ -173,12 +171,15 @@ export const useVideoTrimmer = ({
         width: rightPosition.value - leftPosition.value,
     }));
 
-    // Reset function
+    // Reset function - also cap at MAX_DURATION
     const resetTrim = useCallback(() => {
+        const cappedEndPosition = Math.min(trackWidth, maxDistancePx);
         leftPosition.value = withSpring(0);
-        rightPosition.value = withSpring(trackWidth);
-        setTrimRange({ startTime: 0, endTime: duration });
-    }, [duration, trackWidth]);
+        rightPosition.value = withSpring(cappedEndPosition);
+        setTrimRange({ startTime: 0, endTime: Math.min(duration, MAX_DURATION) });
+    }, [duration, trackWidth, maxDistancePx]);
+
+    console.log({ trimRange });
 
     return {
         trimRange,

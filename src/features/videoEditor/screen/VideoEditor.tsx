@@ -1,6 +1,6 @@
 // src/features/videoEditor/VideoEditorScreen.tsx
 
-import { useVideoPlayer } from 'expo-video';
+import { VideoPlayer, useVideoPlayer } from 'expo-video';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
@@ -20,60 +20,28 @@ import { useVideoLoop } from '../hooks/useVideoLoop';
 import { useVideoTrimmer } from '../hooks/useVideoTrimmer';
 import { VideoEditorProps, VideoEditorResult } from '../types';
 
-export const VideoEditorScreen: React.FC<VideoEditorProps> = ({
+// ============================================
+// INNER COMPONENT - Only renders when duration is known
+// ============================================
+interface VideoEditorContentProps {
+    player: VideoPlayer;
+    videoUri: string;
+    duration: number; // Required - guaranteed to be a real number
+    onConfirm: (result: VideoEditorResult) => void;
+    onCancel: () => void;
+}
+
+const VideoEditorContent: React.FC<VideoEditorContentProps> = ({
+    player,
     videoUri,
+    duration,
     onConfirm,
     onCancel,
 }) => {
-    // State
     const [isPlaying, setIsPlaying] = useState(false);
     const [isMuted, setIsMuted] = useState(false);
-    const [duration, setDuration] = useState<number | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
 
-    // Initialize video player
-    const player = useVideoPlayer(videoUri, (playerInstance) => {
-        playerInstance.loop = false; // We handle looping manually
-        playerInstance.muted = false;
-    });
-
-    // Get video duration once player is ready
-    useEffect(() => {
-        if (!player) return;
-
-        const checkDuration = setInterval(() => {
-            try {
-                if (player.duration && player.duration > 0) {
-                    const durationMs = player.duration * 1000; // Convert to ms
-                    setDuration(durationMs);
-                    setIsLoading(false);
-                    clearInterval(checkDuration);
-                }
-            } catch (err) {
-                console.error('Error getting duration:', err);
-                setError('Failed to load video');
-                setIsLoading(false);
-                clearInterval(checkDuration);
-            }
-        }, 100);
-
-        // Timeout after 10 seconds
-        const timeout = setTimeout(() => {
-            if (isLoading) {
-                clearInterval(checkDuration);
-                setError('Video loading timeout');
-                setIsLoading(false);
-            }
-        }, 10000);
-
-        return () => {
-            clearInterval(checkDuration);
-            clearTimeout(timeout);
-        };
-    }, [player, isLoading]);
-
-    // Initialize trimmer hook
+    // Initialize trimmer hook - duration is now guaranteed to be real
     const {
         trimRange,
         leftHandleGesture,
@@ -84,9 +52,9 @@ export const VideoEditorScreen: React.FC<VideoEditorProps> = ({
         selectionStyle,
         resetTrim,
     } = useVideoTrimmer({
-        duration: duration || 10000,
+        duration,
         initialStartTime: 0,
-        initialEndTime: duration || 10000,
+        initialEndTime: duration, // Will be capped at MAX_DURATION inside the hook
     });
 
     // Handle video looping within trim range
@@ -111,9 +79,6 @@ export const VideoEditorScreen: React.FC<VideoEditorProps> = ({
         const handlePlayingChange = () => {
             setIsPlaying(player.playing);
         };
-
-        // Subscribe to player status changes if available
-        // Note: expo-video API may vary, adjust as needed
 
         return () => {
             // Cleanup if needed
@@ -142,7 +107,6 @@ export const VideoEditorScreen: React.FC<VideoEditorProps> = ({
         if (isPlaying || (player && player.currentTime === 0)) {
             animationFrameId = requestAnimationFrame(updateProgress);
         } else {
-            // Update once when paused or manual seek happens
             updateProgress();
         }
 
@@ -169,7 +133,6 @@ export const VideoEditorScreen: React.FC<VideoEditorProps> = ({
             player.pause();
             setIsPlaying(false);
         } else {
-            // Ensure we start from the trim start if outside range
             const currentTimeMs = player.currentTime * 1000;
             if (currentTimeMs < trimRange.startTime || currentTimeMs >= trimRange.endTime) {
                 player.currentTime = trimRange.startTime / 1000;
@@ -195,7 +158,6 @@ export const VideoEditorScreen: React.FC<VideoEditorProps> = ({
     }, [resetTrim, player, isPlaying]);
 
     const handleConfirm = useCallback(() => {
-        // Pause video before confirming
         if (player && isPlaying) {
             player.pause();
             setIsPlaying(false);
@@ -205,14 +167,13 @@ export const VideoEditorScreen: React.FC<VideoEditorProps> = ({
             uri: videoUri,
             startTime: trimRange.startTime,
             endTime: trimRange.endTime,
-            duration: duration || 0,
+            duration: duration,
         };
 
         onConfirm(result);
     }, [videoUri, trimRange, duration, onConfirm, player, isPlaying]);
 
     const handleCancel = useCallback(() => {
-        // Pause video before canceling
         if (player && isPlaying) {
             player.pause();
             setIsPlaying(false);
@@ -220,43 +181,6 @@ export const VideoEditorScreen: React.FC<VideoEditorProps> = ({
 
         onCancel();
     }, [onCancel, player, isPlaying]);
-
-    // Loading state
-    if (isLoading) {
-        return (
-            <SafeAreaView style={styles.container}>
-                <StatusBar barStyle="dark-content" />
-                <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color={COLORS.controlActive} />
-                    <Text style={styles.loadingText}>Loading video...</Text>
-                </View>
-            </SafeAreaView>
-        );
-    }
-
-    // Error state
-    if (error || !duration) {
-        return (
-            <SafeAreaView style={styles.container}>
-                <StatusBar barStyle="dark-content" />
-                <View style={styles.errorContainer}>
-                    <Text style={styles.errorText}>{error || 'Failed to load video'}</Text>
-                    <Text style={styles.errorSubtext}>Please try again with a different video</Text>
-                </View>
-                <View style={styles.errorButtonContainer}>
-                    <ControlBar
-                        isPlaying={false}
-                        isMuted={false}
-                        onPlayPause={() => { }}
-                        onMuteToggle={() => { }}
-                        onReset={() => { }}
-                        onConfirm={() => { }}
-                        onCancel={handleCancel}
-                    />
-                </View>
-            </SafeAreaView>
-        );
-    }
 
     return (
         <GestureHandlerRootView style={styles.gestureRoot}>
@@ -289,7 +213,7 @@ export const VideoEditorScreen: React.FC<VideoEditorProps> = ({
                 </View>
 
                 {/* Spacer */}
-                <View style={styles.spacer} />
+                {/* <View style={styles.spacer} /> */}
 
                 {/* Control Bar */}
                 <View style={styles.controlsContainer}>
@@ -305,6 +229,107 @@ export const VideoEditorScreen: React.FC<VideoEditorProps> = ({
                 </View>
             </SafeAreaView>
         </GestureHandlerRootView>
+    );
+};
+
+// ============================================
+// OUTER COMPONENT - Handles loading/error states
+// ============================================
+export const VideoEditorScreen: React.FC<VideoEditorProps> = ({
+    videoUri,
+    onConfirm,
+    onCancel,
+}) => {
+    const [duration, setDuration] = useState<number | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    // Initialize video player
+    const player = useVideoPlayer(videoUri, (playerInstance) => {
+        playerInstance.loop = false;
+        playerInstance.muted = false;
+    });
+
+    // Get video duration once player is ready
+    useEffect(() => {
+        if (!player) return;
+
+        const checkDuration = setInterval(() => {
+            try {
+                if (player.duration && player.duration > 0) {
+                    const durationMs = player.duration * 1000;
+                    setDuration(durationMs);
+                    setIsLoading(false);
+                    clearInterval(checkDuration);
+                }
+            } catch (err) {
+                console.error('Error getting duration:', err);
+                setError('Failed to load video');
+                setIsLoading(false);
+                clearInterval(checkDuration);
+            }
+        }, 100);
+
+        const timeout = setTimeout(() => {
+            if (isLoading) {
+                clearInterval(checkDuration);
+                setError('Video loading timeout');
+                setIsLoading(false);
+            }
+        }, 10000);
+
+        return () => {
+            clearInterval(checkDuration);
+            clearTimeout(timeout);
+        };
+    }, [player, isLoading]);
+
+    // Loading state
+    if (isLoading) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <StatusBar barStyle="dark-content" />
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color={COLORS.controlActive} />
+                    <Text style={styles.loadingText}>Loading video...</Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    // Error state
+    if (error || !duration) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <StatusBar barStyle="dark-content" />
+                <View style={styles.errorContainer}>
+                    <Text style={styles.errorText}>{error || 'Failed to load video'}</Text>
+                    <Text style={styles.errorSubtext}>Please try again with a different video</Text>
+                </View>
+                <View style={styles.errorButtonContainer}>
+                    <ControlBar
+                        isPlaying={false}
+                        isMuted={false}
+                        onPlayPause={() => { }}
+                        onMuteToggle={() => { }}
+                        onReset={() => { }}
+                        onConfirm={() => { }}
+                        onCancel={onCancel}
+                    />
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    // Duration is now guaranteed to be a number
+    return (
+        <VideoEditorContent
+            player={player}
+            videoUri={videoUri}
+            duration={duration}
+            onConfirm={onConfirm}
+            onCancel={onCancel}
+        />
     );
 };
 
@@ -330,6 +355,7 @@ const styles = StyleSheet.create({
     },
     previewContainer: {
         backgroundColor: COLORS.previewBackground,
+        flex: 1
     },
     trimmerContainer: {
         marginTop: 16,

@@ -15,12 +15,14 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ player }) => {
     const videoHeight = LAYOUT.SCREEN_WIDTH * (9 / 16); // 16:9 aspect ratio
 
     return (
-        <View style={[styles.container, { height: videoHeight }]}>
+        <View style={[styles.container,
+            // { height: videoHeight }
+        ]}>
             <VideoView
                 player={player}
                 style={styles.video}
                 contentFit="contain"
-                nativeControls={true}
+                nativeControls={false}
             />
         </View>
     );
@@ -30,6 +32,7 @@ const styles = StyleSheet.create({
     container: {
         width: '100%',
         backgroundColor: COLORS.previewBackground,
+        flex: 1,
     },
     video: {
         flex: 1,
