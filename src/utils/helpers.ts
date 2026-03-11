@@ -1,4 +1,4 @@
-export type MediaType = "image" | "video" | "unknown";
+export type MediaType = "image" | "video";
 
 const IMAGE_EXTENSIONS = new Set<string>([
   // Common
@@ -39,15 +39,22 @@ const VIDEO_EXTENSIONS = new Set<string>([
   "m2ts",
 ]);
 
-export const getMediaType = (extension: string): MediaType => {
-  if (!extension) return "unknown";
+export const getMediaType = (pathOrExtension: string): MediaType => {
+  if (!pathOrExtension) return "image";
 
-  const ext = extension.toLowerCase().trim();
+  // Strip query params, then extract just the filename from the path/URL
+  const withoutQuery = pathOrExtension.split("?")[0];
+  const filename = withoutQuery.split("/").pop() ?? "";
+  // If the filename has a dot, use its extension; otherwise treat the whole input as an extension
+  const ext = (filename.includes(".")
+    ? filename.split(".").pop()
+    : pathOrExtension
+  )?.toLowerCase().trim() ?? "";
 
   if (IMAGE_EXTENSIONS.has(ext)) return "image";
   if (VIDEO_EXTENSIONS.has(ext)) return "video";
 
-  return "unknown";
+  return "image";
 };
 
 export function timeAgo(dateString: string): string {

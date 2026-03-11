@@ -1,4 +1,4 @@
-import { Platform } from "react-native";
+import { ColorValue, Platform } from "react-native";
 
 type ThemeShape = {
   colors: {
@@ -13,6 +13,7 @@ type ThemeShape = {
     icon: string;
     tabIconDefault: string;
     tabIconSelected: string;
+    gradient: readonly [ColorValue, ColorValue, ...ColorValue[]];
   };
   spacing: typeof spacing;
   radius: typeof radius;
@@ -64,6 +65,7 @@ const lightTheme: ThemeShape = {
     icon: "#687076",
     tabIconDefault: "#687076",
     tabIconSelected: "#0a7ea4",
+    gradient: ["#5a42b7", "#2761df", "#00f1ed"]
   },
   spacing,
   radius,
@@ -83,6 +85,7 @@ const darkTheme: ThemeShape = {
     icon: "#94A3B8",
     tabIconDefault: "#64748B",
     tabIconSelected: "#38BDF8",
+    gradient: ["#5a42b7", "#2761df", "#00f1ed"]
   },
   spacing,
   radius,

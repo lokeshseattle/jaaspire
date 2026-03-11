@@ -4,6 +4,7 @@ import {
   useGetStoryByUsername,
 } from "@/src/features/story/story.hooks";
 import { queryClient } from "@/src/lib/query-client";
+import { getMediaType } from "@/src/utils/helpers";
 import { router } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, StyleSheet, View } from "react-native";
@@ -15,7 +16,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import StoryHeader from "./components/StoryHeader";
-import StoryMedia from "./components/StoryMedia";
+import StoryMedia, { StoryMediaHandle } from "./components/StoryMedia";
 import StoryProgress from "./components/StoryProgress";
 import StoryTouchOverlay from "./components/StoryTouchOverlay";
 import Viewers from "./components/Viewers";
@@ -44,6 +45,9 @@ const StoryView = ({ username, onClose, isPanning = false }: TProps) => {
   const callbackRef = useRef(onClose);
   callbackRef.current = onClose;
 
+  const [videoDuration, setVideoDuration] = useState<number | null>(null);
+  const mediaRef = useRef<StoryMediaHandle>(null);
+
   const stories = data?.stories ?? [];
   const user = data?.user;
   const hasStories = data?.has_stories ?? false;
@@ -53,8 +57,10 @@ const StoryView = ({ username, onClose, isPanning = false }: TProps) => {
 
   const currentStory = stories[safeIndex];
 
-  // const storyViewerQuery = useGetStoryViewers(currentStory.id)
+  const currentMediaType = currentStory ? getMediaType(currentStory.path) : "video";
 
+  // const storyViewerQuery = useGetStoryViewers(currentStory.id)
+  ` `
   // Go to next story
   const goNext = useCallback(() => {
     if (safeIndex < stories.length - 1) {
@@ -71,22 +77,53 @@ const StoryView = ({ username, onClose, isPanning = false }: TProps) => {
     }
   }, [safeIndex]);
 
+  const handleVideoLoad = useCallback((duration: number) => {
+    setVideoDuration(duration);
+  }, []);
+
+  const handleTimeUpdate = useCallback(
+    (currentTime: number) => {
+      if (videoDuration && videoDuration > 0) {
+        progress.value = Math.min(currentTime / videoDuration, 1);
+      }
+    },
+    [videoDuration, progress]
+  );
+
+  const handleVideoEnd = useCallback(() => {
+    goNext();
+  }, [goNext]);
+
+  const handleFastForwardStart = useCallback(() => {
+    mediaRef.current?.setPlaybackRate(2);
+  }, []);
+
+  const handleFastForwardEnd = useCallback(() => {
+    mediaRef.current?.setPlaybackRate(1);
+  }, []);
+
   // Start/restart progress animation when story changes
   useEffect(() => {
     if (!stories.length) return;
 
     cancelAnimation(progress);
     progress.value = 0;
+    setVideoDuration(null);
 
-    progress.value = withTiming(
-      1,
-      { duration: STORY_DURATION, easing: Easing.linear },
-      (finished) => {
-        if (finished) {
-          runOnJS(goNext)();
+    const mediaType = getMediaType(stories[safeIndex]?.path ?? "");
+
+    // Only start timer for images
+    if (mediaType === "image") {
+      progress.value = withTiming(
+        1,
+        { duration: STORY_DURATION, easing: Easing.linear },
+        (finished) => {
+          if (finished) {
+            runOnJS(goNext)();
+          }
         }
-      },
-    );
+      );
+    }
 
     return () => {
       cancelAnimation(progress);
@@ -97,27 +134,26 @@ const StoryView = ({ username, onClose, isPanning = false }: TProps) => {
   useEffect(() => {
     const shouldPause = isPaused || isPanning;
 
-    if (shouldPause) {
-      cancelAnimation(progress);
-    } else {
-      // Resume from current progress
-      const remaining = 1 - progress.value;
-      if (remaining > 0) {
-        progress.value = withTiming(
-          1,
-          {
-            duration: STORY_DURATION * remaining,
-            easing: Easing.linear,
-          },
-          (finished) => {
-            if (finished) {
-              runOnJS(goNext)();
+    // Only handle timer for images - videos use paused prop
+    if (currentMediaType === "image") {
+      if (shouldPause) {
+        cancelAnimation(progress);
+      } else {
+        const remaining = 1 - progress.value;
+        if (remaining > 0) {
+          progress.value = withTiming(
+            1,
+            { duration: STORY_DURATION * remaining, easing: Easing.linear },
+            (finished) => {
+              if (finished) {
+                runOnJS(goNext)();
+              }
             }
-          },
-        );
+          );
+        }
       }
     }
-  }, [isPaused, isPanning]);
+  }, [isPaused, isPanning, currentMediaType]);
 
   const handleDeleteStory = () => {
     if (!currentStory?.id) return;
@@ -183,7 +219,15 @@ const StoryView = ({ username, onClose, isPanning = false }: TProps) => {
   return (
     <View style={styles.container}>
       {/* Story image — bottom layer */}
-      <StoryMedia uri={currentStory.path} />
+      <StoryMedia
+        ref={mediaRef}
+        uri={currentStory.path}
+        type={currentMediaType}
+        paused={isPaused || isPanning}
+        onVideoLoad={handleVideoLoad}
+        onTimeUpdate={handleTimeUpdate}
+        onVideoEnd={handleVideoEnd}
+      />
       {/* Gradient overlay for top UI readability */}
       <Animated.View style={styles.topGradient} />
 
@@ -212,6 +256,8 @@ const StoryView = ({ username, onClose, isPanning = false }: TProps) => {
         onPrevious={goPrevious}
         onPressIn={() => setIsPaused(true)}
         onPressOut={() => setIsPaused(false)}
+        onFastForwardStart={handleFastForwardStart}
+        onFastForwardEnd={handleFastForwardEnd}
       />
       <Viewers id={currentStory.id} setIsPaused={setIsPaused} />
     </View>

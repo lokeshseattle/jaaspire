@@ -45,3 +45,12 @@ export type UploadVideoRequest = {
     fileName: string;
     onProgress?: (progress: number) => void;
 };
+export type ReportTypesResponse = {
+    success: boolean;
+    message: string;
+    data: ReportTypesData;
+};
+
+export type ReportTypesData = {
+    types: string[];
+};

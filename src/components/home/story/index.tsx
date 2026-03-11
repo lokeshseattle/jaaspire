@@ -31,14 +31,27 @@ function StoryAvatar({
   isLoading: boolean;
   animatedStyle: any;
 }) {
+  const { theme } = useTheme();
   if (isLoading) {
     return (
-      <Animated.View style={[styles.ring, animatedStyle]}>
-        <LinearGradient
-          colors={["#feda75", "#fa7e1e", "#d62976", "#962fbf", "#4f5bd5"]}
-          style={styles.gradient}
-        />
-      </Animated.View>
+      <View style={styles.devRingContainer}>
+        {/* The rotating gradient in the background */}
+        <Animated.View style={[StyleSheet.absoluteFill, animatedStyle]}>
+          <LinearGradient
+            colors={theme.colors.gradient || ["#feda75", "#fa7e1e", "#d62976", "#962fbf", "#4f5bd5"]}
+            style={{ flex: 1, borderRadius: 40 }}
+          />
+        </Animated.View>
+
+        {/* The static inner ring and avatar sitting on top */}
+        <View style={styles.innerRing}>
+          <Image
+            cachePolicy="disk"
+            source={{ uri: avatar }}
+            style={styles.avatar}
+          />
+        </View>
+      </View>
     );
   }
 
@@ -66,7 +79,7 @@ function StoryAvatar({
 
   return (
     <LinearGradient
-      colors={["#feda75", "#fa7e1e", "#d62976", "#962fbf", "#4f5bd5"]}
+      colors={theme.colors.gradient}
       style={styles.ring}
     >
       <View style={styles.innerRing}>
@@ -172,7 +185,7 @@ function Stories() {
         renderItem={({ item }) => {
           const hasStory = item.stories?.length > 0;
           const isViewed = item.is_viewed === 1;
-
+          const uploading = isLoading && item.name === "You"
           return (
             <Pressable
               onPress={() => (hasStory ? openStory(item.username) : null)}
@@ -183,11 +196,11 @@ function Stories() {
                   avatar={item.avatar}
                   hasStory={hasStory}
                   isViewed={isViewed}
-                  isLoading={isLoading}
+                  isLoading={uploading}
                   animatedStyle={animatedStyle}
                 />
 
-                {item.name === "You" && (
+                {item.name === "You" && !isLoading && (
                   <Pressable onPress={handleStory} style={{ position: "absolute", backgroundColor: "white", borderRadius: 12, bottom: 0, right: 0 }}>
                     <Ionicons name="add-circle" size={24} color={theme.colors.primary} />
                   </Pressable>
@@ -270,6 +283,13 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     padding: 3,
     borderRadius: 40,
+  },
+  devRingContainer: {
+    padding: 3, // This padding reveals the spinning gradient underneath
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 40,
+    // Note: ensure this matches your other ring border radiuses
   },
 
 });

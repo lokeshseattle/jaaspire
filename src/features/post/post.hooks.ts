@@ -1,7 +1,7 @@
 import { queryClient } from "@/src/lib/query-client";
 import { apiClient } from "@/src/services/api/api.client";
-import { BookmarkPostResponse, BookmarksResponse, FeedResponse, PossibleErrorResponse, SinglePostResponse } from "@/src/services/api/api.types";
-import { useInfiniteQuery, useMutation, UseMutationResult, useQuery } from "@tanstack/react-query";
+import { BookmarkPostResponse, BookmarksResponse, CreateReportPayload, FeedResponse, PossibleErrorResponse, ReportTypesData, ReportTypesResponse, SinglePostResponse } from "@/src/services/api/api.types";
+import { useInfiniteQuery, useMutation, UseMutationResult, useQuery, UseQueryResult } from "@tanstack/react-query";
 import { usePostStore } from "./post.store";
 
 export const useGetFeedQuery = () => {
@@ -396,8 +396,18 @@ export const useGetBookmarksQuery = (type?: "all" | "image" | "video") => {
   });
 };
 
-export const useGetReport = () => {
+export const useGetReport = (): UseQueryResult<ReportTypesData, PossibleErrorResponse> => {
   return useQuery({
-    queryKey: []
+    queryKey: ["report"],
+    queryFn: () => apiClient.get<ReportTypesResponse>("/report/types").then((d) => d.data.data),
+    staleTime: 1000 * 60 * 60 * 24,
+    gcTime: 1000 * 60 * 60 * 24,
+  })
+}
+
+export const useCreateReportMutation = (): UseMutationResult<void, PossibleErrorResponse, CreateReportPayload> => {
+  return useMutation({
+    mutationFn: (payload: CreateReportPayload) =>
+      apiClient.post<void>("/report/content", payload).then((d) => d.data),
   })
 }

@@ -17,6 +17,7 @@ import {
   findNodeHandle,
 } from "react-native";
 import StoryAvatar from "../story/StoryAvatar";
+import ReportModal from "./ReportModal";
 
 const MENU_WIDTH = 180;
 
@@ -28,6 +29,7 @@ const PostHeader: React.FC = () => {
   const iconRef = useRef<View>(null);
 
   const [menuVisible, setMenuVisible] = useState(false);
+  const [reportModalVisible, setReportModalVisible] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
 
   const savePost = useBookmarkPostMutation()
@@ -61,8 +63,10 @@ const PostHeader: React.FC = () => {
   const handleAction = (action: string) => {
     if (action === "save") {
       savePost.mutate({ action: !post.is_bookmarked ? "add" : "remove", postId: post.id })
+    } else if (action === "report") {
+      setReportModalVisible(true);
     }
-    // closeMenu();
+    closeMenu();
   };
 
   const navigateToUser = () => {
@@ -137,6 +141,13 @@ const PostHeader: React.FC = () => {
           </View>
         </Pressable>
       </Modal>
+
+      <ReportModal
+        visible={reportModalVisible}
+        onClose={() => setReportModalVisible(false)}
+        postId={post.id}
+        userId={post.user.id}
+      />
     </>
   );
 };

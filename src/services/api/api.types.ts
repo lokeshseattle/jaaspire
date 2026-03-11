@@ -614,3 +614,29 @@ export type StoryTrimResult = {
   url: string;
   format: string;
 };
+
+export type ReportReason = {
+  id: number;
+  name?: string;
+  title?: string;
+  label?: string;
+};
+
+export type ReportTypesData = {
+  types: string[];
+};
+
+export type ReportTypesResponse = {
+  success: boolean;
+  message: string;
+  data: ReportTypesData;
+};
+
+export type CreateReportPayload = {
+  type: string;
+  user_id: number;
+  post_id: number;
+  message_id?: string;
+  stream_id?: string;
+  details: string;
+};
