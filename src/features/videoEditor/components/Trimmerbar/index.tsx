@@ -75,7 +75,7 @@ export const TrimmerBar: React.FC<TrimmerBarProps> = ({
 const styles = StyleSheet.create({
     container: {
         paddingHorizontal: LAYOUT.TRIMMER_HORIZONTAL_PADDING,
-        paddingVertical: 16,
+        paddingVertical: 10,
     },
     gestureRoot: {
         width: '100%',

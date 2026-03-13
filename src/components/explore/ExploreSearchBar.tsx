@@ -45,11 +45,11 @@ export const ExploreSearchBar: React.FC<ExploreSearchBarProps> = ({
                     </Pressable>
                 )}
             </View>
-            {isFocused && (
+            {/* {isFocused && (
                 <Pressable onPress={onBlur} style={styles.cancelButton}>
                     <Ionicons name="close" size={24} color="#ffffff" />
                 </Pressable>
-            )}
+            )} */}
         </View>
     );
 };

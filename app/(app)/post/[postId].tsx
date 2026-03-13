@@ -3,7 +3,7 @@
 import { useCommentsSheet } from "@/hooks/use-comment-sheet";
 import { CommentsBottomSheet } from "@/src/components/comments/CommentsBottomSheet";
 import PostItem from "@/src/components/home/posts/PostWrapper";
-import { useGetSinglePost } from "@/src/features/post/post.hooks";
+import { useGetSinglePost, useTrackPostView } from "@/src/features/post/post.hooks";
 import { videoManager } from "@/src/lib/video-manager";
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -28,6 +28,7 @@ const PostScreen = () => {
 
     const [visiblePostId, setVisiblePostId] = useState<number | null>(null);
     const [isScreenFocused, setIsScreenFocused] = useState(true);
+    const trackPostView = useTrackPostView();
 
     // Comments hook
     const { bottomSheetRef, selectedPostId, openComments, onDismiss } =
@@ -101,9 +102,12 @@ const PostScreen = () => {
 
             const newVisibleId = mostVisibleItem.item as number;
 
+
+
             setVisiblePostId((prevId) => {
                 if (prevId !== newVisibleId) {
                     console.log(`👁️ Visible post changed: ${prevId} → ${newVisibleId}`);
+                    trackPostView.mutate(newVisibleId);
                 }
                 return newVisibleId;
             });

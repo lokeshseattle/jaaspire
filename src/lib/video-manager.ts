@@ -13,6 +13,8 @@ class VideoPlayerManager {
     private mountedPlayers = new Set<number>();
     private maxPlayers = 5;
     private currentlyPlaying: number | null = null;
+    private globalMuted: boolean = true;
+    private muteSubscribers = new Set<(muted: boolean) => void>();
 
     /**
      * Get an existing player or create a new one for a given post.
@@ -49,7 +51,7 @@ class VideoPlayerManager {
 
         const player = createVideoPlayer(url);
         player.loop = true;
-        player.muted = true;
+        player.muted = this.globalMuted;
 
         this.players.set(postId, {
             player,
@@ -194,17 +196,29 @@ class VideoPlayerManager {
     }
 
     /**
-     * Set muted state for a player.
+     * Set muted state for all players globally.
      */
-    setMuted(postId: number, muted: boolean): void {
-        const entry = this.players.get(postId);
-        if (entry && !entry.isCleared) {
-            try {
-                entry.player.muted = muted;
-            } catch (e) {
-                console.warn(`⚠️ Failed to set muted for post ${postId}:`, e);
+    setGlobalMuted(muted: boolean): void {
+        this.globalMuted = muted;
+        this.players.forEach(({ player, isCleared }, postId) => {
+            if (!isCleared) {
+                try {
+                    player.muted = muted;
+                } catch (e) {
+                    console.warn(`⚠️ Failed to set muted for post ${postId}:`, e);
+                }
             }
-        }
+        });
+        this.muteSubscribers.forEach(sub => sub(muted));
+    }
+
+    getGlobalMuted(): boolean {
+        return this.globalMuted;
+    }
+
+    subscribeToMute(callback: (muted: boolean) => void): () => void {
+        this.muteSubscribers.add(callback);
+        return () => this.muteSubscribers.delete(callback);
     }
 
     /**

@@ -17,7 +17,7 @@ export function useManagedVideoPlayer(
     const [isReady, setIsReady] = useState(false);
     const [isBuffering, setIsBuffering] = useState(true);
     const [isPlaying, setIsPlaying] = useState(false);
-    const [isMuted, setIsMuted] = useState(true);
+    const [isMuted, setIsMuted] = useState(videoManager.getGlobalMuted());
     const [player, setPlayer] = useState<VideoPlayer | null>(null);
 
     // Refs to avoid stale closures in event listeners
@@ -127,6 +127,13 @@ export function useManagedVideoPlayer(
         };
     }, [postId, url]); // Re-run if postId or url changes
 
+    // --- Sub to global mute state ---
+    useEffect(() => {
+        return videoManager.subscribeToMute((muted) => {
+            setIsMuted(muted);
+        });
+    }, []);
+
     // --- Handle visibility changes ---
     useEffect(() => {
         const p = playerRef.current;
@@ -173,15 +180,8 @@ export function useManagedVideoPlayer(
     }, []);
 
     const toggleMute = useCallback(() => {
-        const p = playerRef.current;
-        if (!p) return;
-
-        const currentPostId = postIdRef.current;
-        setIsMuted((prev) => {
-            const newMuted = !prev;
-            videoManager.setMuted(currentPostId, newMuted);
-            return newMuted;
-        });
+        const currentGlobalMuted = videoManager.getGlobalMuted();
+        videoManager.setGlobalMuted(!currentGlobalMuted);
     }, []);
 
     const pause = useCallback(() => {

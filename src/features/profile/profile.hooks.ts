@@ -235,3 +235,18 @@ export const useSearchUserQuery = (q: string): UseQueryResult<MentionSearchRespo
     enabled: q.length > 2,
   });
 };
+
+export const useAcceptRejectRequestMutation = (): UseMutationResult<any, any, { userId: number, action: "accept" | "reject" }> => {
+  return useMutation({
+    mutationFn: ({ userId, action }: { userId: number, action: "accept" | "reject" }) =>
+      apiClient
+        .post<FollowUserResponse>(`/follow-requests/${userId}/${action}`)
+        .then((d) => d.data),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["followers"] });
+      queryClient.invalidateQueries({ queryKey: ["following"] });
+      queryClient.invalidateQueries({ queryKey: ["pending_requests"] });
+    },
+  });
+};

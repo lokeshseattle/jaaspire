@@ -80,6 +80,13 @@ export default function AppLayout() {
         headerBackButtonDisplayMode: "minimal",
         // animation: "fade_from_bottom",
       }} />
+
+      <Stack.Screen name="pending-requests" options={{
+        headerShown: true,
+        headerTitle: "Pending Requests",
+        headerBackButtonDisplayMode: "minimal",
+        // animation: "fade_from_bottom",
+      }} />
     </Stack>
     // </Stack>
   );

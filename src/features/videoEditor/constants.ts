@@ -14,11 +14,11 @@ export const LAYOUT = {
 };
 
 export const TRIMMER = {
-    HANDLE_WIDTH: 16,
-    BAR_HEIGHT: 60,
+    HANDLE_WIDTH: 10,
+    BAR_HEIGHT: 50,
     MIN_TRIM_DURATION_MS: 1000, // 1 second minimum
     MAX_TRIM_DURATION_MS: 60000, // 1 minute maximum
-    HANDLE_HIT_SLOP: 20,
+    HANDLE_HIT_SLOP: 0,
 };
 
 export const COLORS = {
@@ -37,7 +37,7 @@ export const COLORS = {
     controlBackground: '#F3F4F6',
 
     // Text
-    textPrimary: '#1F2937',
+    textPrimary: "#ccc",
     textSecondary: '#6B7280',
 
     // Buttons

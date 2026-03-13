@@ -65,6 +65,7 @@ export type Post = {
   expire_date: any;
   created_at: string;
   updated_at: string;
+  views_count: number;
   user: {
     id: number;
     name: string;
@@ -639,4 +640,22 @@ export type CreateReportPayload = {
   message_id?: string;
   stream_id?: string;
   details: string;
+};
+export type PendingFollowRequestsResponse = {
+  success: boolean;
+  message: string;
+  data: {
+    requests: PendingFollowRequest[];
+    pagination: Pagination;
+  };
+};
+
+export type PendingFollowRequest = {
+  id: number;
+  name: string;
+  username: string;
+  avatar: string;
+  verified_user: boolean;
+  story_status: StoryStatus;
+  requested_at: string;
 };

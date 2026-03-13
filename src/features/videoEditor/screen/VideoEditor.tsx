@@ -4,6 +4,7 @@ import { VideoPlayer, useVideoPlayer } from 'expo-video';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
+    Pressable,
     StatusBar,
     StyleSheet,
     Text,
@@ -12,7 +13,6 @@ import {
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ControlBar } from '../components/ControlBar';
 import { TrimmerBar } from '../components/Trimmerbar/index';
 import { VideoPreview } from '../components/VideoPreview';
 import { COLORS, LAYOUT, TRIMMER } from '../constants';
@@ -38,7 +38,7 @@ const VideoEditorContent: React.FC<VideoEditorContentProps> = ({
     onConfirm,
     onCancel,
 }) => {
-    const [isPlaying, setIsPlaying] = useState(false);
+    const [isPlaying, setIsPlaying] = useState(true);
     const [isMuted, setIsMuted] = useState(false);
 
     // Initialize trimmer hook - duration is now guaranteed to be real
@@ -184,16 +184,20 @@ const VideoEditorContent: React.FC<VideoEditorContentProps> = ({
 
     return (
         <GestureHandlerRootView style={styles.gestureRoot}>
-            <SafeAreaView style={styles.container}>
-                <StatusBar barStyle="dark-content" />
+            <SafeAreaView edges={['top']} style={styles.container}>
+                <StatusBar barStyle="light-content" />
 
                 {/* Header */}
-                <View style={styles.header}>
+                {/* <View style={styles.header}>
                     <Text style={styles.headerTitle}>Trim Video</Text>
-                </View>
+                </View> */}
 
                 {/* Video Preview */}
                 <View style={styles.previewContainer}>
+                    <View style={styles.header}>
+                        <Pressable onPress={handleCancel}><Text style={styles.headerTitle}>Back</Text></Pressable>
+                        <Pressable onPress={handleConfirm}><Text style={styles.headerTitle}>Done</Text></Pressable>
+                    </View>
                     <VideoPreview player={player} />
                 </View>
 
@@ -217,7 +221,7 @@ const VideoEditorContent: React.FC<VideoEditorContentProps> = ({
 
                 {/* Control Bar */}
                 <View style={styles.controlsContainer}>
-                    <ControlBar
+                    {/* <ControlBar
                         isPlaying={isPlaying}
                         isMuted={isMuted}
                         onPlayPause={handlePlayPause}
@@ -225,7 +229,7 @@ const VideoEditorContent: React.FC<VideoEditorContentProps> = ({
                         onReset={handleReset}
                         onConfirm={handleConfirm}
                         onCancel={handleCancel}
-                    />
+                    /> */}
                 </View>
             </SafeAreaView>
         </GestureHandlerRootView>
@@ -248,6 +252,9 @@ export const VideoEditorScreen: React.FC<VideoEditorProps> = ({
     const player = useVideoPlayer(videoUri, (playerInstance) => {
         playerInstance.loop = false;
         playerInstance.muted = false;
+        // play video automatically starting from 0 (currentTime is in seconds)
+        playerInstance.currentTime = 0;
+        playerInstance.play();
     });
 
     // Get video duration once player is ready
@@ -306,7 +313,7 @@ export const VideoEditorScreen: React.FC<VideoEditorProps> = ({
                     <Text style={styles.errorText}>{error || 'Failed to load video'}</Text>
                     <Text style={styles.errorSubtext}>Please try again with a different video</Text>
                 </View>
-                <View style={styles.errorButtonContainer}>
+                {/* <View style={styles.errorButtonContainer}>
                     <ControlBar
                         isPlaying={false}
                         isMuted={false}
@@ -316,7 +323,7 @@ export const VideoEditorScreen: React.FC<VideoEditorProps> = ({
                         onConfirm={() => { }}
                         onCancel={onCancel}
                     />
-                </View>
+                </View> */}
             </SafeAreaView>
         );
     }
@@ -336,26 +343,34 @@ export const VideoEditorScreen: React.FC<VideoEditorProps> = ({
 const styles = StyleSheet.create({
     gestureRoot: {
         flex: 1,
+        backgroundColor: "black",
     },
     container: {
         flex: 1,
-        backgroundColor: COLORS.screenBackground,
+        backgroundColor: "black",
     },
     header: {
+        position: "absolute",
+        top: 10,
+        left: 0,
+        right: 0,
+        zIndex: 10,
+        flexDirection: "row",
+        justifyContent: "space-between",
         paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.unselectedRegion,
+        // paddingTop: 50, // adjust for status bar / notch
+        paddingBottom: 12,
     },
     headerTitle: {
         fontSize: 18,
         fontWeight: '600',
-        color: COLORS.textPrimary,
+        color: "white",
         textAlign: 'center',
     },
     previewContainer: {
         backgroundColor: COLORS.previewBackground,
-        flex: 1
+        flex: 1,
+        borderRadius: 10,
     },
     trimmerContainer: {
         marginTop: 16,
@@ -399,6 +414,7 @@ const styles = StyleSheet.create({
         borderTopWidth: 1,
         borderTopColor: COLORS.unselectedRegion,
     },
+
 });
 
 export default VideoEditorScreen;

@@ -3,9 +3,10 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { VideoView } from "expo-video";
-import { memo, useCallback, useRef } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Dimensions,
   Pressable,
   StyleSheet,
   View,
@@ -31,6 +32,11 @@ interface Props {
 
 // Double-tap detection window (ms)
 const DOUBLE_TAP_DELAY = 300;
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+const SCREEN_WIDTH = Dimensions.get("window").width;
+const SCREEN_HEIGHT = Dimensions.get("window").height;
+const MAX_MEDIA_HEIGHT = SCREEN_HEIGHT * 0.75;
 
 function PostMedia({
   postId,
@@ -51,9 +57,17 @@ function PostMedia({
   const scale = useSharedValue(0);
   const opacity = useSharedValue(0);
 
+  // Animation values for mute icon
+  const muteOpacity = useSharedValue(0);
+  const muteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
     opacity: opacity.value,
+  }));
+
+  const animatedMuteStyle = useAnimatedStyle(() => ({
+    opacity: muteOpacity.value,
   }));
 
   // Video player hook - now with preloading support
@@ -74,6 +88,24 @@ function PostMedia({
     nextPostUrl,  // Pass for preloading
     nextPostId    // Pass for preloading
   );
+
+  // Dynamic Aspect Ratio
+  const [aspectRatio, setAspectRatio] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (type === "video" && isReady && player?.videoTrack?.size) {
+      const { width, height } = player.videoTrack.size;
+      if (width && height) {
+        setAspectRatio(width / height);
+      }
+    }
+  }, [type, isReady, player]);
+
+  const handleImageLoad = useCallback((e: any) => {
+    if (e.source?.width && e.source?.height) {
+      setAspectRatio(e.source.width / e.source.height);
+    }
+  }, []);
 
   // Heart animation
   const triggerHeartAnimation = useCallback(() => {
@@ -101,13 +133,22 @@ function PostMedia({
     }
   }, [isLiked, onLike, triggerHeartAnimation]);
 
-  // Single-tap handler (toggle play/pause for video, nothing for image)
+  const showMuteIcon = useCallback(() => {
+    muteOpacity.value = withTiming(1, { duration: 200 });
+    if (muteTimerRef.current) {
+      clearTimeout(muteTimerRef.current);
+    }
+    muteTimerRef.current = setTimeout(() => {
+      muteOpacity.value = withTiming(0, { duration: 500 });
+    }, 1000);
+  }, []);
+
+  // Single-tap handler (show mute icon for video, nothing for image)
   const handleSingleTap = useCallback(() => {
     if (type === "video") {
-      togglePlayPause();
+      showMuteIcon();
     }
-    // For images, single tap does nothing (could open fullscreen later)
-  }, [type, togglePlayPause]);
+  }, [type, showMuteIcon]);
 
   // Unified tap handler with debounce to distinguish single vs double
   const handleTap = useCallback(() => {
@@ -158,7 +199,8 @@ function PostMedia({
   const handleMutePress = useCallback(() => {
     toggleMute();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [toggleMute]);
+    showMuteIcon();
+  }, [toggleMute, showMuteIcon]);
 
   // Don't render if no media
   if (!media) return null;
@@ -171,16 +213,20 @@ function PostMedia({
   // Show loading overlay when buffering or not ready
   const showLoadingOverlay = type === "video" && (isBuffering || !isReady);
 
+  const calculatedHeight = aspectRatio ? SCREEN_WIDTH / aspectRatio : SCREEN_WIDTH;
+  const containerHeight = Math.min(calculatedHeight, MAX_MEDIA_HEIGHT);
+
   return (
     <View style={styles.container}>
       {type === "image" ? (
         <Pressable onPress={handleTap}>
           <Image
             source={{ uri: media }}
-            style={[styles.media, styles.imageAspect]}
+            style={[styles.media, { height: containerHeight }]}
             contentFit="cover"
             cachePolicy="disk"
             transition={200}
+            onLoad={handleImageLoad}
           />
         </Pressable>
       ) : (
@@ -190,7 +236,7 @@ function PostMedia({
           onPressOut={handleLongPressOut}
           delayLongPress={200}
         >
-          <View style={[styles.media, styles.videoAspect]}>
+          <View style={[styles.media, { height: containerHeight }]}>
             {/* Thumbnail as background while loading */}
             {thumbnail && (
               <Image
@@ -231,9 +277,9 @@ function PostMedia({
             )}
 
             {/* Mute button */}
-            <Pressable
+            <AnimatedPressable
               onPress={handleMutePress}
-              style={styles.muteButton}
+              style={[styles.muteButton, animatedMuteStyle]}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <Ionicons
@@ -241,7 +287,7 @@ function PostMedia({
                 size={18}
                 color="white"
               />
-            </Pressable>
+            </AnimatedPressable>
           </View>
         </Pressable>
       )}
@@ -254,7 +300,7 @@ function PostMedia({
         <Ionicons
           name="heart"
           size={120}
-          color={isLiked ? "#ff3040" : "white"}
+          color="#ff3040"
           style={styles.heartIcon}
         />
       </Animated.View>
@@ -269,12 +315,6 @@ const styles = StyleSheet.create({
   media: {
     width: "100%",
     backgroundColor: "#000",
-  },
-  imageAspect: {
-    aspectRatio: 4 / 5,
-  },
-  videoAspect: {
-    aspectRatio: 9 / 14,
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,

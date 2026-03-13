@@ -47,7 +47,7 @@ const PostActions = () => {
         <Share />
       </View>
 
-      <Views />
+      <Views viewCount={post.views_count} />
     </View>
   );
 };
@@ -87,8 +87,11 @@ const Share = () => {
   return <Feather name="send" size={24} style={styles.icon} />;
 };
 
-const Views = () => {
-  return <Feather name="eye" size={24} style={styles.icon} />;
+const Views = ({ viewCount }: { viewCount: number }) => {
+  return <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+    <Feather name="eye" size={16} style={styles.icon} />
+    <Text style={{}}>{viewCount}</Text>
+  </View>;
 };
 
 /* =========================
@@ -99,6 +102,7 @@ import { usePost } from "@/src/context/post-context";
 import { FontAwesome } from "@expo/vector-icons";
 import { useState } from "react";
 import { Animated, Pressable } from "react-native";
+import RichText from "../../ui/rich-text";
 
 // if (Platform.OS === "android") {
 //   UIManager.setLayoutAnimationEnabledExperimental?.(true);
@@ -129,7 +133,7 @@ const PostCaptions = () => {
   return (
     <View style={styles.container}>
       {/* Measure full height */}
-      <Text
+      <RichText
         style={[styles.text, styles.hidden]}
         onLayout={(e) => {
           fullHeight.current = e.nativeEvent.layout.height;
@@ -147,11 +151,11 @@ const PostCaptions = () => {
         }}
       >
         {caption}
-      </Text>
+      </RichText>
 
       {/* Animated visible container */}
       <Animated.View style={{ height: animatedHeight, overflow: "hidden" }}>
-        <Text style={styles.text}>{caption}</Text>
+        <RichText style={styles.text}>{caption}</RichText>
       </Animated.View>
 
       {shouldShowToggle && (

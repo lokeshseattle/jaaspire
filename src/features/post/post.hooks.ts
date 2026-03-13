@@ -411,3 +411,11 @@ export const useCreateReportMutation = (): UseMutationResult<void, PossibleError
       apiClient.post<void>("/report/content", payload).then((d) => d.data),
   })
 }
+
+export const useTrackPostView = (): UseMutationResult<void, PossibleErrorResponse, number> => {
+  return useMutation({
+    mutationFn: (postId: number) =>
+      apiClient.post<void>(`/posts/${postId}/track-view`).then((d) => d.data),
+  })
+}
+

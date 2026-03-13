@@ -1,6 +1,17 @@
 // screens/NotificationsScreen.tsx
 
-import React, { useCallback, useMemo, useState } from "react";
+import {
+  TFilter,
+  useGetNotifications,
+  useGetPendingRequests,
+  useMarkNotificationReadMutation,
+} from "@/src/features/profile/notification.hooks";
+import { TNotification } from "@/src/services/api/api.types";
+import { timeAgo } from "@/src/utils/helpers";
+import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import { router, useNavigation } from "expo-router";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   LayoutChangeEvent,
@@ -8,13 +19,8 @@ import {
   StyleSheet,
   Text,
   View,
+  ViewToken,
 } from "react-native";
-
-import { TFilter, useGetNotifications } from "@/src/features/profile/notification.hooks";
-import { TNotification } from "@/src/services/api/api.types";
-import { timeAgo } from "@/src/utils/helpers";
-import { Ionicons } from "@expo/vector-icons";
-import { Image } from "expo-image";
 import { FlatList, RefreshControl } from "react-native-gesture-handler";
 import Animated, {
   Easing,
@@ -26,10 +32,108 @@ import Animated, {
 } from "react-native-reanimated";
 
 const FILTERS: TFilter[] = ["", "likes", "subscriptions", "tips"];
+interface ListHeaderComponentProps {
+  pendingRequestsData: ReturnType<typeof useGetPendingRequests>['data'];
+}
+
+const ListHeaderComponent = ({ pendingRequestsData }: ListHeaderComponentProps) => {
+  const navigation = useNavigation();
+
+
+  // Extract data from infinite query structure
+  const allRequests = pendingRequestsData?.pages?.flatMap(
+    (page) => page.data.requests
+  ) ?? [];
+  const totalCount = pendingRequestsData?.pages?.[0]?.data?.pagination?.total ?? 0;
+
+  // Requirement 1: Return null if no pending requests
+  if (allRequests.length === 0) {
+    return null;
+  }
+
+  const firstRequest = allRequests[0];
+  const remainingCount = totalCount - 1;
+
+  const handleAccept = (id: number) => {
+    // TODO: Implement accept mutation
+    // acceptRejectRequest({ userId: id, action: "accept" });
+  };
+
+  const handleReject = (id: number) => {
+    // TODO: Implement reject mutation
+    // acceptRejectRequest({ userId: id, action: "reject" });
+  };
+
+  const handleViewAllRequests = () => {
+    // Navigate to pending requests screen
+    router.push({
+      pathname: "/pending-requests",
+    })
+  };
+
+  return (
+    <Pressable onPress={handleViewAllRequests} style={styles.pendingRequestsContainer}>
+      {/* Title */}
+      {/* <Text style={styles.title}>Pending Requests</Text> */}
+
+      {/* Single Request Card */}
+      <View style={styles.requestCard}>
+        {/* Avatar */}
+        <Image
+          source={{ uri: firstRequest.avatar }}
+          style={styles.pendingRequestAvatar}
+        />
+
+        {/* User Info */}
+        <View style={styles.userInfo}>
+          <View style={styles.nameRow}>
+            <Text style={styles.name} numberOfLines={1}>
+              Follow request
+            </Text>
+            {firstRequest.verified_user && (
+              <Ionicons
+                name="checkmark-circle"
+                size={16}
+                color="#1DA1F2"
+              />
+            )}
+          </View>
+          <Text style={styles.pendingRequestUsername} numberOfLines={1}>
+            @{firstRequest.username} {remainingCount > 0 && `+ ${remainingCount} other`}
+          </Text>
+        </View>
+
+        {/* Action Buttons */}
+        {/* <View style={styles.pendingRequestButtonsContainer}> */}
+        {/* <Pressable
+          style={styles.viewMoreContainer}
+          onPress={handleViewAllRequests}
+        > */}
+        {/* <Text style={styles.viewMoreText}>
+              +{remainingCount} more
+            </Text> */}
+        <Ionicons
+          name="chevron-forward"
+          size={18}
+          color="#007AFF"
+          onPress={handleViewAllRequests}
+
+        />
+        {/* </Pressable> */}
+        {/* </View> */}
+      </View>
+
+    </Pressable>
+  );
+}
 
 const FILTER_CONFIG: Record<
   TFilter,
-  { label: string; icon: keyof typeof Ionicons.glyphMap; activeIcon?: keyof typeof Ionicons.glyphMap }
+  {
+    label: string;
+    icon: keyof typeof Ionicons.glyphMap;
+    activeIcon?: keyof typeof Ionicons.glyphMap;
+  }
 > = {
   "": {
     label: "All",
@@ -53,18 +157,23 @@ const FILTER_CONFIG: Record<
   },
 };
 
-// Animated Icon Component
 const AnimatedIcon = Animated.createAnimatedComponent(Ionicons);
 
 interface AnimatedTabProps {
   filterKey: TFilter;
-  config: typeof FILTER_CONFIG[TFilter];
+  config: (typeof FILTER_CONFIG)[TFilter];
   isActive: boolean;
   onPress: () => void;
   onLayout: (event: LayoutChangeEvent) => void;
 }
 
-function AnimatedTab({ filterKey, config, isActive, onPress, onLayout }: AnimatedTabProps) {
+function AnimatedTab({
+  filterKey,
+  config,
+  isActive,
+  onPress,
+  onLayout,
+}: AnimatedTabProps) {
   const scale = useSharedValue(1);
   const progress = useSharedValue(isActive ? 1 : 0);
 
@@ -77,11 +186,7 @@ function AnimatedTab({ filterKey, config, isActive, onPress, onLayout }: Animate
 
   const animatedTextStyle = useAnimatedStyle(() => {
     return {
-      color: interpolateColor(
-        progress.value,
-        [0, 1],
-        ['#999', '#000']
-      ),
+      color: interpolateColor(progress.value, [0, 1], ["#999", "#000"]),
       transform: [
         {
           scale: withSpring(scale.value, {
@@ -131,11 +236,7 @@ function AnimatedTab({ filterKey, config, isActive, onPress, onLayout }: Animate
       </Animated.View>
 
       <Animated.Text
-        style={[
-          styles.tabText,
-          animatedTextStyle,
-          isActive && styles.activeTabText,
-        ]}
+        style={[styles.tabText, animatedTextStyle, isActive && styles.activeTabText]}
       >
         {config.label}
       </Animated.Text>
@@ -143,14 +244,15 @@ function AnimatedTab({ filterKey, config, isActive, onPress, onLayout }: Animate
   );
 }
 
-// Animated Tab Bar Component
 interface AnimatedTabBarProps {
   filter: TFilter;
   onFilterChange: (filter: TFilter) => void;
 }
 
 function AnimatedTabBar({ filter, onFilterChange }: AnimatedTabBarProps) {
-  const [tabLayouts, setTabLayouts] = useState<{ [key: string]: { x: number; width: number } }>({});
+  const [tabLayouts, setTabLayouts] = useState<{
+    [key: string]: { x: number; width: number };
+  }>({});
   const indicatorX = useSharedValue(0);
   const indicatorWidth = useSharedValue(0);
 
@@ -159,7 +261,6 @@ function AnimatedTabBar({ filter, onFilterChange }: AnimatedTabBarProps) {
   React.useEffect(() => {
     const layout = tabLayouts[filter];
     if (layout) {
-      // Calculate indicator position (60% of tab width, centered)
       const actualIndicatorWidth = layout.width * 0.6;
       const offsetX = (layout.width - actualIndicatorWidth) / 2;
 
@@ -210,7 +311,6 @@ function AnimatedTabBar({ filter, onFilterChange }: AnimatedTabBarProps) {
         );
       })}
 
-      {/* Animated Indicator */}
       <Animated.View style={[styles.activeIndicator, indicatorStyle]} />
     </View>
   );
@@ -228,6 +328,94 @@ export default function NotificationsScreen() {
     refetch,
     isRefetching,
   } = useGetNotifications(filter);
+  const {
+    data: pendingRequestsData,
+    refetch: refetchPendingRequests,
+    isRefetching: isRefetchingPendingRequests
+  } = useGetPendingRequests();
+
+  const handleRefresh = useCallback(() => {
+    refetch();
+    refetchPendingRequests();
+  }, [refetch, refetchPendingRequests]);
+
+  // 👇 Combined refreshing state
+  const isRefreshingAny = isRefetching || isRefetchingPendingRequests;
+
+  // mutation
+  const markReadMutation = useMarkNotificationReadMutation();
+
+  // optimistic UI
+  const [optimisticReadIds, setOptimisticReadIds] = useState<Set<string>>(new Set());
+
+  // queue + spam guards
+  const pendingReadIdsRef = useRef<Set<string>>(new Set());
+  const isFlushingRef = useRef(false);
+  const lastFlushAtRef = useRef(0);
+
+  const FLUSH_COOLDOWN_MS = 1500;
+
+  const flushPendingReads = useCallback(() => {
+    const now = Date.now();
+
+    // guards
+    if (isFlushingRef.current) return;
+    if (now - lastFlushAtRef.current < FLUSH_COOLDOWN_MS) return;
+
+    const ids = Array.from(pendingReadIdsRef.current);
+    if (!ids.length) return;
+
+    pendingReadIdsRef.current.clear();
+    isFlushingRef.current = true;
+    lastFlushAtRef.current = now;
+
+    markReadMutation.mutate(ids, {
+      onError: () => {
+        // re-queue on failure
+        ids.forEach((id) => pendingReadIdsRef.current.add(id));
+      },
+      onSettled: () => {
+        isFlushingRef.current = false;
+      },
+    });
+  }, [markReadMutation]);
+
+  // make viewability stricter so it doesn't mark read while "fly-scrolling"
+  const viewabilityConfig = useMemo(
+    () => ({
+      itemVisiblePercentThreshold: 80,
+      minimumViewTime: 1200,
+    }),
+    []
+  );
+
+  // IMPORTANT: enqueue + optimistic update ONLY (no network call here)
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: Array<ViewToken> }) => {
+      const newlyRead: string[] = [];
+
+      for (const v of viewableItems) {
+        const item = v.item as TNotification | undefined;
+        if (!item) continue;
+
+        const alreadyRead = item.read || optimisticReadIds.has(item.id);
+        if (alreadyRead) continue;
+
+        if (!pendingReadIdsRef.current.has(item.id)) {
+          pendingReadIdsRef.current.add(item.id);
+          newlyRead.push(item.id);
+        }
+      }
+
+      if (newlyRead.length) {
+        setOptimisticReadIds((prev) => {
+          const next = new Set(prev);
+          newlyRead.forEach((id) => next.add(id));
+          return next;
+        });
+      }
+    }
+  ).current;
 
   // Flatten paginated data
   const notifications = useMemo(() => {
@@ -241,37 +429,29 @@ export default function NotificationsScreen() {
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const renderItem = ({ item }: { item: TNotification }) => {
-    const profilePic = item.from_user.avatar
-    return (
-      <View style={[styles.notificationItem, !item.read && styles.unreadItem]}>
-        {/* Profile Picture */}
-        <Image
-          source={{ uri: profilePic }}
-          style={styles.avatar}
-        />
+    const profilePic = item.from_user.avatar;
+    const isRead = item.read || optimisticReadIds.has(item.id);
 
-        {/* Content */}
+    return (
+      <View style={[styles.notificationItem, !isRead && styles.unreadItem]}>
+        <Image source={{ uri: profilePic }} style={styles.avatar} />
+
         <View style={styles.notificationContent}>
           <View style={styles.notificationHeader}>
             <Text style={styles.username}>@{item.from_user?.username}</Text>
             <Text style={styles.time}>{timeAgo(item.created_at)}</Text>
           </View>
 
-          <Text style={styles.message}
-          >
-            {item.message}
-          </Text>
+          <Text style={styles.message}>{item.message}</Text>
         </View>
 
-        {/* Unread Indicator Dot */}
-        {!item.read && <View style={styles.unreadDot} />}
+        {!isRead && <View style={styles.unreadDot} />}
       </View>
     );
   };
 
   const renderFooter = () => {
     if (!isFetchingNextPage) return null;
-
     return (
       <View style={{ paddingVertical: 20 }}>
         <ActivityIndicator />
@@ -279,20 +459,15 @@ export default function NotificationsScreen() {
     );
   };
 
-  // if (isLoading) {
-  //   return (
-  //     <View style={styles.center}>
-  //       <ActivityIndicator size="large" />
-  //     </View>
-  //   );
-  // }
+  // flush on unmount (optional but good)
+  React.useEffect(() => {
+    return () => flushPendingReads();
+  }, [flushPendingReads]);
 
   return (
     <View style={styles.container}>
-      {/* ANIMATED FILTER TABS */}
       <AnimatedTabBar filter={filter} onFilterChange={setFilter} />
 
-      {/* LIST */}
       {isLoading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" />
@@ -302,16 +477,22 @@ export default function NotificationsScreen() {
           data={notifications}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
+          ListHeaderComponent={<ListHeaderComponent pendingRequestsData={pendingRequestsData} />}
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.3}
-          refreshing={isRefetching}
-          onRefresh={refetch}
+          viewabilityConfig={viewabilityConfig}
+          onViewableItemsChanged={onViewableItemsChanged}
+          // flush only when scrolling stops (prevents spam)
+          onMomentumScrollEnd={flushPendingReads}
+          onScrollEndDrag={flushPendingReads}
+          refreshing={isRefreshingAny}
+          onRefresh={handleRefresh}
           refreshControl={
             <RefreshControl
-              refreshing={isRefetching ?? false}
-              onRefresh={refetch}
-              colors={['#007AFF']}        // Android
-              tintColor="#007AFF"         // iOS
+              refreshing={isRefreshingAny}
+              onRefresh={handleRefresh}
+              colors={["#007AFF"]}
+              tintColor="#007AFF"
             />
           }
           ListFooterComponent={renderFooter}
@@ -320,7 +501,8 @@ export default function NotificationsScreen() {
               <Text>No notifications found</Text>
             </View>
           }
-        />)}
+        />
+      )}
     </View>
   );
 }
@@ -336,7 +518,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginTop: 100,
-  }, notificationContent: {
+  },
+
+  notificationContent: {
     flex: 1,
     marginLeft: 12,
   },
@@ -360,8 +544,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#f6f9ff",
   },
 
-
-
   message: {
     fontSize: 14,
     marginBottom: 4,
@@ -370,7 +552,9 @@ const styles = StyleSheet.create({
   date: {
     fontSize: 12,
     color: "#999",
-  }, avatar: {
+  },
+
+  avatar: {
     width: 48,
     height: 48,
     borderRadius: 24,
@@ -382,11 +566,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderColor: "#eee",
     position: "relative",
-  }, username: {
+  },
+
+  username: {
     fontWeight: "700",
     fontSize: 14,
     color: "#555",
-  }, unreadDot: {
+  },
+
+  unreadDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
@@ -425,5 +613,92 @@ const styles = StyleSheet.create({
     height: 2,
     backgroundColor: "#000",
     borderRadius: 2,
+  },
+
+  pendingRequestsContainer: {
+    // padding: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EFEFEF',
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 12,
+  },
+  requestCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+  },
+  pendingRequestAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#E1E1E1',
+  },
+  userInfo: {
+    flex: 1,
+    marginLeft: 12,
+    marginRight: 8,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  name: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#000',
+    flexShrink: 1,
+  },
+  pendingRequestUsername: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 2,
+  },
+  pendingRequestButtonsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  acceptButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  acceptButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  rejectButton: {
+    backgroundColor: '#E8E8E8',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  rejectButtonText: {
+    color: '#333',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  viewMoreContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    paddingVertical: 8,
+  },
+  viewMoreText: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '500',
+    marginRight: 4,
   },
 });

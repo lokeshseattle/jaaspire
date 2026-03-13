@@ -3,7 +3,7 @@ import { useCommentsSheet } from "@/hooks/use-comment-sheet";
 import { CommentsBottomSheet } from "@/src/components/comments/CommentsBottomSheet";
 import PostItem from "@/src/components/home/posts/PostWrapper";
 import Stories from "@/src/components/home/story";
-import { useGetFeedQuery } from "@/src/features/post/post.hooks";
+import { useGetFeedQuery, useTrackPostView } from "@/src/features/post/post.hooks";
 import { useGetAllStories } from "@/src/features/story/story.hooks";
 import { videoManager } from "@/src/lib/video-manager";
 import { useFocusEffect, useNavigation } from "expo-router";
@@ -34,7 +34,7 @@ export default function Home() {
     scrollOffsetRef.current = event.nativeEvent.contentOffset.y;
   }, []);
 
-
+  const trackPostView = useTrackPostView();
 
   // Comments hook
   const { bottomSheetRef, selectedPostId, openComments, onDismiss } =
@@ -118,6 +118,7 @@ export default function Home() {
           mostVisibleItem = item;
           break;
         }
+
       }
 
       const newVisibleId = mostVisibleItem.item as number;
@@ -125,6 +126,7 @@ export default function Home() {
       setVisiblePostId((prevId) => {
         if (prevId !== newVisibleId) {
           console.log(`👁️ Visible post changed: ${prevId} → ${newVisibleId}`);
+          trackPostView.mutate(newVisibleId);
         }
         return newVisibleId;
       });

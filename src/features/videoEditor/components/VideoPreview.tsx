@@ -21,8 +21,9 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ player }) => {
             <VideoView
                 player={player}
                 style={styles.video}
-                contentFit="contain"
+                contentFit="fill"
                 nativeControls={false}
+
             />
         </View>
     );
@@ -33,8 +34,10 @@ const styles = StyleSheet.create({
         width: '100%',
         backgroundColor: COLORS.previewBackground,
         flex: 1,
+        borderRadius: 10,
     },
     video: {
         flex: 1,
+        borderRadius: 10,
     },
 });

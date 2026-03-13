@@ -127,11 +127,11 @@ const PostHeader: React.FC = () => {
               label={post.is_bookmarked ? "Saved" : "Save"}
               onPress={() => handleAction("save")}
             />
-            <MenuItem
+            {/* <MenuItem
               icon="share-social-outline"
               label="Share"
               onPress={() => handleAction("share")}
-            />
+            /> */}
             <MenuItem
               icon="flag"
               label="Report"
