@@ -153,6 +153,6 @@ const createStyles = (theme: AppTheme) =>
       backgroundColor: theme.colors.background,
     },
     tabContainer: {
-      marginTop: 16,
+      marginTop: theme.spacing.lg,
     },
   });

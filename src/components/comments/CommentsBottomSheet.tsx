@@ -6,6 +6,8 @@ import {
 } from "@/src/features/post/comments.hooks";
 import { queryClient } from "@/src/lib/query-client";
 import type { MentionUser, ProfileResponse, TComment } from "@/src/services/api/api.types";
+import { AppTheme } from "@/src/theme";
+import { useTheme } from "@/src/theme/ThemeProvider";
 import { debounce, getMentionQuery, timeAgo } from "@/src/utils/helpers";
 import { Ionicons } from "@expo/vector-icons";
 import type { BottomSheetFooterProps } from "@gorhom/bottom-sheet";
@@ -31,6 +33,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MentionSuggestionsList from "./MentionSuggestionList";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+const LIKED_COLOR = "#FF3B30";
+const SEND_COLOR = "#3897F0";
 
 // ============ Reply Item ============
 const ReplyItem = ({
@@ -50,6 +54,8 @@ const ReplyItem = ({
     currentUserId: number | null;
     onLike: (commentId: number) => void;
 }) => {
+    const { theme } = useTheme();
+    const styles = createStyles(theme);
     const isOwner = item.user.id === currentUserId;
 
     return (
@@ -68,14 +74,13 @@ const ReplyItem = ({
                 </View>
                 <Text style={styles.message}>{item.message}</Text>
 
-                {/* Actions row with like and reply */}
                 {!item._isOptimistic && (
                     <View style={styles.actionsRow}>
                         <Pressable style={styles.actionButton} onPress={() => onLike(item.id)}>
                             <Ionicons
                                 name={item.is_liked ? "heart" : "heart-outline"}
                                 size={14}
-                                color={item.is_liked ? "#FF3B30" : "#8E8E8E"}
+                                color={item.is_liked ? LIKED_COLOR : theme.colors.textSecondary}
                             />
                             {item.reactions > 0 && (
                                 <Text style={styles.actionCount}>{item.reactions}</Text>
@@ -94,9 +99,9 @@ const ReplyItem = ({
                                 disabled={isDeleting}
                             >
                                 {isDeleting ? (
-                                    <ActivityIndicator size="small" color="#8E8E8E" />
+                                    <ActivityIndicator size="small" color={theme.colors.textSecondary} />
                                 ) : (
-                                    <Ionicons name="trash-outline" size={14} color="#FF3B30" />
+                                    <Ionicons name="trash-outline" size={14} color={LIKED_COLOR} />
                                 )}
                             </Pressable>
                         )}
@@ -122,8 +127,10 @@ const CommentItem = ({
     deletingId: number | null;
     currentUserId: number | null;
     onLike: (commentId: number) => void;
-
 }) => {
+    const { theme } = useTheme();
+    const styles = createStyles(theme);
+
     const [showReplies, setShowReplies] = useState(false);
     const hasReplies = item.replies && item.replies.length > 0;
 
@@ -152,7 +159,7 @@ const CommentItem = ({
                                 <Ionicons
                                     name={item.is_liked ? "heart" : "heart-outline"}
                                     size={16}
-                                    color={item.is_liked ? "#FF3B30" : "#8E8E8E"}
+                                    color={item.is_liked ? LIKED_COLOR : theme.colors.textSecondary}
                                 />
                                 {item.reactions > 0 && (
                                     <Text style={styles.actionCount}>{item.reactions}</Text>
@@ -171,9 +178,9 @@ const CommentItem = ({
                                     disabled={isDeleting}
                                 >
                                     {isDeleting ? (
-                                        <ActivityIndicator size="small" color="#8E8E8E" />
+                                        <ActivityIndicator size="small" color={theme.colors.textSecondary} />
                                     ) : (
-                                        <Ionicons name="trash-outline" size={16} color="#FF3B30" />
+                                        <Ionicons name="trash-outline" size={16} color={LIKED_COLOR} />
                                     )}
                                 </Pressable>
                             )}
@@ -216,7 +223,6 @@ const CommentItem = ({
     );
 };
 
-
 // ============ Footer Input Component ============
 interface FooterInputProps {
     postId: number | null;
@@ -243,17 +249,17 @@ const FooterInput = forwardRef<FooterInputRef, FooterInputProps>(
         },
         ref
     ) => {
+        const { theme } = useTheme();
+        const styles = createStyles(theme);
+
         const addComment = useAddComment();
 
-        // 👇 Local state for controlled input
         const [message, setMessage] = useState("");
         const inputRef = useRef<any>(null);
 
-        // 👇 Expose method to parent for updating after mention select
         useImperativeHandle(ref, () => ({
             updateMessage: (msg: string, cursor: number) => {
                 setMessage(msg);
-                // Set cursor position after state update
                 setTimeout(() => {
                     inputRef.current?.setNativeProps({
                         selection: { start: cursor, end: cursor },
@@ -262,13 +268,11 @@ const FooterInput = forwardRef<FooterInputRef, FooterInputProps>(
             },
         }));
 
-        // 👇 Handle text changes locally AND notify parent
         const handleTextChange = useCallback((text: string) => {
             setMessage(text);
             onMessageChange(text);
         }, [onMessageChange]);
 
-        // 👇 Handle selection changes
         const handleSelectionChange = useCallback(
             (e: any) => {
                 onCursorChange(e.nativeEvent.selection.end);
@@ -313,7 +317,7 @@ const FooterInput = forwardRef<FooterInputRef, FooterInputProps>(
                             <Text style={styles.replyUsername}>@{replyTo.username}</Text>
                         </Text>
                         <Pressable onPress={handleCancel} hitSlop={8}>
-                            <Ionicons name="close" size={18} color="#8E8E8E" />
+                            <Ionicons name="close" size={18} color={theme.colors.textSecondary} />
                         </Pressable>
                     </View>
                 )}
@@ -325,7 +329,7 @@ const FooterInput = forwardRef<FooterInputRef, FooterInputProps>(
                         placeholder={
                             replyTo ? `Reply to @${replyTo.username}...` : "Add a comment..."
                         }
-                        placeholderTextColor="#8E8E8E"
+                        placeholderTextColor={theme.colors.textSecondary}
                         value={message}
                         onChangeText={handleTextChange}
                         onSelectionChange={handleSelectionChange}
@@ -359,8 +363,7 @@ interface CommentsListProps {
     onDelete: (commentId: number) => void;
     deletingId: number | null;
     currentUserId: number | null;
-    onLike: (commentId: number) => void;  // 👈 Add
-
+    onLike: (commentId: number) => void;
 }
 
 const CommentsList = ({
@@ -368,8 +371,11 @@ const CommentsList = ({
     onReply,
     onDelete,
     deletingId,
-    currentUserId, onLike
+    currentUserId,
+    onLike
 }: CommentsListProps) => {
+    const { theme } = useTheme();
+    const styles = createStyles(theme);
     const { height } = Dimensions.get("window");
 
     const {
@@ -377,7 +383,10 @@ const CommentsList = ({
         fetchNextPage,
         hasNextPage,
         isFetchingNextPage,
-        isLoading, isError, refetch, error
+        isLoading,
+        isError,
+        refetch,
+        error
     } = useGetPostComments(postId ?? 0);
 
     const insets = useSafeAreaInsets();
@@ -385,7 +394,14 @@ const CommentsList = ({
 
     const renderItem = useCallback(
         ({ item }: { item: TComment }) => (
-            <CommentItem onLike={onLike} onReply={onReply} item={item} onDelete={onDelete} deletingId={deletingId} currentUserId={currentUserId} />
+            <CommentItem
+                onLike={onLike}
+                onReply={onReply}
+                item={item}
+                onDelete={onDelete}
+                deletingId={deletingId}
+                currentUserId={currentUserId}
+            />
         ),
         [onReply, onDelete, deletingId, currentUserId, onLike]
     );
@@ -400,7 +416,7 @@ const CommentsList = ({
         return (
             <View style={styles.centered}>
                 <ListHeader />
-                <ActivityIndicator style={{ marginTop: 20 }} />
+                <ActivityIndicator style={{ marginTop: 20 }} color={theme.colors.textSecondary} />
             </View>
         );
     }
@@ -426,9 +442,11 @@ const CommentsList = ({
                         </View>
                     );
                 }
-                return <View style={styles.emptyContainer}>
-                    <Text style={styles.emptyText}>No comments yet</Text>
-                </View>
+                return (
+                    <View style={styles.emptyContainer}>
+                        <Text style={styles.emptyText}>No comments yet</Text>
+                    </View>
+                );
             }}
             onEndReached={() => {
                 if (hasNextPage && !isFetchingNextPage) fetchNextPage();
@@ -437,7 +455,7 @@ const CommentsList = ({
             ListFooterComponent={
                 <>
                     {isFetchingNextPage && (
-                        <ActivityIndicator style={{ marginVertical: 16 }} />
+                        <ActivityIndicator style={{ marginVertical: 16 }} color={theme.colors.textSecondary} />
                     )}
                     <View style={{ height: FOOTER_HEIGHT }} />
                 </>
@@ -459,6 +477,9 @@ export const CommentsBottomSheet = ({
     postId,
     onDismiss,
 }: CommentsBottomSheetProps) => {
+    const { theme } = useTheme();
+    const styles = createStyles(theme);
+
     const snapPoints = useMemo(() => ["60%", "90%"], []);
     const insets = useSafeAreaInsets();
 
@@ -479,11 +500,11 @@ export const CommentsBottomSheet = ({
     const profileData = queryClient.getQueryData<ProfileResponse>(["profile"]);
     const currentUserId = profileData?.data?.id ?? null;
 
-    // 👇 Use REFS for message & cursor (no re-renders)
+    // Refs for message & cursor
     const messageRef = useRef("");
     const cursorRef = useRef(0);
 
-    // 👇 Debounced state ONLY for mention detection (triggers list swap)
+    // Debounced state for mention detection
     const [mentionState, setMentionState] = useState<{
         isSearching: boolean;
         query: string;
@@ -491,7 +512,7 @@ export const CommentsBottomSheet = ({
         endIndex: number;
     } | null>(null);
 
-    // 👇 Debounced mention detection
+    // Debounced mention detection
     const debouncedMentionCheck = useMemo(
         () =>
             debounce((text: string, cursor: number) => {
@@ -510,19 +531,16 @@ export const CommentsBottomSheet = ({
         []
     );
 
-    // 👇 Called from FooterInput on text change
     const handleMessageChange = useCallback((text: string) => {
         messageRef.current = text;
         debouncedMentionCheck(text, cursorRef.current);
     }, [debouncedMentionCheck]);
 
-    // 👇 Called from FooterInput on cursor change
     const handleCursorChange = useCallback((position: number) => {
         cursorRef.current = position;
         debouncedMentionCheck(messageRef.current, position);
     }, [debouncedMentionCheck]);
 
-    // 👇 Handle mention selection
     const handleSelectMention = useCallback((user: MentionUser) => {
         if (!mentionState) return;
 
@@ -533,15 +551,10 @@ export const CommentsBottomSheet = ({
         messageRef.current = newMessage;
         cursorRef.current = before.length + user.username.length + 2;
 
-        // Clear mention state to go back to comments
         setMentionState(null);
-
-        // Force footer to update with new message
-        // We need a way to sync - see FooterInput updates below
         footerRef.current?.updateMessage(newMessage, cursorRef.current);
     }, [mentionState]);
 
-    // 👇 Ref to communicate with footer
     const footerRef = useRef<{ updateMessage: (msg: string, cursor: number) => void } | null>(null);
 
     // Like handler
@@ -586,7 +599,6 @@ export const CommentsBottomSheet = ({
         []
     );
 
-    // 👇 STABLE renderFooter - no message/cursor in deps
     const renderFooter = useCallback(
         (props: BottomSheetFooterProps) => (
             <BottomSheetFooter {...props}>
@@ -641,217 +653,220 @@ export const CommentsBottomSheet = ({
 };
 
 // ============ Styles ============
-const styles = StyleSheet.create({
-    // Sheet
-    sheetBackground: {
-        backgroundColor: "white",
-    },
-    handleIndicator: {
-        backgroundColor: "#DEDEDE",
-        width: 40,
-    },
+const createStyles = (theme: AppTheme) =>
+    StyleSheet.create({
+        // Sheet
+        sheetBackground: {
+            backgroundColor: theme.colors.background,
+        },
+        handleIndicator: {
+            backgroundColor: theme.colors.border,
+            width: 40,
+        },
 
-    // List
-    listContent: {
-        paddingBottom: SCREEN_HEIGHT * 0.1, // 50% of screen height
-    },
-    centered: {
-        flex: 1,
-        alignItems: "center",
-    },
-    deletingItem: {
-        opacity: 0.5,
-    },
-    errorText: {
-        color: "#777",
-        fontSize: 14,
-        marginBottom: 12,
-        textAlign: "center",
-    },
-    retryButton: {
-        paddingHorizontal: 20,
-        paddingVertical: 10,
-        borderRadius: 8,
-    },
-    retryText: {
-        color: "#3b82f6",
-        // color: "#fff",
-        fontWeight: "600",
-    },
-    // Header
-    commentsHeader: {
-        paddingVertical: 12,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: "#E5E5E5",
-        alignItems: "center",
-    },
-    commentsTitle: {
-        fontSize: 16,
-        fontWeight: "600",
-        color: "#262626",
-    },
+        // List
+        listContent: {
+            paddingBottom: SCREEN_HEIGHT * 0.1,
+        },
+        centered: {
+            flex: 1,
+            alignItems: "center",
+        },
+        deletingItem: {
+            opacity: 0.5,
+        },
+        errorText: {
+            color: theme.colors.textSecondary,
+            fontSize: 14,
+            marginBottom: theme.spacing.md,
+            textAlign: "center",
+        },
+        retryButton: {
+            paddingHorizontal: theme.spacing.xl,
+            paddingVertical: theme.spacing.sm,
+            borderRadius: theme.radius.sm,
+        },
+        retryText: {
+            color: theme.colors.primary,
+            fontWeight: "600",
+        },
 
-    // Comment Item
-    commentItem: {
-        flexDirection: "row",
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-    }, optimisticItem: {
-        opacity: 0.6,
-    },
-    avatar: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        marginRight: 12,
-    },
-    commentContent: {
-        flex: 1,
-    },
-    commentHeader: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
-        marginBottom: 4,
-    },
-    username: {
-        fontSize: 14,
-        fontWeight: "600",
-        color: "#262626",
-    },
-    time: {
-        fontSize: 12,
-        color: "#8E8E8E",
-    },
-    message: {
-        fontSize: 14,
-        color: "#262626",
-        lineHeight: 20,
-    },
+        // Header
+        commentsHeader: {
+            paddingVertical: theme.spacing.md,
+            borderBottomWidth: StyleSheet.hairlineWidth,
+            borderBottomColor: theme.colors.border,
+            alignItems: "center",
+        },
+        commentsTitle: {
+            fontSize: 16,
+            fontWeight: "600",
+            color: theme.colors.textPrimary,
+        },
 
-    // Replies
-    repliesContainer: {
-        marginLeft: 52,
-        paddingLeft: 16,
-    },
-    replyItem: {
-        flexDirection: "row",
-        paddingVertical: 8,
-        // backgroundColor: "red",
-        marginRight: 8
-    },
-    replyAvatar: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        marginRight: 10,
-    },
-    replyContent: {
-        flex: 1,
-    },
-    repliesToggle: {
-        flexDirection: "row",
-        alignItems: "center",
-        marginTop: 8,
-    },
-    repliesLine: {
-        width: 24,
-        height: 1,
-        backgroundColor: "#C7C7C7",
-        marginRight: 8,
-    },
-    repliesToggleText: {
-        fontSize: 13,
-        color: "#8E8E8E",
-        fontWeight: "500",
-    },
-    actionsRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        marginTop: 8,
-        gap: 16,
-    },
-    actionButton: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 4,
-    },
-    actionCount: {
-        fontSize: 12,
-        color: "#8E8E8E",
-    },
-    replyButtonText: {
-        fontSize: 12,
-        color: "#8E8E8E",
-        fontWeight: "500",
-    },
-    // States
-    separator: {
-        height: StyleSheet.hairlineWidth,
-        backgroundColor: "#E5E5E5",
-        marginLeft: 68,
-    },
-    emptyContainer: {
-        padding: 32,
-        alignItems: "center",
-    },
-    emptyText: {
-        color: "#8E8E8E",
-        fontSize: 14,
-    },
-    footerWrapper: {
-        backgroundColor: "white",
-        borderTopWidth: StyleSheet.hairlineWidth,
-        borderTopColor: "#E5E5E5",
-    },
-    replyIndicator: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        backgroundColor: "#F5F5F5",
-    },
-    replyIndicatorText: {
-        fontSize: 13,
-        color: "#8E8E8E",
-    },
-    replyUsername: {
-        fontWeight: "600",
-        color: "#262626",
-    },
-    // Footer Input
-    inputContainer: {
-        flexDirection: "row",
-        alignItems: "flex-end",
-        paddingHorizontal: 16,
-        paddingTop: 12,
-        // borderTopWidth: StyleSheet.hairlineWidth,
-        // borderTopColor: "#E5E5E5",
-        backgroundColor: "white",
-        gap: 12,
-    },
-    input: {
-        flex: 1,
-        minHeight: 40,
-        maxHeight: 100,
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        backgroundColor: "#F5F5F5",
-        borderRadius: 20,
-        fontSize: 14,
-        color: "#262626",
-    },
-    sendButton: {
-        paddingHorizontal: 4,
-        paddingVertical: 10,
-    },
-    sendButtonDisabled: {
-        opacity: 0.5,
-    },
-    sendButtonText: {
-        color: "#3897F0",
-        fontSize: 14,
-        fontWeight: "600",
-    },
-});
+        // Comment Item
+        commentItem: {
+            flexDirection: "row",
+            paddingHorizontal: theme.spacing.lg,
+            paddingVertical: theme.spacing.md,
+        },
+        optimisticItem: {
+            opacity: 0.6,
+        },
+        avatar: {
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            marginRight: theme.spacing.md,
+        },
+        commentContent: {
+            flex: 1,
+        },
+        commentHeader: {
+            flexDirection: "row",
+            alignItems: "center",
+            gap: theme.spacing.sm,
+            marginBottom: 4,
+        },
+        username: {
+            fontSize: 14,
+            fontWeight: "600",
+            color: theme.colors.textPrimary,
+        },
+        time: {
+            fontSize: 12,
+            color: theme.colors.textSecondary,
+        },
+        message: {
+            fontSize: 14,
+            color: theme.colors.textPrimary,
+            lineHeight: 20,
+        },
+
+        // Replies
+        repliesContainer: {
+            marginLeft: 52,
+            paddingLeft: theme.spacing.lg,
+        },
+        replyItem: {
+            flexDirection: "row",
+            paddingVertical: theme.spacing.sm,
+            marginRight: theme.spacing.sm,
+        },
+        replyAvatar: {
+            width: 32,
+            height: 32,
+            borderRadius: 16,
+            marginRight: 10,
+        },
+        replyContent: {
+            flex: 1,
+        },
+        repliesToggle: {
+            flexDirection: "row",
+            alignItems: "center",
+            marginTop: theme.spacing.sm,
+        },
+        repliesLine: {
+            width: 24,
+            height: 1,
+            backgroundColor: theme.colors.border,
+            marginRight: theme.spacing.sm,
+        },
+        repliesToggleText: {
+            fontSize: 13,
+            color: theme.colors.textSecondary,
+            fontWeight: "500",
+        },
+        actionsRow: {
+            flexDirection: "row",
+            alignItems: "center",
+            marginTop: theme.spacing.sm,
+            gap: theme.spacing.lg,
+        },
+        actionButton: {
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 4,
+        },
+        actionCount: {
+            fontSize: 12,
+            color: theme.colors.textSecondary,
+        },
+        replyButtonText: {
+            fontSize: 12,
+            color: theme.colors.textSecondary,
+            fontWeight: "500",
+        },
+
+        // States
+        separator: {
+            height: StyleSheet.hairlineWidth,
+            backgroundColor: theme.colors.border,
+            marginLeft: 68,
+        },
+        emptyContainer: {
+            padding: 32,
+            alignItems: "center",
+        },
+        emptyText: {
+            color: theme.colors.textSecondary,
+            fontSize: 14,
+        },
+
+        // Footer
+        footerWrapper: {
+            backgroundColor: theme.colors.background,
+            borderTopWidth: StyleSheet.hairlineWidth,
+            borderTopColor: theme.colors.border,
+        },
+        replyIndicator: {
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+            paddingHorizontal: theme.spacing.lg,
+            paddingVertical: theme.spacing.sm,
+            backgroundColor: theme.colors.surface,
+        },
+        replyIndicatorText: {
+            fontSize: 13,
+            color: theme.colors.textSecondary,
+        },
+        replyUsername: {
+            fontWeight: "600",
+            color: theme.colors.textPrimary,
+        },
+
+        // Footer Input
+        inputContainer: {
+            flexDirection: "row",
+            alignItems: "flex-end",
+            paddingHorizontal: theme.spacing.lg,
+            paddingTop: theme.spacing.md,
+            backgroundColor: theme.colors.background,
+            gap: theme.spacing.md,
+        },
+        input: {
+            flex: 1,
+            minHeight: 40,
+            maxHeight: 100,
+            paddingHorizontal: theme.spacing.lg,
+            paddingVertical: 10,
+            backgroundColor: theme.colors.surface,
+            borderRadius: theme.radius.lg,
+            fontSize: 14,
+            color: theme.colors.textPrimary,
+        },
+        sendButton: {
+            paddingHorizontal: 4,
+            paddingVertical: 10,
+        },
+        sendButtonDisabled: {
+            opacity: 0.5,
+        },
+        sendButtonText: {
+            color: SEND_COLOR,
+            fontSize: 14,
+            fontWeight: "600",
+        },
+    });

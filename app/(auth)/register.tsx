@@ -4,12 +4,13 @@ import { Logo } from "@/assets/svg";
 import { useDebounce } from "@/hooks/use-debounce";
 import Button from "@/src/components/ui/button";
 import FormInput from "@/src/components/ui/input";
-import { Colors } from "@/src/constants/theme";
 import {
   useAuth,
   useCheckUsername,
   useRegister,
 } from "@/src/features/auth/auth.hooks";
+import { AppTheme } from "@/src/theme";
+import { useTheme } from "@/src/theme/ThemeProvider";
 import { setServerErrors } from "@/src/utils/form-errors";
 import {
   hasNumber,
@@ -26,6 +27,8 @@ const FIELD_MAP = {
   password_confirmation: "confirmPassword",
 };
 
+const ERROR_COLOR = "#DC2626";
+
 type FormData = {
   email: string;
   password: string;
@@ -36,7 +39,10 @@ type FormData = {
   acceptPolicy: boolean;
 };
 
-export default function Login() {
+export default function Register() {
+  const { theme } = useTheme();
+  const styles = createStyles(theme);
+
   const { control, handleSubmit, setError } = useForm<FormData>({
     mode: "onBlur",
     defaultValues: {
@@ -47,6 +53,7 @@ export default function Login() {
       confirmPassword: "passworD@123",
     },
   });
+
   const register = useRegister();
   const authStore = useAuth();
 
@@ -56,14 +63,10 @@ export default function Login() {
   });
 
   const debouncedUsername = useDebounce(username, 1000);
-
   const checkUsername = useCheckUsername(debouncedUsername);
-
-  // console.log(checkUsername);
 
   useEffect(() => {
     if (checkUsername.isSuccess) {
-      // console.log(checkUsername.data.data.available);
       if (!checkUsername.data.data.available) {
         setError("username", {
           type: "manual",
@@ -87,46 +90,40 @@ export default function Login() {
           authStore.login(data.data.token);
         },
         onError: (e) => {
-          // console.log(e.data.errors);
           setServerErrors<FormData>(e.data?.errors, setError, FIELD_MAP);
         },
-      },
+      }
     );
   };
+
   return (
-    <ScrollView>
+    <ScrollView style={styles.scrollView}>
       <View style={styles.container}>
-        <View style={{ alignItems: "center" }}>
+        <View style={styles.logoContainer}>
           <Logo />
         </View>
 
-        <View style={{}}>
-          <Text
-            style={{
-              fontSize: 34,
-              fontWeight: "800",
-              color: Colors.primaryColor,
-            }}
-          >
-            Create an Account
-          </Text>
+        <View>
+          <Text style={styles.title}>Create an Account</Text>
         </View>
+
         <FormInput
           control={control}
           name="name"
           label="Name"
           placeholder="Enter your name"
-          Left={<FontAwesome5 name="user-circle" size={24} color="black" />}
+          Left={<FontAwesome5 name="user-circle" size={24} color={theme.colors.icon} />}
           rules={{
             required: "Name is required",
           }}
         />
+
         <FormInput
           control={control}
           name="username"
           label="Username"
           placeholder="Enter your username"
-          Left={<FontAwesome5 name="user-circle" size={24} color="black" />}
+          Left={<FontAwesome5 name="user-circle" size={24} color={theme.colors.icon} />}
           rules={{
             required: "Username is required",
             minLength: {
@@ -138,8 +135,9 @@ export default function Login() {
               "Username already taken",
           }}
         />
+
         {checkUsername.isLoading && (
-          <Text style={{ fontSize: 12 }}>Checking availability...</Text>
+          <Text style={styles.checkingText}>Checking availability...</Text>
         )}
 
         <FormInput
@@ -147,7 +145,7 @@ export default function Login() {
           name="email"
           label="Email"
           placeholder="Enter your email"
-          Left={<Fontisto name="email" size={24} color="black" />}
+          Left={<Fontisto name="email" size={24} color={theme.colors.icon} />}
           rules={{
             required: "Email is required",
             pattern: {
@@ -156,14 +154,14 @@ export default function Login() {
             },
           }}
         />
+
         <FormInput
-          // secureTextEntry
           control={control}
           name="password"
           label="Password"
           placeholder="Enter your password"
           keyboardType="visible-password"
-          Left={<Fontisto name="email" size={24} color="black" />}
+          Left={<Fontisto name="locked" size={24} color={theme.colors.icon} />}
           rules={{
             required: "Password is required",
             validate: {
@@ -184,13 +182,12 @@ export default function Login() {
         />
 
         <FormInput
-          // secureTextEntry
           control={control}
           name="confirmPassword"
           label="Confirm Password"
           placeholder="Re-enter your password"
           keyboardType="visible-password"
-          Left={<Fontisto name="email" size={24} color="black" />}
+          Left={<Fontisto name="locked" size={24} color={theme.colors.icon} />}
           rules={{
             required: "Password is required",
             validate: (value, formValues) =>
@@ -206,15 +203,15 @@ export default function Login() {
           }}
           render={({ field: { value, onChange }, fieldState: { error } }) => (
             <View>
-              <View style={{ flexDirection: "row", gap: 8 }}>
+              <View style={styles.checkboxRow}>
                 <FontAwesome5
                   name={value ? "check-square" : "square"}
                   size={22}
-                  color={Colors.primaryColor}
+                  color={theme.colors.primary}
                   onPress={() => onChange(!value)}
                 />
                 <Text
-                  style={{ flexShrink: 1 }}
+                  style={styles.checkboxText}
                   onPress={() => onChange(!value)}
                 >
                   I acknowledge and agree to the Terms of Service and Privacy
@@ -222,9 +219,7 @@ export default function Login() {
                 </Text>
               </View>
               {error && (
-                <Text style={{ color: "red", fontSize: 12 }}>
-                  {error.message}
-                </Text>
+                <Text style={styles.errorText}>{error.message}</Text>
               )}
             </View>
           )}
@@ -234,16 +229,17 @@ export default function Login() {
           control={control}
           name="acceptPolicy"
           render={({ field: { value, onChange } }) => (
-            <View
-              style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}
-            >
+            <View style={styles.checkboxRow}>
               <FontAwesome5
                 name={value ? "check-square" : "square"}
                 size={22}
-                color={Colors.primaryColor}
+                color={theme.colors.primary}
                 onPress={() => onChange(!value)}
               />
-              <Text style={{ flexShrink: 1 }} onPress={() => onChange(!value)}>
+              <Text
+                style={styles.checkboxText}
+                onPress={() => onChange(!value)}
+              >
                 I agree to the Acceptable Use Policy and acknowledge that
                 pornography and illegal content are strictly prohibited. I
                 understand that uploading such content will result in immediate
@@ -263,30 +259,47 @@ export default function Login() {
   );
 }
 
-const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    // alignItems: "center",
-    paddingHorizontal: 12,
-    marginTop: 20,
-    gap: 20,
-    width: "100%",
-  },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: "absolute",
-  },
-});
+const createStyles = (theme: AppTheme) =>
+  StyleSheet.create({
+    scrollView: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    container: {
+      flex: 1,
+      justifyContent: "center",
+      paddingHorizontal: theme.spacing.md,
+      marginTop: theme.spacing.xl,
+      marginBottom: theme.spacing.xl,
+      gap: theme.spacing.xl,
+      width: "100%",
+    },
+    logoContainer: {
+      alignItems: "center",
+    },
+    title: {
+      fontSize: 34,
+      fontWeight: "800",
+      color: theme.colors.primary,
+    },
+    checkingText: {
+      fontSize: 12,
+      color: theme.colors.textSecondary,
+    },
+    checkboxRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: theme.spacing.sm,
+    },
+    checkboxText: {
+      flexShrink: 1,
+      color: theme.colors.textPrimary,
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    errorText: {
+      color: ERROR_COLOR,
+      fontSize: 12,
+      marginTop: theme.spacing.xs,
+    },
+  });

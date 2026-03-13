@@ -16,8 +16,10 @@ import {
   TextInputProps,
   View,
 } from "react-native";
-import DatePickerSheet from "./datepicker-sheet"; // adjust import path
-import SelectPickerSheet from "./selectpicker-sheet"; // adjust import path
+import DatePickerSheet from "./datepicker-sheet";
+import SelectPickerSheet from "./selectpicker-sheet";
+
+const ERROR_COLOR = "#DC2626";
 
 // Option interface for select picker
 interface Option {
@@ -36,7 +38,8 @@ interface BaseFormInputProps<T extends FieldValues> {
 
 // Props for normal text input (no pickerType)
 interface TextFormInputProps<T extends FieldValues>
-  extends BaseFormInputProps<T>, Omit<TextInputProps, "style"> {
+  extends BaseFormInputProps<T>,
+  Omit<TextInputProps, "style"> {
   pickerType?: undefined;
   options?: never;
   style?: TextInputProps["style"];
@@ -44,18 +47,16 @@ interface TextFormInputProps<T extends FieldValues>
 }
 
 // Props for date picker
-interface DateFormInputProps<
-  T extends FieldValues,
-> extends BaseFormInputProps<T> {
+interface DateFormInputProps<T extends FieldValues>
+  extends BaseFormInputProps<T> {
   pickerType: "date";
   options?: never;
   placeholder?: string;
 }
 
 // Props for select picker
-interface SelectFormInputProps<
-  T extends FieldValues,
-> extends BaseFormInputProps<T> {
+interface SelectFormInputProps<T extends FieldValues>
+  extends BaseFormInputProps<T> {
   pickerType: "select";
   options: Option[];
   placeholder?: string;
@@ -124,12 +125,10 @@ function FormInput<T extends FieldValues>(props: FormInputProps<T>) {
                   visible={isPickerOpen}
                   value={value}
                   onChange={(date) => {
-                    // const iso = date.toISOString().split("T")[0];
                     console.log(
                       "DatePickerSheet onChange fired:",
-                      date.toISOString(),
+                      date.toISOString()
                     );
-
                     onChange(date);
                   }}
                   onClose={() => setIsPickerOpen(false)}
@@ -142,7 +141,7 @@ function FormInput<T extends FieldValues>(props: FormInputProps<T>) {
           if (pickerType === "select") {
             const selectProps = props as SelectFormInputProps<T>;
             const selectedOption = selectProps.options.find(
-              (opt) => opt.value === value,
+              (opt) => opt.value === value
             );
 
             return (
@@ -203,7 +202,7 @@ function FormInput<T extends FieldValues>(props: FormInputProps<T>) {
                 onChangeText={onChange}
                 onBlur={onBlur}
                 placeholder={placeholder}
-                placeholderTextColor="#999"
+                placeholderTextColor={theme.colors.textSecondary}
                 {...inputProps}
               />
             </View>
@@ -256,7 +255,6 @@ export const createStyles = (theme: AppTheme) =>
       paddingVertical: theme.spacing.sm,
     },
 
-    // Styles for picker trigger (Pressable)
     pickerTrigger: {
       justifyContent: "flex-start",
     },
@@ -269,11 +267,11 @@ export const createStyles = (theme: AppTheme) =>
     },
 
     placeholderText: {
-      color: "#999",
+      color: theme.colors.textSecondary,
     },
 
     errorBorder: {
-      borderColor: "red",
+      borderColor: ERROR_COLOR,
     },
 
     input: {
@@ -290,7 +288,7 @@ export const createStyles = (theme: AppTheme) =>
     },
 
     errorText: {
-      color: "red",
+      color: ERROR_COLOR,
       fontSize: 12,
       marginTop: theme.spacing.xs,
     },

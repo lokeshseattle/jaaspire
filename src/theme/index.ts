@@ -74,18 +74,24 @@ const lightTheme: ThemeShape = {
 
 const darkTheme: ThemeShape = {
   colors: {
-    background: "#0F172A",
-    surface: "#111827",
-    card: "#1E293B",
-    textPrimary: "#F1F5F9",
-    textSecondary: "#94A3B8",
-    border: "#1F2937",
-    tint: "#38BDF8",
-    primary: "#3B82F6",
-    icon: "#94A3B8",
-    tabIconDefault: "#64748B",
-    tabIconSelected: "#38BDF8",
-    gradient: ["#5a42b7", "#2761df", "#00f1ed"]
+    background: "#0B0F14",   // app background
+    surface: "#121821",      // screens / containers
+    card: "#1A2230",         // cards / elevated surfaces
+
+    textPrimary: "#F8FAFC",  // main readable text
+    textSecondary: "#94A3B8",// subtitles / metadata
+
+    border: "#222B3A",       // subtle separators
+
+    tint: "#60A5FA",         // interactive elements
+    primary: "#3B82F6",      // main brand color
+
+    icon: "#9CA3AF",
+
+    tabIconDefault: "#6B7280",
+    tabIconSelected: "#60A5FA",
+
+    gradient: ["#7C3AED", "#2563EB", "#06B6D4"],
   },
   spacing,
   radius,

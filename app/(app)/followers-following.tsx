@@ -201,7 +201,7 @@ const FollowersFollowingScreen = () => {
                 {/* Content */}
                 <Animated.View style={[styles.listWrapper, contentStyle]}>
                     {isLoading ? (
-                        <ActivityIndicator />
+                        <ActivityIndicator color={theme.colors.textSecondary} />
                     ) : (
                         <FlatList
                             data={listData}

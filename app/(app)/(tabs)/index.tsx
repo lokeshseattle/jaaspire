@@ -6,11 +6,14 @@ import Stories from "@/src/components/home/story";
 import { useGetFeedQuery, useTrackPostView } from "@/src/features/post/post.hooks";
 import { useGetAllStories } from "@/src/features/story/story.hooks";
 import { videoManager } from "@/src/lib/video-manager";
+import { AppTheme } from "@/src/theme";
+import { useTheme } from "@/src/theme/ThemeProvider";
 import { useFocusEffect, useNavigation } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  StyleSheet,
   View,
   ViewabilityConfig,
   ViewToken,
@@ -18,11 +21,14 @@ import {
 
 // Define viewability config outside component to prevent recreation
 const VIEWABILITY_CONFIG: ViewabilityConfig = {
-  itemVisiblePercentThreshold: 50, // Instagram-style: 50% visible triggers
-  minimumViewTime: 100, // Reduced from 250ms for faster response
+  itemVisiblePercentThreshold: 50,
+  minimumViewTime: 100,
 };
 
 export default function Home() {
+  const { theme } = useTheme();
+  const styles = createStyles(theme);
+
   const [visiblePostId, setVisiblePostId] = useState<number | null>(null);
   const [isScreenFocused, setIsScreenFocused] = useState(true);
   const flatListRef = useRef<FlatList>(null);
@@ -57,15 +63,6 @@ export default function Home() {
 
   const { refetch: storyRefetch } = useGetAllStories();
 
-  // useEffect(() => {
-  //   const unsubscribe = navigation.addListener('focus', () => {
-
-  //   })
-
-  //   return unsubscribe
-
-  // }, [navigation])
-
   // Track screen focus for pausing videos when navigating away
   useFocusEffect(
     useCallback(() => {
@@ -96,7 +93,7 @@ export default function Home() {
     });
 
     return unsubscribe;
-  }, [navigation, handleRefresh])
+  }, [navigation, handleRefresh]);
 
   // Stable callback using useCallback + ref pattern for viewability
   const onViewableItemsChanged = useCallback(
@@ -106,19 +103,13 @@ export default function Home() {
         return;
       }
 
-      // Find the most visible item (highest visibility percentage)
-      // viewableItems are already sorted by index, but we want most visible
       let mostVisibleItem = viewableItems[0];
 
-      // If multiple items are viewable, prefer the one closest to center
-      // For simplicity, we take the first one that's at least 50% visible
-      // (they all meet threshold, so first one is typically most centered)
       for (const item of viewableItems) {
         if (item.isViewable) {
           mostVisibleItem = item;
           break;
         }
-
       }
 
       const newVisibleId = mostVisibleItem.item as number;
@@ -135,7 +126,6 @@ export default function Home() {
   );
 
   // Use viewabilityConfigCallbackPairs for stable behavior
-  // This prevents the "changing onViewableItemsChanged on the fly" warning
   const viewabilityConfigCallbackPairs = useRef([
     {
       viewabilityConfig: VIEWABILITY_CONFIG,
@@ -182,14 +172,20 @@ export default function Home() {
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const ListFooter = useMemo(
-    () => (isFetchingNextPage ? <ActivityIndicator style={{ padding: 20 }} /> : null),
-    [isFetchingNextPage]
+    () =>
+      isFetchingNextPage ? (
+        <ActivityIndicator
+          style={styles.loader}
+          color={theme.colors.textSecondary}
+        />
+      ) : null,
+    [isFetchingNextPage, styles.loader, theme.colors.textSecondary]
   );
 
   const ListHeader = useMemo(() => <Stories />, []);
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={styles.container}>
       <FlatList
         ref={flatListRef}
         onScroll={handleScroll}
@@ -199,7 +195,6 @@ export default function Home() {
         renderItem={renderItem}
         ListHeaderComponent={ListHeader}
         ListFooterComponent={ListFooter}
-        // Use callback pairs instead of separate props (more stable)
         viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs.current}
         // Pagination
         onEndReached={handleEndReached}
@@ -208,17 +203,15 @@ export default function Home() {
         onRefresh={handleRefresh}
         refreshing={isRefetching}
         // Performance optimizations
-        removeClippedSubviews={true} // Unmount off-screen views (Android)
-        windowSize={5} // Render 5 screens worth of content (2 above, 2 below, 1 visible)
-        maxToRenderPerBatch={3} // Render 3 items per batch
-        initialNumToRender={3} // Initial render count
-        updateCellsBatchingPeriod={50} // Batch updates every 50ms
-        // Prevent content jumping when items load
+        removeClippedSubviews={true}
+        windowSize={5}
+        maxToRenderPerBatch={3}
+        initialNumToRender={3}
+        updateCellsBatchingPeriod={50}
         maintainVisibleContentPosition={{
           minIndexForVisible: 0,
         }}
-        // Optimize re-renders
-        extraData={visiblePostId} // Re-render when visible post changes
+        extraData={visiblePostId}
       />
 
       <CommentsBottomSheet
@@ -229,3 +222,14 @@ export default function Home() {
     </View>
   );
 }
+
+const createStyles = (theme: AppTheme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    loader: {
+      padding: theme.spacing.xl,
+    },
+  });

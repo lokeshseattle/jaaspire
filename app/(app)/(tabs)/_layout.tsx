@@ -1,4 +1,4 @@
-import { Colors } from "@/src/constants/theme";
+import { useTheme } from "@/src/theme/ThemeProvider";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Tabs } from "expo-router";
 import { Platform, View } from "react-native";
@@ -9,17 +9,21 @@ const TAB_BAR_PADDING_BOTTOM = Platform.OS === "ios" ? 24 : 12;
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
 
   return (
     <View style={{ flex: 1, backgroundColor: "white", paddingTop: insets.top }}>
       <Tabs
         screenOptions={{
           headerShown: false,
-          tabBarActiveTintColor: Colors.primaryColor,
-          tabBarInactiveTintColor: "gray",
+          tabBarActiveTintColor: theme.colors.primary,
+          tabBarInactiveTintColor: theme.colors.textPrimary,
           tabBarStyle: {
             height: TAB_BAR_HEIGHT + TAB_BAR_PADDING_BOTTOM,
             paddingBottom: TAB_BAR_PADDING_BOTTOM,
+            backgroundColor: theme.colors.background,
+            borderTopColor: theme.colors.border,
+            borderTopWidth: 1,
             //   paddingTop: 8,
           },
           tabBarItemStyle: {
@@ -28,6 +32,7 @@ export default function TabsLayout() {
           tabBarLabelStyle: {
             fontSize: 11,
             //   marginTop: 2,
+            color: theme.colors.textPrimary
           },
         }}
       >

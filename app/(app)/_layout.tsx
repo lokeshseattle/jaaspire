@@ -1,4 +1,6 @@
+import { initializePusher } from "@/src/lib/pusher";
 import { Stack } from "expo-router";
+import { useEffect } from "react";
 
 export default function AppLayout() {
   //   const {user, isHydrated} = useAuthStore().state;
@@ -9,7 +11,9 @@ export default function AppLayout() {
   //   if (!user) {
   //     return <Redirect href="/login" />;
   //   }
-
+  useEffect(() => {
+    initializePusher();
+  }, []);
   return (
     // <Stack screenOptions={{ headerShown: false }}>
     <Stack screenOptions={{ headerShown: false }}>
@@ -17,6 +21,7 @@ export default function AppLayout() {
 
       <Stack.Screen
         name="messages"
+
         options={{
           headerShown: true,
           title: "Messages",

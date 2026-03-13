@@ -7,10 +7,12 @@ import {
   useMarkNotificationReadMutation,
 } from "@/src/features/profile/notification.hooks";
 import { TNotification } from "@/src/services/api/api.types";
+import { AppTheme } from "@/src/theme";
+import { useTheme } from "@/src/theme/ThemeProvider";
 import { timeAgo } from "@/src/utils/helpers";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
-import { router, useNavigation } from "expo-router";
+import { router } from "expo-router";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -32,21 +34,23 @@ import Animated, {
 } from "react-native-reanimated";
 
 const FILTERS: TFilter[] = ["", "likes", "subscriptions", "tips"];
+const VERIFIED_COLOR = "#1DA1F2";
+
 interface ListHeaderComponentProps {
-  pendingRequestsData: ReturnType<typeof useGetPendingRequests>['data'];
+  pendingRequestsData: ReturnType<typeof useGetPendingRequests>["data"];
 }
 
-const ListHeaderComponent = ({ pendingRequestsData }: ListHeaderComponentProps) => {
-  const navigation = useNavigation();
+const ListHeaderComponent = ({
+  pendingRequestsData,
+}: ListHeaderComponentProps) => {
+  const { theme } = useTheme();
+  const styles = createStyles(theme);
 
+  const allRequests =
+    pendingRequestsData?.pages?.flatMap((page) => page.data.requests) ?? [];
+  const totalCount =
+    pendingRequestsData?.pages?.[0]?.data?.pagination?.total ?? 0;
 
-  // Extract data from infinite query structure
-  const allRequests = pendingRequestsData?.pages?.flatMap(
-    (page) => page.data.requests
-  ) ?? [];
-  const totalCount = pendingRequestsData?.pages?.[0]?.data?.pagination?.total ?? 0;
-
-  // Requirement 1: Return null if no pending requests
   if (allRequests.length === 0) {
     return null;
   }
@@ -54,78 +58,48 @@ const ListHeaderComponent = ({ pendingRequestsData }: ListHeaderComponentProps) 
   const firstRequest = allRequests[0];
   const remainingCount = totalCount - 1;
 
-  const handleAccept = (id: number) => {
-    // TODO: Implement accept mutation
-    // acceptRejectRequest({ userId: id, action: "accept" });
-  };
-
-  const handleReject = (id: number) => {
-    // TODO: Implement reject mutation
-    // acceptRejectRequest({ userId: id, action: "reject" });
-  };
-
   const handleViewAllRequests = () => {
-    // Navigate to pending requests screen
     router.push({
       pathname: "/pending-requests",
-    })
+    });
   };
 
   return (
-    <Pressable onPress={handleViewAllRequests} style={styles.pendingRequestsContainer}>
-      {/* Title */}
-      {/* <Text style={styles.title}>Pending Requests</Text> */}
-
-      {/* Single Request Card */}
+    <Pressable
+      onPress={handleViewAllRequests}
+      style={styles.pendingRequestsContainer}
+    >
       <View style={styles.requestCard}>
-        {/* Avatar */}
         <Image
           source={{ uri: firstRequest.avatar }}
           style={styles.pendingRequestAvatar}
         />
 
-        {/* User Info */}
         <View style={styles.userInfo}>
           <View style={styles.nameRow}>
             <Text style={styles.name} numberOfLines={1}>
               Follow request
             </Text>
             {firstRequest.verified_user && (
-              <Ionicons
-                name="checkmark-circle"
-                size={16}
-                color="#1DA1F2"
-              />
+              <Ionicons name="checkmark-circle" size={16} color={VERIFIED_COLOR} />
             )}
           </View>
           <Text style={styles.pendingRequestUsername} numberOfLines={1}>
-            @{firstRequest.username} {remainingCount > 0 && `+ ${remainingCount} other`}
+            @{firstRequest.username}{" "}
+            {remainingCount > 0 && `+ ${remainingCount} other`}
           </Text>
         </View>
 
-        {/* Action Buttons */}
-        {/* <View style={styles.pendingRequestButtonsContainer}> */}
-        {/* <Pressable
-          style={styles.viewMoreContainer}
-          onPress={handleViewAllRequests}
-        > */}
-        {/* <Text style={styles.viewMoreText}>
-              +{remainingCount} more
-            </Text> */}
         <Ionicons
           name="chevron-forward"
           size={18}
-          color="#007AFF"
+          color={theme.colors.primary}
           onPress={handleViewAllRequests}
-
         />
-        {/* </Pressable> */}
-        {/* </View> */}
       </View>
-
     </Pressable>
   );
-}
+};
 
 const FILTER_CONFIG: Record<
   TFilter,
@@ -157,14 +131,13 @@ const FILTER_CONFIG: Record<
   },
 };
 
-const AnimatedIcon = Animated.createAnimatedComponent(Ionicons);
-
 interface AnimatedTabProps {
   filterKey: TFilter;
   config: (typeof FILTER_CONFIG)[TFilter];
   isActive: boolean;
   onPress: () => void;
   onLayout: (event: LayoutChangeEvent) => void;
+  theme: AppTheme;
 }
 
 function AnimatedTab({
@@ -173,7 +146,9 @@ function AnimatedTab({
   isActive,
   onPress,
   onLayout,
+  theme,
 }: AnimatedTabProps) {
+  const styles = createStyles(theme);
   const scale = useSharedValue(1);
   const progress = useSharedValue(isActive ? 1 : 0);
 
@@ -186,7 +161,11 @@ function AnimatedTab({
 
   const animatedTextStyle = useAnimatedStyle(() => {
     return {
-      color: interpolateColor(progress.value, [0, 1], ["#999", "#000"]),
+      color: interpolateColor(
+        progress.value,
+        [0, 1],
+        [theme.colors.textSecondary, theme.colors.textPrimary]
+      ),
       transform: [
         {
           scale: withSpring(scale.value, {
@@ -231,12 +210,16 @@ function AnimatedTab({
         <Ionicons
           name={isActive && config.activeIcon ? config.activeIcon : config.icon}
           size={22}
-          color={isActive ? "#000" : "#999"}
+          color={isActive ? theme.colors.textPrimary : theme.colors.textSecondary}
         />
       </Animated.View>
 
       <Animated.Text
-        style={[styles.tabText, animatedTextStyle, isActive && styles.activeTabText]}
+        style={[
+          styles.tabText,
+          animatedTextStyle,
+          isActive && styles.activeTabText,
+        ]}
       >
         {config.label}
       </Animated.Text>
@@ -250,6 +233,9 @@ interface AnimatedTabBarProps {
 }
 
 function AnimatedTabBar({ filter, onFilterChange }: AnimatedTabBarProps) {
+  const { theme } = useTheme();
+  const styles = createStyles(theme);
+
   const [tabLayouts, setTabLayouts] = useState<{
     [key: string]: { x: number; width: number };
   }>({});
@@ -307,6 +293,7 @@ function AnimatedTabBar({ filter, onFilterChange }: AnimatedTabBarProps) {
             isActive={isActive}
             onPress={() => onFilterChange(key)}
             onLayout={handleTabLayout(key)}
+            theme={theme}
           />
         );
       })}
@@ -317,6 +304,9 @@ function AnimatedTabBar({ filter, onFilterChange }: AnimatedTabBarProps) {
 }
 
 export default function NotificationsScreen() {
+  const { theme } = useTheme();
+  const styles = createStyles(theme);
+
   const [filter, setFilter] = useState<TFilter>("");
 
   const {
@@ -328,10 +318,11 @@ export default function NotificationsScreen() {
     refetch,
     isRefetching,
   } = useGetNotifications(filter);
+
   const {
     data: pendingRequestsData,
     refetch: refetchPendingRequests,
-    isRefetching: isRefetchingPendingRequests
+    isRefetching: isRefetchingPendingRequests,
   } = useGetPendingRequests();
 
   const handleRefresh = useCallback(() => {
@@ -339,16 +330,13 @@ export default function NotificationsScreen() {
     refetchPendingRequests();
   }, [refetch, refetchPendingRequests]);
 
-  // 👇 Combined refreshing state
   const isRefreshingAny = isRefetching || isRefetchingPendingRequests;
 
-  // mutation
   const markReadMutation = useMarkNotificationReadMutation();
+  const [optimisticReadIds, setOptimisticReadIds] = useState<Set<string>>(
+    new Set()
+  );
 
-  // optimistic UI
-  const [optimisticReadIds, setOptimisticReadIds] = useState<Set<string>>(new Set());
-
-  // queue + spam guards
   const pendingReadIdsRef = useRef<Set<string>>(new Set());
   const isFlushingRef = useRef(false);
   const lastFlushAtRef = useRef(0);
@@ -358,7 +346,6 @@ export default function NotificationsScreen() {
   const flushPendingReads = useCallback(() => {
     const now = Date.now();
 
-    // guards
     if (isFlushingRef.current) return;
     if (now - lastFlushAtRef.current < FLUSH_COOLDOWN_MS) return;
 
@@ -371,7 +358,6 @@ export default function NotificationsScreen() {
 
     markReadMutation.mutate(ids, {
       onError: () => {
-        // re-queue on failure
         ids.forEach((id) => pendingReadIdsRef.current.add(id));
       },
       onSettled: () => {
@@ -380,7 +366,6 @@ export default function NotificationsScreen() {
     });
   }, [markReadMutation]);
 
-  // make viewability stricter so it doesn't mark read while "fly-scrolling"
   const viewabilityConfig = useMemo(
     () => ({
       itemVisiblePercentThreshold: 80,
@@ -389,7 +374,6 @@ export default function NotificationsScreen() {
     []
   );
 
-  // IMPORTANT: enqueue + optimistic update ONLY (no network call here)
   const onViewableItemsChanged = useRef(
     ({ viewableItems }: { viewableItems: Array<ViewToken> }) => {
       const newlyRead: string[] = [];
@@ -417,7 +401,6 @@ export default function NotificationsScreen() {
     }
   ).current;
 
-  // Flatten paginated data
   const notifications = useMemo(() => {
     return data?.pages.flatMap((page) => page.data.notifications) ?? [];
   }, [data]);
@@ -453,13 +436,12 @@ export default function NotificationsScreen() {
   const renderFooter = () => {
     if (!isFetchingNextPage) return null;
     return (
-      <View style={{ paddingVertical: 20 }}>
-        <ActivityIndicator />
+      <View style={styles.footerLoader}>
+        <ActivityIndicator color={theme.colors.textSecondary} />
       </View>
     );
   };
 
-  // flush on unmount (optional but good)
   React.useEffect(() => {
     return () => flushPendingReads();
   }, [flushPendingReads]);
@@ -470,19 +452,20 @@ export default function NotificationsScreen() {
 
       {isLoading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" />
+          <ActivityIndicator size="large" color={theme.colors.textSecondary} />
         </View>
       ) : (
         <FlatList
           data={notifications}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
-          ListHeaderComponent={<ListHeaderComponent pendingRequestsData={pendingRequestsData} />}
+          ListHeaderComponent={
+            <ListHeaderComponent pendingRequestsData={pendingRequestsData} />
+          }
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.3}
           viewabilityConfig={viewabilityConfig}
           onViewableItemsChanged={onViewableItemsChanged}
-          // flush only when scrolling stops (prevents spam)
           onMomentumScrollEnd={flushPendingReads}
           onScrollEndDrag={flushPendingReads}
           refreshing={isRefreshingAny}
@@ -491,14 +474,14 @@ export default function NotificationsScreen() {
             <RefreshControl
               refreshing={isRefreshingAny}
               onRefresh={handleRefresh}
-              colors={["#007AFF"]}
-              tintColor="#007AFF"
+              colors={[theme.colors.primary]}
+              tintColor={theme.colors.primary}
             />
           }
           ListFooterComponent={renderFooter}
           ListEmptyComponent={
             <View style={styles.center}>
-              <Text>No notifications found</Text>
+              <Text style={styles.emptyText}>No notifications found</Text>
             </View>
           }
         />
@@ -507,198 +490,218 @@ export default function NotificationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-  },
+const createStyles = (theme: AppTheme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
 
-  center: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 100,
-  },
+    center: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      marginTop: 100,
+    },
 
-  notificationContent: {
-    flex: 1,
-    marginLeft: 12,
-  },
+    emptyText: {
+      color: theme.colors.textSecondary,
+      fontSize: 14,
+    },
 
-  notificationHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 4,
-  },
+    footerLoader: {
+      paddingVertical: theme.spacing.xl,
+    },
 
-  notificationItem: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderColor: "#f1f1f1",
-    flexDirection: "row",
-    alignItems: "center",
-  },
+    notificationContent: {
+      flex: 1,
+      marginLeft: theme.spacing.md,
+    },
 
-  unreadItem: {
-    backgroundColor: "#f6f9ff",
-  },
+    notificationHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 4,
+    },
 
-  message: {
-    fontSize: 14,
-    marginBottom: 4,
-  },
+    notificationItem: {
+      padding: theme.spacing.lg,
+      borderBottomWidth: 1,
+      borderColor: theme.colors.border,
+      flexDirection: "row",
+      alignItems: "center",
+    },
 
-  date: {
-    fontSize: 12,
-    color: "#999",
-  },
+    unreadItem: {
+      backgroundColor: theme.colors.surface,
+    },
 
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#f0f0f0",
-  },
+    message: {
+      fontSize: 14,
+      marginBottom: 4,
+      color: theme.colors.textPrimary,
+    },
 
-  tabContainer: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-    borderColor: "#eee",
-    position: "relative",
-  },
+    avatar: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: theme.colors.border,
+    },
 
-  username: {
-    fontWeight: "700",
-    fontSize: 14,
-    color: "#555",
-  },
+    tabContainer: {
+      flexDirection: "row",
+      borderBottomWidth: 1,
+      borderColor: theme.colors.border,
+      position: "relative",
+      backgroundColor: theme.colors.background,
+    },
 
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#007AFF",
-    marginLeft: 8,
-  },
+    username: {
+      fontWeight: "700",
+      fontSize: 14,
+      color: theme.colors.textPrimary,
+    },
 
-  time: {
-    fontSize: 12,
-    color: "#999",
-  },
+    unreadDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: theme.colors.primary,
+      marginLeft: theme.spacing.sm,
+    },
 
-  tab: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 10,
-  },
+    time: {
+      fontSize: 12,
+      color: theme.colors.textSecondary,
+    },
 
-  tabText: {
-    fontSize: 11,
-    marginTop: 4,
-    color: "#999",
-    fontWeight: "500",
-  },
+    tab: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 10,
+    },
 
-  activeTabText: {
-    color: "#000",
-    fontWeight: "600",
-  },
+    tabText: {
+      fontSize: 11,
+      marginTop: 4,
+      color: theme.colors.textSecondary,
+      fontWeight: "500",
+    },
 
-  activeIndicator: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    height: 2,
-    backgroundColor: "#000",
-    borderRadius: 2,
-  },
+    activeTabText: {
+      color: theme.colors.textPrimary,
+      fontWeight: "600",
+    },
 
-  pendingRequestsContainer: {
-    // padding: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#EFEFEF',
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#000',
-    marginBottom: 12,
-  },
-  requestCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 12,
-  },
-  pendingRequestAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#E1E1E1',
-  },
-  userInfo: {
-    flex: 1,
-    marginLeft: 12,
-    marginRight: 8,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  name: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#000',
-    flexShrink: 1,
-  },
-  pendingRequestUsername: {
-    fontSize: 13,
-    color: '#666',
-    marginTop: 2,
-  },
-  pendingRequestButtonsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  acceptButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  acceptButtonText: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  rejectButton: {
-    backgroundColor: '#E8E8E8',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  rejectButtonText: {
-    color: '#333',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  viewMoreContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
-    paddingVertical: 8,
-  },
-  viewMoreText: {
-    fontSize: 14,
-    color: '#007AFF',
-    fontWeight: '500',
-    marginRight: 4,
-  },
-});
+    activeIndicator: {
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      height: 2,
+      backgroundColor: theme.colors.textPrimary,
+      borderRadius: 2,
+    },
+
+    pendingRequestsContainer: {
+      backgroundColor: theme.colors.background,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+
+    title: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.md,
+    },
+
+    requestCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      padding: theme.spacing.lg,
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radius.md,
+    },
+
+    pendingRequestAvatar: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: theme.colors.border,
+    },
+
+    userInfo: {
+      flex: 1,
+      marginLeft: theme.spacing.md,
+      marginRight: theme.spacing.sm,
+    },
+
+    nameRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+    },
+
+    name: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: theme.colors.textPrimary,
+      flexShrink: 1,
+    },
+
+    pendingRequestUsername: {
+      fontSize: 13,
+      color: theme.colors.textSecondary,
+      marginTop: 2,
+    },
+
+    pendingRequestButtonsContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+    },
+
+    acceptButton: {
+      backgroundColor: theme.colors.primary,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: theme.radius.sm,
+    },
+
+    acceptButtonText: {
+      color: "#fff",
+      fontSize: 13,
+      fontWeight: "600",
+    },
+
+    rejectButton: {
+      backgroundColor: theme.colors.surface,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: theme.radius.sm,
+    },
+
+    rejectButtonText: {
+      color: theme.colors.textPrimary,
+      fontSize: 13,
+      fontWeight: "600",
+    },
+
+    viewMoreContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: theme.spacing.md,
+      paddingVertical: theme.spacing.sm,
+    },
+
+    viewMoreText: {
+      fontSize: 14,
+      color: theme.colors.primary,
+      fontWeight: "500",
+      marginRight: 4,
+    },
+  });
