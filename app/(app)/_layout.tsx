@@ -1,27 +1,33 @@
 import { initializePusher } from "@/src/lib/pusher";
+import { useTheme } from "@/src/theme/ThemeProvider";
 import { Stack } from "expo-router";
 import { useEffect } from "react";
 
 export default function AppLayout() {
-  //   const {user, isHydrated} = useAuthStore().state;
-  // //   const isHydrated = useAuthStore((state) => state.isHydrated);
+  const { theme } = useTheme();
 
-  //   if (!isHydrated) return null;
-
-  //   if (!user) {
-  //     return <Redirect href="/login" />;
-  //   }
   useEffect(() => {
     initializePusher();
   }, []);
+
   return (
-    // <Stack screenOptions={{ headerShown: false }}>
-    <Stack screenOptions={{ headerShown: false }}>
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        headerStyle: {
+          backgroundColor: theme.colors.background,
+        },
+        headerTintColor: theme.colors.textPrimary,
+        headerShadowVisible: false,
+        contentStyle: {
+          backgroundColor: theme.colors.background,
+        },
+      }}
+    >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 
       <Stack.Screen
         name="messages"
-
         options={{
           headerShown: true,
           title: "Messages",
@@ -32,7 +38,6 @@ export default function AppLayout() {
       <Stack.Screen
         name="story/[username]"
         options={{
-          // presentation: "fullScreenModal",
           animation: "fade",
           headerShown: false,
         }}
@@ -48,11 +53,11 @@ export default function AppLayout() {
           };
         }}
       />
+
       <Stack.Screen
         name="story-editor"
         options={{
           headerShown: false,
-          // Present as a modal that comes up from the bottom and fades
           presentation: "transparentModal",
           animation: "fade",
         }}
@@ -62,8 +67,6 @@ export default function AppLayout() {
         name="video-editor"
         options={{
           headerShown: false,
-          // Present as a modal that comes up from the bottom and fades
-          // presentation: "transparentModal",
           animation: "fade",
         }}
       />
@@ -79,20 +82,24 @@ export default function AppLayout() {
       />
 
       <Stack.Screen name="followers_following" />
-      <Stack.Screen name="bookmarks" options={{
-        headerShown: true,
-        headerTitle: "Bookmarks",
-        headerBackButtonDisplayMode: "minimal",
-        // animation: "fade_from_bottom",
-      }} />
 
-      <Stack.Screen name="pending-requests" options={{
-        headerShown: true,
-        headerTitle: "Pending Requests",
-        headerBackButtonDisplayMode: "minimal",
-        // animation: "fade_from_bottom",
-      }} />
+      <Stack.Screen
+        name="bookmarks"
+        options={{
+          headerShown: true,
+          headerTitle: "Bookmarks",
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+
+      <Stack.Screen
+        name="pending-requests"
+        options={{
+          headerShown: true,
+          headerTitle: "Pending Requests",
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
     </Stack>
-    // </Stack>
   );
 }

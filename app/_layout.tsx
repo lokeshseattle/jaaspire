@@ -1,6 +1,6 @@
 import { useAuth } from "@/src/features/auth/auth.hooks";
 import { asyncStoragePersister } from "@/src/lib/persister";
-import { ThemeProvider } from "@/src/theme/ThemeProvider";
+import { ThemeProvider, useTheme } from "@/src/theme/ThemeProvider";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 
 import NetworkListener from "@/src/components/toast/NetworkListener";
@@ -9,20 +9,27 @@ import { queryClient } from "@/src/lib/query-client";
 import { ActionSheetProvider } from "@expo/react-native-action-sheet";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { Stack } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import "react-native-reanimated";
 
-export default function RootLayout() {
+// Inner layout that can use theme hooks
+function RootLayoutInner() {
   const { restoreSession } = useAuth();
+  const { theme } = useTheme();
+
+  // Determine if dark mode
+  const isDark = theme.colors.background === "#0B0F14";
 
   useEffect(() => {
     restoreSession();
   }, [restoreSession]);
 
   return (
-    <ThemeProvider>
+    <>
+      <StatusBar style={isDark ? "light" : "dark"} />
       <ActionSheetProvider>
         <ToastProvider>
           <PersistQueryClientProvider
@@ -31,10 +38,7 @@ export default function RootLayout() {
               maxAge: 1000 * 60 * 60 * 24, // 24h
               dehydrateOptions: {
                 shouldDehydrateQuery: (query) => {
-                  // only persist queries marked with meta.persist
                   if (!query.meta?.persist) return false;
-
-                  //As long as there is something useful to show, persist it.
                   return !!query.state.data;
                 },
               },
@@ -42,22 +46,32 @@ export default function RootLayout() {
             client={queryClient}
           >
             <KeyboardProvider>
-              <GestureHandlerRootView style={{ flex: 1 }}>
+              <GestureHandlerRootView
+                style={{ flex: 1, backgroundColor: theme.colors.background }}
+              >
                 <BottomSheetModalProvider>
-
                   <Stack screenOptions={{ headerShown: false }}>
                     <Stack.Screen name="(app)" />
                     <Stack.Screen
                       name="(auth)"
                       options={{ animation: "slide_from_left" }}
                     />
-                  </Stack></BottomSheetModalProvider>
+                  </Stack>
+                </BottomSheetModalProvider>
               </GestureHandlerRootView>
             </KeyboardProvider>
           </PersistQueryClientProvider>
           <NetworkListener />
         </ToastProvider>
       </ActionSheetProvider>
+    </>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <ThemeProvider>
+      <RootLayoutInner />
     </ThemeProvider>
   );
 }

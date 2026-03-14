@@ -1,17 +1,22 @@
+import { useTheme } from "@/src/theme/ThemeProvider";
 import { Stack } from "expo-router";
 
 export default function AuthLayout() {
-  // const { user, isHydrated } = useAuthStore().state;
-  // //   const isHydrated = useAuthStore((state) => state.isHydrated);
-
-  // if (!isHydrated) return null;
-
-  // if (user) {
-  //   return <Redirect href="/home" />;
-  // }
+  const { theme } = useTheme();
 
   return (
-    <Stack>
+    <Stack
+      screenOptions={{
+        headerStyle: {
+          backgroundColor: theme.colors.background,
+        },
+        headerTintColor: theme.colors.textPrimary,
+        headerShadowVisible: false,
+        contentStyle: {
+          backgroundColor: theme.colors.background,
+        },
+      }}
+    >
       <Stack.Screen name="login" options={{ headerShown: false }} />
       <Stack.Screen
         name="register"

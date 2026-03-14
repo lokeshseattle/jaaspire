@@ -12,27 +12,28 @@ export default function TabsLayout() {
   const { theme } = useTheme();
 
   return (
-    <View style={{ flex: 1, backgroundColor: "white", paddingTop: insets.top }}>
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: theme.colors.background,
+        paddingTop: insets.top,
+      }}
+    >
       <Tabs
         screenOptions={{
           headerShown: false,
           tabBarActiveTintColor: theme.colors.primary,
-          tabBarInactiveTintColor: theme.colors.textPrimary,
+          tabBarInactiveTintColor: theme.colors.textSecondary,
           tabBarStyle: {
             height: TAB_BAR_HEIGHT + TAB_BAR_PADDING_BOTTOM,
             paddingBottom: TAB_BAR_PADDING_BOTTOM,
             backgroundColor: theme.colors.background,
             borderTopColor: theme.colors.border,
             borderTopWidth: 1,
-            //   paddingTop: 8,
           },
-          tabBarItemStyle: {
-            //   paddingVertical: 4,
-          },
+          tabBarItemStyle: {},
           tabBarLabelStyle: {
             fontSize: 11,
-            //   marginTop: 2,
-            color: theme.colors.textPrimary
           },
         }}
       >
