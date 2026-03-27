@@ -117,6 +117,7 @@ export default function ProfileScreen() {
             isRefreshing={isRefetchingProfile || isRefetchingFeed}
             onEndReached={handleEndReached}
             isFetchingNextPage={isFetchingNextPage}
+            postRouteUsername={username}
           />
         );
 
@@ -142,6 +143,7 @@ export default function ProfileScreen() {
             isRefreshing={isRefetchingProfile || isRefetchingFeed}
             onEndReached={handleEndReached}
             isFetchingNextPage={isFetchingNextPage}
+            postRouteUsername={username}
           />
         );
 

@@ -41,3 +41,6 @@ app-example
 # generated native folders
 /ios
 /android
+
+# mock upload server output
+uploads-mock/

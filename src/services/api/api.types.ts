@@ -12,20 +12,63 @@ export type LoginRequest = {
   password: string;
 };
 
-export type LoginResponse = {
+/** Session returned after login or 2FA verify success */
+export type AuthSessionUser = {
+  id: number;
+  name: string;
+  email: string;
+  username: string;
+  avatar: string;
+  cover: string;
+  enable_2fa?: boolean;
+};
+
+export type AuthSessionPayload = {
+  token: string;
+  user: AuthSessionUser;
+};
+
+export type LoginRequires2FAData = {
+  require_2fa: true;
+  two_fa_token: string;
+  message: string;
+};
+
+export type LoginSuccessResponse = {
+  success: boolean;
+  message: string;
+  data: AuthSessionPayload;
+};
+
+export type LoginRequires2FAResponse = {
+  success: boolean;
+  message: string;
+  data: LoginRequires2FAData;
+};
+
+export type LoginResponse = LoginSuccessResponse | LoginRequires2FAResponse;
+
+export type Resend2FARequest = {
+  two_fa_token: string;
+};
+
+export type Resend2FAResponse = {
   success: boolean;
   message: string;
   data: {
-    token: string;
-    user: {
-      id: number;
-      name: string;
-      email: string;
-      username: string;
-      avatar: string;
-      cover: string;
-    };
+    message: string;
   };
+};
+
+export type Verify2FARequest = {
+  two_fa_token: string;
+  code: string;
+};
+
+export type Verify2FAResponse = {
+  success: boolean;
+  message: string;
+  data: AuthSessionPayload;
 };
 
 export type RegisterRequest = {
@@ -134,6 +177,7 @@ export type TUserProfile = {
   gender_pronoun: string;
   public_profile: boolean;
   open_profile: boolean;
+  blocked_status: "blocked_by_you" | "blocked_by_user" | null;
   paid_profile: boolean;
   verified_user: boolean;
   email_verified_at: string;
@@ -168,16 +212,18 @@ export type TUserViewer = {
     is_following: boolean;
     follow_status: "follow" | "unfollow" | "requested";
     is_subscribed: boolean;
-  }
-}
+    is_blocked?: boolean;
+  };
+};
 
 export type TUserProfileResponse = ProfileResponse & {
   data: TUserProfile & TUserViewer;
-}
-
+};
 
 export type OptimisticComment = TComment & { _isOptimistic?: boolean };
-export type OptimisticReply = TComment["replies"][0] & { _isOptimistic?: boolean };
+export type OptimisticReply = TComment["replies"][0] & {
+  _isOptimistic?: boolean;
+};
 export type TGender = {
   id: number;
   gender_name: string;
@@ -227,7 +273,32 @@ export type UpdateProfileResponse = {
   data: TUpdateProfile;
 };
 
-export type UpdateProfileRequest = Partial<TUpdateProfile>;
+export type PrivacyFlagKey = "enable_2fa" | "open_profile";
+
+export type PrivacyFlagRequestBody = {
+  key: PrivacyFlagKey;
+  value: boolean;
+};
+
+export type PrivacyFlagResponse = {
+  success: boolean;
+  message: string;
+  data: {
+    key: PrivacyFlagKey;
+    value: boolean;
+  };
+};
+
+/** Optional subscription fields for PUT /profile (privacy flags use POST settings/privacy/flags). */
+export type PrivacyProfileUpdateFields = {
+  price_1_month?: number;
+  price_3_months?: number;
+  price_6_months?: number;
+  price_12_months?: number;
+};
+
+export type UpdateProfileRequest = Partial<TUpdateProfile> &
+  PrivacyProfileUpdateFields;
 
 export type UpdateAvatarRequest = {
   uri: string;
@@ -310,62 +381,61 @@ export type StoryImageUpload = {
 };
 
 export type TComment = {
-  id: number
-  message: string
-  is_liked: boolean
+  id: number;
+  message: string;
+  is_liked: boolean;
   user: {
-    id: number
-    name: string
-    username: string
-    avatar: string
-    verified_user: boolean
+    id: number;
+    name: string;
+    username: string;
+    avatar: string;
+    verified_user: boolean;
     story_status: {
-      has_stories: boolean
-      all_viewed: boolean
-      story_count: number
-    }
-  }
-  reactions: number
+      has_stories: boolean;
+      all_viewed: boolean;
+      story_count: number;
+    };
+  };
+  reactions: number;
   replies: Array<{
-    id: number
-    message: string
-    is_liked: boolean
+    id: number;
+    message: string;
+    is_liked: boolean;
     user: {
-      id: number
-      name: string
-      username: string
-      avatar: string
-      verified_user: boolean
+      id: number;
+      name: string;
+      username: string;
+      avatar: string;
+      verified_user: boolean;
       story_status: {
-        has_stories: boolean
-        all_viewed: boolean
-        story_count: number
-      }
-    }
-    reactions: number
-    created_at: string
-    _isOptimistic?: boolean
-  }>
-  reply_count: number
-  created_at: string
+        has_stories: boolean;
+        all_viewed: boolean;
+        story_count: number;
+      };
+    };
+    reactions: number;
+    created_at: string;
+    _isOptimistic?: boolean;
+  }>;
+  reply_count: number;
+  created_at: string;
   _isOptimistic?: boolean;
-
-}
+};
 
 export type CommentsResponse = {
-  success: boolean
-  message: string
+  success: boolean;
+  message: string;
   data: {
-    comments: Array<TComment>
+    comments: Array<TComment>;
     pagination: {
-      current_page: number
-      last_page: number
-      per_page: number
-      total: number
-      has_more: boolean
-    }
-  }
-}
+      current_page: number;
+      last_page: number;
+      per_page: number;
+      total: number;
+      has_more: boolean;
+    };
+  };
+};
 export type AddCommentResponse = {
   success: boolean;
   message: string;
@@ -386,48 +456,48 @@ export type AddCommentRequest = {
 };
 
 export type TNotification = {
-  id: string
-  type: string
-  message: string
-  read: boolean
-  created_at: string
+  id: string;
+  type: string;
+  message: string;
+  read: boolean;
+  created_at: string;
   from_user: {
-    id: number
-    name: string
-    username: string
-    avatar: string
-    verified_user: boolean
+    id: number;
+    name: string;
+    username: string;
+    avatar: string;
+    verified_user: boolean;
     story_status: {
-      has_stories: boolean
-      all_viewed: boolean
-      story_count: number
-    }
-  }
+      has_stories: boolean;
+      all_viewed: boolean;
+      story_count: number;
+    };
+  };
   post?: {
-    id: number
-    text: string
-  }
+    id: number;
+    text: string;
+  };
   comment?: {
-    id: number
-    message: string
-  }
-  transaction: any
-}
+    id: number;
+    message: string;
+  };
+  transaction: any;
+};
 
 export type NotificationsAPIResponse = {
-  success: boolean
-  message: string
+  success: boolean;
+  message: string;
   data: {
-    notifications: Array<TNotification>
+    notifications: Array<TNotification>;
     pagination: {
-      current_page: number
-      last_page: number
-      per_page: number
-      total: number
-      has_more: boolean
-    }
-  }
-}
+      current_page: number;
+      last_page: number;
+      per_page: number;
+      total: number;
+      has_more: boolean;
+    };
+  };
+};
 
 export type FollowUser = {
   id: number;
@@ -473,6 +543,24 @@ export type FollowingResponse = {
   };
 };
 
+export type BlockedUser = {
+  id: number;
+  name: string;
+  username: string;
+  avatar: string;
+  verified_user: boolean;
+  blocked_at: string;
+};
+
+export type BlockedUsersResponse = {
+  success: boolean;
+  message: string;
+  data: {
+    blocked_users: BlockedUser[];
+    pagination: Pagination;
+  };
+};
+
 export interface StoryStatus {
   has_stories: boolean;
   all_viewed: boolean;
@@ -488,7 +576,7 @@ export interface ExploreUser {
 }
 
 export interface Attachment {
-  type: 'image' | 'video';
+  type: "image" | "video";
   path: string;
   thumbnail: string;
 }
@@ -546,20 +634,19 @@ export type SinglePostResponse = {
         total: number;
         has_more: boolean;
       };
-    }
-
+    };
   };
 };
 
 export type FollowUserResponse = {
-  success: boolean,
-  message: string,
+  success: boolean;
+  message: string;
   data: {
-    follow_status: "unfollow" | "follow" | "requested",
-    is_following: boolean,
-    is_pending: boolean
-  }
-}
+    follow_status: "unfollow" | "follow" | "requested";
+    is_following: boolean;
+    is_pending: boolean;
+  };
+};
 
 export type MentionSearchResponse = {
   success: boolean;
@@ -597,10 +684,10 @@ export type BookmarksResponse = {
 };
 
 export type CreateStoryRequest = {
-  videoUID: string,
-  fileName: string,
-  trimVideoData: string
-}
+  videoUID: string;
+  fileName: string;
+  trimVideoData: string;
+};
 
 export type CreateStoryResponse = {
   success: boolean;
@@ -658,4 +745,157 @@ export type PendingFollowRequest = {
   verified_user: boolean;
   story_status: StoryStatus;
   requested_at: string;
+};
+
+export type SearchResultUser = {
+  id: number;
+  name: string;
+  username: string;
+  bio: string | null;
+  location: string | null;
+  avatar: string;
+  cover: string;
+  verified_user: boolean;
+  story_status: StoryStatus;
+  follow_status: "follow" | "unfollow" | "requested";
+};
+
+type PeopleResponse = {
+  filter: "people";
+  users: SearchResultUser[];
+  pagination: Pagination;
+};
+
+export type GlobalSearchPostsFilter = "latest" | "photos" | "videos";
+
+type PostsSearchResponse = {
+  filter: GlobalSearchPostsFilter;
+  posts: Post[];
+  pagination: Pagination;
+};
+
+export type SearchResponse =
+  | {
+      success: true;
+      message: string;
+      data: PeopleResponse;
+    }
+  | {
+      success: true;
+      message: string;
+      data: PostsSearchResponse;
+    };
+
+export type MessengerStoryStatus = {
+  has_stories: boolean;
+  all_viewed: boolean;
+};
+
+export type MessengerContact = {
+  lastMessageSenderID: number;
+  lastMessage: string;
+  isSeen: number;
+  messageDate: string;
+  senderID: number;
+  senderName: string;
+  senderAvatar: string;
+  senderRole: number;
+  receiverID: number;
+  receiverName: string;
+  receiverAvatar: string;
+  receiverRole: number;
+  contactID: number;
+  firstAttachmentType: string | null;
+  attachmentCount: number;
+  created_at: string;
+  senderStoryStatus: MessengerStoryStatus;
+  receiverStoryStatus: MessengerStoryStatus;
+  isAiBot: boolean;
+};
+
+export type MessengerContactsResponse = {
+  status: string;
+  data: {
+    contacts: MessengerContact[];
+  };
+};
+
+/** Messenger thread user (API may include extra fields). */
+export type MessengerUser = {
+  id: number;
+  name: string;
+  username: string;
+  avatar: string;
+  bio: string;
+  profileUrl: string;
+  canEarnMoney: boolean;
+  [key: string]: unknown;
+};
+
+export type MessengerMessage = {
+  id: number;
+  sender_id: number;
+  receiver_id: number;
+  message: string;
+  isSeen: boolean;
+  price: number;
+  is_ai_conversation: boolean;
+  created_at: string;
+  updated_at?: string;
+  sender: MessengerUser;
+  receiver: MessengerUser;
+};
+
+export type MessengerThreadPagination = {
+  hasMore: boolean;
+  oldestMessageId: number;
+};
+
+export type MessengerMessagesResponse = {
+  status: string;
+  data: {
+    messages: MessengerMessage[];
+    pagination: MessengerThreadPagination;
+  };
+};
+
+export type SendMessengerMessageRequest = {
+  message: string;
+  price: number;
+};
+
+/** Generic success; adjust if backend returns a message payload. */
+export type SendMessengerMessageResponse = {
+  status?: string;
+  data?: unknown;
+};
+
+export type SendAiChatMessageRequest = {
+  message: string;
+};
+
+export type SendAiChatMessageResponse = {
+  success: boolean;
+  message: string;
+  data: {
+    user_message: MessengerMessage;
+    ai_message: MessengerMessage;
+  };
+};
+
+export type MarkMessengerMessagesReadResponse = {
+  status: string;
+  data: {
+    count: number;
+  };
+};
+
+export type NotificationCountsResponse = {
+  success: boolean;
+  message: string;
+  data: {
+    notifications: number | string;
+    messages: number | string;
+    wallet_balance: number | string;
+  };
 };

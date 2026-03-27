@@ -29,8 +29,6 @@ const PostHeader: React.FC = () => {
 
   const { post } = usePost();
 
-  console.log("6565", post.is_bookmarked);
-  const { mutateAsync: bookmarkPost } = useBookmarkPostMutation();
   const iconRef = useRef<View>(null);
 
   const [menuVisible, setMenuVisible] = useState(false);
@@ -38,6 +36,15 @@ const PostHeader: React.FC = () => {
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
 
   const savePost = useBookmarkPostMutation();
+
+  const user = post.user;
+  if (!user) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.sub}>Profile unavailable</Text>
+      </View>
+    );
+  }
 
   const closeMenu = () => setMenuVisible(false);
 
@@ -77,10 +84,10 @@ const PostHeader: React.FC = () => {
   };
 
   const navigateToUser = () => {
-    if (post.user.username)
+    if (user.username)
       router.push({
         pathname: "/user/[username]",
-        params: { username: post.user.username },
+        params: { username: user.username },
       });
   };
 
@@ -90,15 +97,15 @@ const PostHeader: React.FC = () => {
         {/* Left Section */}
         <Pressable onPress={navigateToUser} style={styles.left}>
           <StoryAvatar
-            username={post.user.username}
-            hasStory={post.user.story_status.has_stories}
-            seen={post.user.story_status.all_viewed}
-            uri={post.user.avatar}
+            username={user.username}
+            hasStory={user.story_status?.has_stories ?? false}
+            seen={user.story_status?.all_viewed ?? true}
+            uri={user.avatar}
           />
 
           <View>
-            <Text style={styles.username}>{post.user.name}</Text>
-            <Text style={styles.sub}>@{post.user.username}</Text>
+            <Text style={styles.username}>{user.name}</Text>
+            <Text style={styles.sub}>@{user.username}</Text>
           </View>
         </Pressable>
 
@@ -150,7 +157,7 @@ const PostHeader: React.FC = () => {
         visible={reportModalVisible}
         onClose={() => setReportModalVisible(false)}
         postId={post.id}
-        userId={post.user.id}
+        userId={user.id}
       />
     </>
   );

@@ -1,7 +1,22 @@
 import { queryClient } from "@/src/lib/query-client";
 import { apiClient } from "@/src/services/api/api.client";
-import { BookmarkPostResponse, BookmarksResponse, CreateReportPayload, FeedResponse, PossibleErrorResponse, ReportTypesData, ReportTypesResponse, SinglePostResponse } from "@/src/services/api/api.types";
-import { useInfiniteQuery, useMutation, UseMutationResult, useQuery, UseQueryResult } from "@tanstack/react-query";
+import {
+  BookmarkPostResponse,
+  BookmarksResponse,
+  CreateReportPayload,
+  FeedResponse,
+  PossibleErrorResponse,
+  ReportTypesData,
+  ReportTypesResponse,
+  SinglePostResponse,
+} from "@/src/services/api/api.types";
+import {
+  useInfiniteQuery,
+  useMutation,
+  UseMutationResult,
+  useQuery,
+  UseQueryResult,
+} from "@tanstack/react-query";
 import { usePostStore } from "./post.store";
 
 export const useGetFeedQuery = () => {
@@ -22,7 +37,7 @@ export const useGetFeedQuery = () => {
 
     select: (data) => {
       const allPosts = data.pages.flatMap(
-        (page) => page.data.posts // adjust if your structure differs
+        (page) => page.data.posts, // adjust if your structure differs
       );
 
       // Normalize into Zustand
@@ -46,7 +61,10 @@ export const useGetFeedQuery = () => {
 export const useGetUserFeedQuery = (
   username: string | undefined,
   type: "video" | "" = "",
+  options?: { enabled?: boolean },
 ) => {
+  const enabledByOption = options?.enabled ?? true;
+
   return useInfiniteQuery({
     queryKey: ["user_feed", username, type],
     queryFn: ({ pageParam }) =>
@@ -61,11 +79,11 @@ export const useGetUserFeedQuery = (
         : undefined,
 
     initialPageParam: 1,
-    enabled: !!username,
+    enabled: enabledByOption && !!username,
 
     select: (data) => {
       const allPosts = data.pages.flatMap(
-        (page) => page.data.posts // adjust if your structure differs
+        (page) => page.data.posts, // adjust if your structure differs
       );
 
       // Normalize into Zustand
@@ -179,13 +197,10 @@ export const useGetUserFeedQuery = (
 //       });
 //     },
 
-
 //   });
 // };
 
 export const useToggleLikeMutation = () => {
-
-
   return useMutation({
     mutationFn: (postId: number) =>
       apiClient.post(`/posts/${postId}/react`, {
@@ -215,9 +230,7 @@ export const useToggleLikeMutation = () => {
 
           updatedReactions = post.reactions
             .map((r: any) =>
-              r.name === "love"
-                ? { ...r, count: r.count - 1 }
-                : r
+              r.name === "love" ? { ...r, count: r.count - 1 } : r,
             )
             .filter((r: any) => r.count > 0);
 
@@ -233,16 +246,12 @@ export const useToggleLikeMutation = () => {
 
         // LIKE
 
-        const hasLove = post.reactions.some(
-          (r: any) => r.name === "love"
-        );
+        const hasLove = post.reactions.some((r: any) => r.name === "love");
 
         updatedReactions = hasLove
           ? post.reactions.map((r: any) =>
-            r.name === "love"
-              ? { ...r, count: r.count + 1 }
-              : r
-          )
+              r.name === "love" ? { ...r, count: r.count + 1 } : r,
+            )
           : [...post.reactions, { name: "love", count: 1 }];
 
         updatedTotal = currentTotal + 1;
@@ -273,7 +282,10 @@ export const useToggleLikeMutation = () => {
   });
 };
 
-export const useGetSinglePost = (postId: string, mode: "explore" | "profile" = "explore") => {
+export const useGetSinglePost = (
+  postId: string,
+  mode: "explore" | "user" = "explore",
+) => {
   return useInfiniteQuery({
     queryKey: ["single-post", postId, mode],
     queryFn: ({ pageParam }) =>
@@ -283,9 +295,7 @@ export const useGetSinglePost = (postId: string, mode: "explore" | "profile" = "
     initialPageParam: 1,
     getNextPageParam: (lastPage) => {
       const pagination = lastPage.data.data.recommended.pagination;
-      return pagination.has_more
-        ? pagination.current_page + 1
-        : undefined;
+      return pagination.has_more ? pagination.current_page + 1 : undefined;
     },
 
     select: (data) => {
@@ -305,9 +315,7 @@ export const useGetSinglePost = (postId: string, mode: "explore" | "profile" = "
         mainPostId = mainPost.id;
 
         // 3️⃣ Collect recommended IDs
-        allRecommended.push(
-          ...recommended.map((p) => p.id)
-        );
+        allRecommended.push(...recommended.map((p) => p.id));
       }
 
       return {
@@ -319,10 +327,22 @@ export const useGetSinglePost = (postId: string, mode: "explore" | "profile" = "
   });
 };
 
-export const useBookmarkPostMutation = (): UseMutationResult<BookmarkPostResponse, PossibleErrorResponse, { postId: number, action: "add" | "remove" }> => {
+export const useBookmarkPostMutation = (): UseMutationResult<
+  BookmarkPostResponse,
+  PossibleErrorResponse,
+  { postId: number; action: "add" | "remove" }
+> => {
   return useMutation({
-    mutationFn: ({ postId, action }: { postId: number, action: "add" | "remove" }) =>
-      apiClient.post<BookmarkPostResponse>(`/posts/${postId}/bookmark`, { action }).then((d) => d.data),
+    mutationFn: ({
+      postId,
+      action,
+    }: {
+      postId: number;
+      action: "add" | "remove";
+    }) =>
+      apiClient
+        .post<BookmarkPostResponse>(`/posts/${postId}/bookmark`, { action })
+        .then((d) => d.data),
     onMutate: async ({ postId, action }) => {
       await queryClient.cancelQueries({ queryKey: ["feed"] });
       const { posts, updatePost } = usePostStore.getState();
@@ -352,10 +372,8 @@ export const useBookmarkPostMutation = (): UseMutationResult<BookmarkPostRespons
       // Rollback
       usePostStore.getState().upsertPosts([context.previousPost]);
     },
-
   });
 };
-
 
 export const useGetBookmarksQuery = (type?: "all" | "image" | "video") => {
   return useInfiniteQuery({
@@ -375,7 +393,7 @@ export const useGetBookmarksQuery = (type?: "all" | "image" | "video") => {
 
     select: (data) => {
       const allPosts = data.pages.flatMap(
-        (page) => page.data.posts // adjust if your structure differs
+        (page) => page.data.posts, // adjust if your structure differs
       );
 
       // Normalize into Zustand
@@ -396,26 +414,39 @@ export const useGetBookmarksQuery = (type?: "all" | "image" | "video") => {
   });
 };
 
-export const useGetReport = (): UseQueryResult<ReportTypesData, PossibleErrorResponse> => {
+export const useGetReport = (): UseQueryResult<
+  ReportTypesData,
+  PossibleErrorResponse
+> => {
   return useQuery({
     queryKey: ["report"],
-    queryFn: () => apiClient.get<ReportTypesResponse>("/report/types").then((d) => d.data.data),
+    queryFn: () =>
+      apiClient
+        .get<ReportTypesResponse>("/report/types")
+        .then((d) => d.data.data),
     staleTime: 1000 * 60 * 60 * 24,
     gcTime: 1000 * 60 * 60 * 24,
-  })
-}
+  });
+};
 
-export const useCreateReportMutation = (): UseMutationResult<void, PossibleErrorResponse, CreateReportPayload> => {
+export const useCreateReportMutation = (): UseMutationResult<
+  void,
+  PossibleErrorResponse,
+  CreateReportPayload
+> => {
   return useMutation({
     mutationFn: (payload: CreateReportPayload) =>
       apiClient.post<void>("/report/content", payload).then((d) => d.data),
-  })
-}
+  });
+};
 
-export const useTrackPostView = (): UseMutationResult<void, PossibleErrorResponse, number> => {
+export const useTrackPostView = (): UseMutationResult<
+  void,
+  PossibleErrorResponse,
+  number
+> => {
   return useMutation({
     mutationFn: (postId: number) =>
       apiClient.post<void>(`/posts/${postId}/track-view`).then((d) => d.data),
-  })
-}
-
+  });
+};

@@ -2,7 +2,10 @@
 
 import { useActionSheet } from "@expo/react-native-action-sheet";
 import * as ImagePicker from "expo-image-picker";
+import { Alert } from "react-native";
 
+const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; //2gb;
+const MAX_VIDEO_DURATION = 2 * 60 * 60 * 1000; //2hours;
 /**
  * Normalized file returned to the consumer
  * Safe for FormData, uploads, React Query, etc.
@@ -101,9 +104,30 @@ export const useMediaPicker = () => {
           quality,
         });
 
+        console.log("result", result);
+
+        if (
+          result?.assets?.[0]?.duration &&
+          result.assets[0].duration > MAX_VIDEO_DURATION
+        ) {
+          console.log("video duration is too long");
+          Alert.alert("Error", "Video duration is too long", [
+            { text: "OK", style: "destructive" },
+          ]);
+          return;
+        }
+
         if (result.canceled) return;
 
         const file = normalizeFile(result.assets[0]);
+
+        if (file.size && file.size > MAX_FILE_SIZE) {
+          Alert.alert("Error", "File size is too large", [
+            { text: "OK", style: "destructive" },
+          ]);
+          return;
+        }
+
         onChange(file);
       },
     );

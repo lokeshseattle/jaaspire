@@ -43,6 +43,17 @@ export default function SearchScreen() {
     setSearchText('');
   }, []);
 
+  const handleSubmitSearch = useCallback(() => {
+    const trimmed = searchText.trim();
+    Keyboard.dismiss();
+    setIsSearchFocused(false);
+    if (trimmed.length === 0) return;
+    router.push({
+      pathname: '/global-search',
+      params: { q: trimmed },
+    });
+  }, [searchText]);
+
   const handleProfileSelect = useCallback((profile: ProfileSuggestion) => {
     // Handle profile selection - navigate to profile screen
     console.log('Selected profile:', profile);
@@ -84,6 +95,7 @@ export default function SearchScreen() {
         onBlur={handleSearchBlur}
         onClear={handleSearchClear}
         isFocused={isSearchFocused}
+        onSubmitSearch={handleSubmitSearch}
       />
 
       <View style={styles.content}>

@@ -12,7 +12,6 @@ const ProfileHeader = ({ username, isOwnProfile }: { username: string, isOwnProf
   const styles = createStyles(theme);
 
   const { data, isLoading, isSuccess, refetch } = useGetProfile();
-  console.log(data)
   const profile = isSuccess ? data.data : null;
 
   // console.log(profile)
@@ -42,8 +41,13 @@ const ProfileHeader = ({ username, isOwnProfile }: { username: string, isOwnProf
               <Text>Logout</Text>
             </Pressable>
             <Ionicons name="add-circle-outline" size={24} /> */}
-            <Link href="/profile/settings">
-              <Feather name="menu" size={24} style={{ marginLeft: 16 }} />
+            <Link href="/settings">
+              <Feather
+                name="menu"
+                size={24}
+                color={theme.colors.textPrimary}
+                style={{ marginLeft: 16 }}
+              />
             </Link>
           </View>
         </View>
@@ -166,6 +170,7 @@ const createStyles = (theme: AppTheme) =>
     username: {
       fontSize: 18,
       fontWeight: "600",
+      color: theme.colors.textPrimary,
     },
 
     headerIcons: {
@@ -199,10 +204,12 @@ const createStyles = (theme: AppTheme) =>
     statNumber: {
       fontWeight: "600",
       fontSize: 16,
+      color: theme.colors.textPrimary,
     },
 
     statLabel: {
       fontSize: 13,
+      color: theme.colors.textSecondary,
     },
 
     bioContainer: {
@@ -212,10 +219,12 @@ const createStyles = (theme: AppTheme) =>
 
     name: {
       fontWeight: "600",
+      color: theme.colors.textPrimary,
     },
 
     bio: {
       marginTop: 4,
+      color: theme.colors.textPrimary,
     },
 
     buttonContainer: {
@@ -233,11 +242,13 @@ const createStyles = (theme: AppTheme) =>
       alignItems: "center",
       justifyContent: "center",
       borderWidth: 1,
-      borderColor: "#ccc",
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.card,
     },
 
     editText: {
       fontWeight: "500",
+      color: theme.colors.textPrimary,
     },
 
     highlights: {

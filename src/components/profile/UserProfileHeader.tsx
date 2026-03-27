@@ -1,8 +1,17 @@
 import { ThemedText as Text } from "@/src/components/themed-text";
-import { useFollowToggleMutation, useGetProfileByUsername } from "@/src/features/profile/profile.hooks";
+import {
+  useFollowToggleMutation,
+  useGetProfileByUsername,
+  useUnblockUserMutation,
+} from "@/src/features/profile/profile.hooks";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { capitalize } from "@/src/utils/helpers";
+import {
+  isProfilePublicInAppSense,
+  viewerIsAcceptedFollower,
+} from "@/src/utils/profile-visibility";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import { Image, Pressable, StyleSheet, View } from "react-native";
@@ -13,10 +22,14 @@ const ProfileHeader = ({ username }: { username: string }) => {
 
     const { data, isLoading, isSuccess, refetch } = useGetProfileByUsername(username);
     const followMutation = useFollowToggleMutation();
+    const unblockMutation = useUnblockUserMutation();
 
     const profile = isSuccess ? data.data : null;
-
-
+    const blockedByYou = profile?.blocked_status === "blocked_by_you";
+    const blockedByOther =
+        !blockedByYou &&
+        (profile?.blocked_status === "blocked_by_user" ||
+            profile?.viewer.is_blocked === true);
 
     const [activeTab, setActiveTab] = useState<"posts" | "reels" | "tagged">(
         "posts",
@@ -31,9 +44,6 @@ const ProfileHeader = ({ username }: { username: string }) => {
             },
         });
     };
-    console.log("follow status", profile?.viewer.follow_status)
-
-
     if (profile)
         return (
             <>
@@ -76,23 +86,66 @@ const ProfileHeader = ({ username }: { username: string }) => {
                     <Text style={styles.bio}>{profile.bio}</Text>
                 </View>
 
-                {/* EDIT BUTTON */}
+                {/* ACTIONS / BLOCKED NOTICE */}
                 <View style={styles.buttonContainer}>
-                    {/* //fade button on mutation */}
-                    <Pressable
-                        onPress={() => followMutation.mutateAsync(username)}
-                        style={[styles.button]}
-                        disabled={followMutation.isPending || isLoading}
-                    >
-                        <Text style={[styles.editText, { color: "white" }]}>{capitalize(profile.viewer.follow_status)}</Text>
-                    </Pressable>
+                    {blockedByYou ? (
+                        <View style={styles.blockedNotice}>
+                            <Ionicons
+                                name="ban-outline"
+                                size={22}
+                                color="#EF4444"
+                            />
+                            <Text style={styles.blockedNoticeTitle}>
+                                User blocked
+                            </Text>
+                            <Text style={styles.blockedNoticeSubtitle}>
+                                You won&apos;t see their posts. Unblock from
+                                the menu to interact again.
+                            </Text>
+                        </View>
+                    ) : blockedByOther ? (
+                        <Pressable
+                            onPress={() => unblockMutation.mutateAsync(username)}
+                            style={[styles.button]}
+                            disabled={unblockMutation.isPending || isLoading}
+                        >
+                            <Text style={[styles.editText, { color: "white" }]}>
+                                Unblock
+                            </Text>
+                        </Pressable>
+                    ) : (
+                        <>
+                            <Pressable
+                                onPress={() => followMutation.mutateAsync(username)}
+                                style={[styles.button]}
+                                disabled={followMutation.isPending || isLoading}
+                            >
+                                <Text style={[styles.editText, { color: "white" }]}>
+                                    {capitalize(profile.viewer.follow_status)}
+                                </Text>
+                            </Pressable>
 
-                    {(profile.viewer.follow_status === "follow" || profile.open_profile) && <Pressable
-                        onPress={() => router.push("/profile/settings")}
-                        style={[styles.button, { backgroundColor: "white" }]}
-                    >
-                        <Text style={styles.editText}>Message</Text>
-                    </Pressable>}
+                            {(isProfilePublicInAppSense(profile) ||
+                                viewerIsAcceptedFollower(profile.viewer)) && (
+                                <Pressable
+                                    onPress={() =>
+                                        router.push({
+                                            pathname: "/chat/[senderId]",
+                                            params: {
+                                                senderId: String(profile.id),
+                                                name: profile.name,
+                                                username: profile.username,
+                                                avatar: profile.avatar,
+                                            },
+                                        })
+                                    }
+                                    style={[styles.button, styles.buttonSecondary]}
+                                >
+                                    <Text style={styles.editTextSecondary}>Message</Text>
+                                </Pressable>
+                            )}
+                        </>
+                    )}
                 </View>
 
                 {/* HIGHLIGHTS */}
@@ -152,7 +205,30 @@ const createStyles = (theme: AppTheme) =>
             justifyContent: "space-between",
             paddingHorizontal: 16,
             marginTop: 10,
-            gap: 10
+            gap: 10,
+        },
+        blockedNotice: {
+            flex: 1,
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 8,
+            paddingVertical: 12,
+            paddingHorizontal: 12,
+            borderRadius: 8,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: theme.colors.border,
+            backgroundColor: theme.colors.card,
+        },
+        blockedNoticeTitle: {
+            fontWeight: "600",
+            fontSize: 16,
+            color: theme.colors.textPrimary,
+        },
+        blockedNoticeSubtitle: {
+            fontSize: 13,
+            textAlign: "center",
+            color: theme.colors.textSecondary,
+            lineHeight: 18,
         },
 
         header: {
@@ -165,16 +241,19 @@ const createStyles = (theme: AppTheme) =>
         },
 
         button: {
-            // width: "50%",
             flex: 1,
             height: 40,
             borderRadius: 6,
             alignItems: "center",
             justifyContent: "center",
             borderWidth: 1,
-            borderColor: "#ccc",
+            borderColor: theme.colors.primary,
             backgroundColor: theme.colors.primary,
-            color: "white",
+        },
+
+        buttonSecondary: {
+            backgroundColor: theme.colors.card,
+            borderColor: theme.colors.border,
         },
 
         username: {
@@ -213,10 +292,12 @@ const createStyles = (theme: AppTheme) =>
         statNumber: {
             fontWeight: "600",
             fontSize: 16,
+            color: theme.colors.textPrimary,
         },
 
         statLabel: {
             fontSize: 13,
+            color: theme.colors.textSecondary,
         },
 
         bioContainer: {
@@ -226,10 +307,12 @@ const createStyles = (theme: AppTheme) =>
 
         name: {
             fontWeight: "600",
+            color: theme.colors.textPrimary,
         },
 
         bio: {
             marginTop: 4,
+            color: theme.colors.textPrimary,
         },
 
         editButton: {
@@ -244,6 +327,12 @@ const createStyles = (theme: AppTheme) =>
 
         editText: {
             fontWeight: "500",
+            color: "#fff",
+        },
+
+        editTextSecondary: {
+            fontWeight: "500",
+            color: theme.colors.textPrimary,
         },
 
         highlights: {

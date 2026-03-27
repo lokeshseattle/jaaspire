@@ -80,3 +80,33 @@ export const uploadVideo = async ({
 
     return lastResponse;
 };
+
+export const uploadChunkForPost = async ({
+    file,
+    chunk_index,
+    total_chunks,
+    file_id,
+    original_name,
+}: {
+    file: Blob;
+    chunk_index: number; //never 0
+    total_chunks: number;
+    file_id: string;
+    original_name: string;
+}) => {
+    const form = new FormData();
+
+    // await FileSystem
+
+    form.append("chunk", file, `chunk_${chunk_index}`);
+    form.append("chunk_index", String(chunk_index));
+    form.append("total_chunks", String(total_chunks));
+    form.append("file_id", file_id);
+    form.append("original_name", original_name);
+
+    const { data } = await apiClient.post<ChunkUploadResponse>(
+        "/attachments/upload-chunk",
+        form
+    );
+    return data;
+};

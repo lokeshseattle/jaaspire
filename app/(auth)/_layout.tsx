@@ -27,6 +27,15 @@ export default function AuthLayout() {
           title: "",
         }}
       />
+      <Stack.Screen
+        name="verify-2fa"
+        options={{
+          headerBackVisible: true,
+          headerShown: true,
+          headerBackTitle: "Back",
+          title: "",
+        }}
+      />
     </Stack>
   );
 }

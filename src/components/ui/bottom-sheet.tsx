@@ -1,8 +1,7 @@
-import { AppTheme, appThemes } from "@/src/theme";
+import { AppTheme } from "@/src/theme";
+import { useTheme } from "@/src/theme/ThemeProvider";
 import React from "react";
 import { Modal, Pressable, StyleSheet, View } from "react-native";
-
-const theme: AppTheme = appThemes.light;
 
 interface BottomSheetProps {
   visible: boolean;
@@ -15,6 +14,9 @@ export default function BottomSheet({
   onClose,
   children,
 }: BottomSheetProps) {
+  const { theme } = useTheme();
+  const styles = createStyles(theme);
+
   return (
     <Modal
       transparent
@@ -31,15 +33,16 @@ export default function BottomSheet({
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.3)",
-  },
-  sheet: {
-    backgroundColor: theme.colors.surface,
-    padding: 16,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-  },
-});
+const createStyles = (theme: AppTheme) =>
+  StyleSheet.create({
+    overlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.5)",
+    },
+    sheet: {
+      backgroundColor: theme.colors.card,
+      padding: theme.spacing.lg,
+      borderTopLeftRadius: theme.radius.lg,
+      borderTopRightRadius: theme.radius.lg,
+    },
+  });

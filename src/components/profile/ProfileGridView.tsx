@@ -34,6 +34,9 @@ interface ProfileGridViewProps {
     isRefreshing: boolean;
     onEndReached: () => void;
     isFetchingNextPage: boolean;
+    /** When set, opens user-scoped post detail (`mode=user` API). Otherwise `/post/:id` (explore). */
+    postRouteUsername?: string;
+    ListEmptyComponent?: React.ReactElement | null;
 }
 
 export function ProfileGridView({
@@ -43,6 +46,8 @@ export function ProfileGridView({
     isRefreshing,
     onEndReached,
     isFetchingNextPage,
+    postRouteUsername,
+    ListEmptyComponent,
 }: ProfileGridViewProps) {
     const { theme } = useTheme();
     const styles = useMemo(() => createStyles(theme), [theme]);
@@ -72,9 +77,16 @@ export function ProfileGridView({
         return items;
     }, [postIds, posts]);
 
-    const handleItemPress = useCallback((postId: number) => {
-        router.push(`/post/${postId}`);
-    }, []);
+    const handleItemPress = useCallback(
+        (postId: number) => {
+            if (postRouteUsername) {
+                router.push(`/user/${postRouteUsername}/posts/${postId}`);
+            } else {
+                router.push(`/post/${postId}`);
+            }
+        },
+        [postRouteUsername],
+    );
 
     const renderItem = useCallback(
         ({ item }: { item: GridItem }) => (
@@ -118,6 +130,7 @@ export function ProfileGridView({
             keyExtractor={keyExtractor}
             numColumns={NUM_COLUMNS}
             ListHeaderComponent={ListHeaderComponent}
+            ListEmptyComponent={ListEmptyComponent ?? undefined}
             ListFooterComponent={ListFooter}
             onRefresh={onRefresh}
             refreshing={isRefreshing}

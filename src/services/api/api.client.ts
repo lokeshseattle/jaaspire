@@ -9,21 +9,33 @@ import { normalizeApiError } from "./api.error";
 
 const baseURL = "https://stgx.jaaspire.com/api/v1";
 
+/** Set to true to test with local mock upload API (run: npm run mock:upload-api) */
+// const USE_MOCK_UPLOAD_API = __DEV__ && false;
+// const MOCK_UPLOAD_BASE_URL =
+//   (typeof process !== "undefined" &&
+//     process.env?.EXPO_PUBLIC_MOCK_UPLOAD_BASE_URL) ||
+//   "http://localhost:3333/api/v1";
+
 // Logger helper
+
+const LOG_REQUEST = true;
+const LOG_RESPONSE = true;
+const LOG_ERROR = false;
+
 const logger = {
   request: (config: InternalAxiosRequestConfig, hasToken: boolean) => {
-    if (!__DEV__) return;
+    if (!__DEV__ || !LOG_REQUEST) return;
     console.log(`\n🚀 ${config.method?.toUpperCase()} ${config.url}`);
     console.log(`📦 Body: ${JSON.stringify(config.data) ?? "None"}`);
     console.log(`🔑 Auth: ${hasToken ? "Yes" : "No"}\n`);
   },
   response: (response: AxiosResponse) => {
-    if (!__DEV__) return;
+    if (!__DEV__ || !LOG_RESPONSE) return;
     console.log(`\n✅ ${response.status} ${response.config.url}`);
     console.log(`📥 ${JSON.stringify(response.data, null, 2)}\n`);
   },
   error: (error: AxiosError) => {
-    if (!__DEV__) return;
+    if (!__DEV__ || !LOG_ERROR) return;
     console.log(`\n❌ ${error.response?.status ?? "ERR"} ${error.config?.url}`);
     console.log(`📛 ${error.message}`);
     console.log(`📥 ${JSON.stringify(error.response?.data, null, 2)}\n`);
@@ -32,6 +44,9 @@ const logger = {
 
 export const apiClient = axios.create({
   baseURL,
+  timeout: 60000, // 60 seconds
+  maxContentLength: Infinity,
+  maxBodyLength: Infinity,
 });
 
 apiClient.interceptors.request.use(

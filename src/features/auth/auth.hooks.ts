@@ -7,7 +7,11 @@ import {
   LoginResponse,
   PossibleErrorResponse,
   RegisterRequest,
+  Resend2FARequest,
+  Resend2FAResponse,
   ValidateUsernameResponse,
+  Verify2FARequest,
+  Verify2FAResponse,
 } from "@/src/services/api/api.types";
 import {
   useMutation,
@@ -43,7 +47,27 @@ export const useRegister = (): UseMutationResult<
   });
 };
 
+export const useResend2FA = (): UseMutationResult<
+  Resend2FAResponse,
+  PossibleErrorResponse,
+  Resend2FARequest
+> => {
+  return useMutation({
+    mutationFn: (body) =>
+      apiClient.post("/auth/resend-2fa", body).then((r) => r.data),
+  });
+};
 
+export const useVerify2FA = (): UseMutationResult<
+  Verify2FAResponse,
+  PossibleErrorResponse,
+  Verify2FARequest
+> => {
+  return useMutation({
+    mutationFn: (body) =>
+      apiClient.post("/auth/verify-2fa", body).then((r) => r.data),
+  });
+};
 
 export const useAuth = () => {
   const accessToken = useAuthStore((s) => s.accessToken);

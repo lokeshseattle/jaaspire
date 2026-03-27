@@ -1,5 +1,6 @@
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
+import { Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
 import {
   Control,
@@ -44,6 +45,8 @@ interface TextFormInputProps<T extends FieldValues>
   options?: never;
   style?: TextInputProps["style"];
   placeholder?: string;
+  /** Rounds trailing eye control to show/hide when `secureTextEntry` is used. */
+  passwordToggle?: boolean;
 }
 
 // Props for date picker
@@ -74,6 +77,7 @@ function FormInput<T extends FieldValues>(props: FormInputProps<T>) {
   const { theme } = useTheme();
   const styles = createStyles(theme);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [passwordVisible, setPasswordVisible] = useState(false);
 
   // Type guard to check if it's a text input
   const isTextInput = !pickerType;
@@ -181,7 +185,26 @@ function FormInput<T extends FieldValues>(props: FormInputProps<T>) {
 
           // DEFAULT TEXT INPUT
           const textProps = props as TextFormInputProps<T>;
-          const { style, ...inputProps } = textProps;
+          const {
+            style,
+            passwordToggle,
+            secureTextEntry: secureTextEntryProp,
+            ...inputProps
+          } = textProps;
+          const secureTextEntry = passwordToggle
+            ? !passwordVisible
+            : !!secureTextEntryProp;
+
+          const restoreAfterVisibilityToggle = () => {
+            const saved =
+              value === undefined || value === null ? "" : String(value);
+            setPasswordVisible((v) => !v);
+            // RN often clears the field or emits '' when `secureTextEntry` flips;
+            // re-sync RHF value after the native update.
+            requestAnimationFrame(() => {
+              onChange(saved);
+            });
+          };
 
           return (
             <View
@@ -193,18 +216,36 @@ function FormInput<T extends FieldValues>(props: FormInputProps<T>) {
             >
               {Left && <View style={styles.iconWrapper}>{Left}</View>}
               <TextInput
+                {...inputProps}
                 style={[
                   styles.input,
                   isMultiline && styles.multilineInput,
                   style,
                 ]}
+                placeholder={placeholder}
+                placeholderTextColor={theme.colors.textSecondary}
                 value={value}
                 onChangeText={onChange}
                 onBlur={onBlur}
-                placeholder={placeholder}
-                placeholderTextColor={theme.colors.textSecondary}
-                {...inputProps}
+                secureTextEntry={secureTextEntry}
               />
+              {passwordToggle ? (
+                <Pressable
+                  onPress={restoreAfterVisibilityToggle}
+                  style={styles.iconWrapperRight}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    passwordVisible ? "Hide password" : "Show password"
+                  }
+                  hitSlop={8}
+                >
+                  <Ionicons
+                    name={passwordVisible ? "eye-off-outline" : "eye-outline"}
+                    size={22}
+                    color={theme.colors.icon}
+                  />
+                </Pressable>
+              ) : null}
             </View>
           );
         };
@@ -295,5 +336,10 @@ export const createStyles = (theme: AppTheme) =>
 
     iconWrapper: {
       marginRight: theme.spacing.sm,
+    },
+
+    iconWrapperRight: {
+      marginLeft: theme.spacing.sm,
+      paddingVertical: theme.spacing.xs,
     },
   });

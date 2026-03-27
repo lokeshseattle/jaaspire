@@ -1,8 +1,11 @@
 import { apiClient } from "@/src/services/api/api.client";
 import {
+  MarkMessengerMessagesReadResponse,
   MessengerContactsResponse,
   MessengerMessagesResponse,
   PossibleErrorResponse,
+  SendAiChatMessageRequest,
+  SendAiChatMessageResponse,
   SendMessengerMessageRequest,
   SendMessengerMessageResponse,
 } from "@/src/services/api/api.types";
@@ -13,8 +16,9 @@ import {
   UseMutationResult,
   useQuery,
   useQueryClient,
-  UseQueryResult
+  UseQueryResult,
 } from "@tanstack/react-query";
+import { notificationCountsQueryKey } from "../profile/notification.hooks";
 import { messengerMessagesQueryKey } from "./messenger-query-keys";
 
 export { messengerMessagesQueryKey } from "./messenger-query-keys";
@@ -117,6 +121,44 @@ export const useSendMessengerMessage = (
         .then((r) => r.data),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["messenger", "contacts"] });
+    },
+  });
+};
+
+export const useSendAiChatMessage = (): UseMutationResult<
+  SendAiChatMessageResponse,
+  PossibleErrorResponse,
+  SendAiChatMessageRequest
+> => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: SendAiChatMessageRequest) =>
+      apiClient
+        .post<SendAiChatMessageResponse>("/ai-chat/send", body)
+        .then((r) => r.data),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["messenger", "contacts"] });
+    },
+  });
+};
+
+export const useMarkMessageAsRead = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    MarkMessengerMessagesReadResponse,
+    PossibleErrorResponse,
+    number
+  >({
+    mutationFn: (peerUserId: number) =>
+      apiClient
+        .post<MarkMessengerMessagesReadResponse>(
+          `/messenger/${peerUserId}/read`,
+        )
+        .then((r) => r.data),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["messenger", "contacts"] });
+      queryClient.invalidateQueries({ queryKey: notificationCountsQueryKey });
     },
   });
 };

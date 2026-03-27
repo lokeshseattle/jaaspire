@@ -9,11 +9,14 @@ import { queryClient } from "@/src/lib/query-client";
 import { ActionSheetProvider } from "@expo/react-native-action-sheet";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { Stack } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import "react-native-reanimated";
+
+SplashScreen.preventAutoHideAsync();
 
 // Inner layout that can use theme hooks
 function RootLayoutInner() {

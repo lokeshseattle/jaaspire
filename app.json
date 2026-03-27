@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "jaaspire",
+    "name": "Jaaspire",
     "slug": "jaaspire",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -31,9 +31,21 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/icon.png"
     },
     "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#f5f5f5",
+          "image": "./assets/images/icon.png",
+          "dark": {
+            "image": "./assets/images/icon.png",
+            "backgroundColor": "#000000"
+          },
+          "imageWidth": 200
+        }
+      ],
       "expo-router",
       [
         "expo-splash-screen",

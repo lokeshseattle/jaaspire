@@ -1,5 +1,6 @@
 // screens/NotificationsScreen.tsx
 
+import { useNotificationBadgeStore } from "@/src/features/notifications/notification-badge.store";
 import {
   TFilter,
   useGetNotifications,
@@ -12,7 +13,7 @@ import { useTheme } from "@/src/theme/ThemeProvider";
 import { timeAgo } from "@/src/utils/helpers";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -81,7 +82,11 @@ const ListHeaderComponent = ({
               Follow request
             </Text>
             {firstRequest.verified_user && (
-              <Ionicons name="checkmark-circle" size={16} color={VERIFIED_COLOR} />
+              <Ionicons
+                name="checkmark-circle"
+                size={16}
+                color={VERIFIED_COLOR}
+              />
             )}
           </View>
           <Text style={styles.pendingRequestUsername} numberOfLines={1}>
@@ -164,7 +169,7 @@ function AnimatedTab({
       color: interpolateColor(
         progress.value,
         [0, 1],
-        [theme.colors.textSecondary, theme.colors.textPrimary]
+        [theme.colors.textSecondary, theme.colors.textPrimary],
       ),
       transform: [
         {
@@ -210,7 +215,9 @@ function AnimatedTab({
         <Ionicons
           name={isActive && config.activeIcon ? config.activeIcon : config.icon}
           size={22}
-          color={isActive ? theme.colors.textPrimary : theme.colors.textSecondary}
+          color={
+            isActive ? theme.colors.textPrimary : theme.colors.textSecondary
+          }
         />
       </Animated.View>
 
@@ -306,8 +313,15 @@ function AnimatedTabBar({ filter, onFilterChange }: AnimatedTabBarProps) {
 export default function NotificationsScreen() {
   const { theme } = useTheme();
   const styles = createStyles(theme);
+  const clearBadge = useNotificationBadgeStore((s) => s.clearBadge);
 
   const [filter, setFilter] = useState<TFilter>("");
+
+  useFocusEffect(
+    useCallback(() => {
+      clearBadge();
+    }, [clearBadge]),
+  );
 
   const {
     data,
@@ -334,7 +348,7 @@ export default function NotificationsScreen() {
 
   const markReadMutation = useMarkNotificationReadMutation();
   const [optimisticReadIds, setOptimisticReadIds] = useState<Set<string>>(
-    new Set()
+    new Set(),
   );
 
   const pendingReadIdsRef = useRef<Set<string>>(new Set());
@@ -371,7 +385,7 @@ export default function NotificationsScreen() {
       itemVisiblePercentThreshold: 80,
       minimumViewTime: 1200,
     }),
-    []
+    [],
   );
 
   const onViewableItemsChanged = useRef(
@@ -398,12 +412,15 @@ export default function NotificationsScreen() {
           return next;
         });
       }
-    }
+    },
   ).current;
 
   const notifications = useMemo(() => {
     return data?.pages.flatMap((page) => page.data.notifications) ?? [];
   }, [data]);
+
+  console.log("notifications", notifications);
+  console.log("data", data);
 
   const handleLoadMore = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) {
@@ -416,12 +433,28 @@ export default function NotificationsScreen() {
     const isRead = item.read || optimisticReadIds.has(item.id);
 
     return (
-      <View style={[styles.notificationItem, !isRead && styles.unreadItem]}>
-        <Image source={{ uri: profilePic }} style={styles.avatar} />
+      <Pressable
+        onPress={() =>
+          item.post?.id &&
+          router.push(
+            `/user/${item.from_user?.username}/posts/${item.post?.id}`,
+          )
+        }
+        style={[styles.notificationItem, !isRead && styles.unreadItem]}
+      >
+        <Pressable
+          onPress={() => router.push(`/user/${item.from_user?.username}`)}
+        >
+          <Image source={{ uri: profilePic }} style={styles.avatar} />
+        </Pressable>
 
         <View style={styles.notificationContent}>
           <View style={styles.notificationHeader}>
-            <Text style={styles.username}>@{item.from_user?.username}</Text>
+            <Pressable
+              onPress={() => router.push(`/user/${item.from_user?.username}`)}
+            >
+              <Text style={styles.username}>@{item.from_user?.username}</Text>
+            </Pressable>
             <Text style={styles.time}>{timeAgo(item.created_at)}</Text>
           </View>
 
@@ -429,7 +462,7 @@ export default function NotificationsScreen() {
         </View>
 
         {!isRead && <View style={styles.unreadDot} />}
-      </View>
+      </Pressable>
     );
   };
 

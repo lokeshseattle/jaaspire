@@ -105,9 +105,12 @@ export default function ProfileView({
     }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
     // Handle grid item press - navigate to post
-    const handleItemPress = useCallback((postId: number) => {
-        router.push(`/post/${postId}`);
-    }, []);
+    const handleItemPress = useCallback(
+        (postId: number) => {
+            router.push(`/user/${username}/posts/${postId}`);
+        },
+        [username],
+    );
 
     // Render grid item
     const renderItem = useCallback(

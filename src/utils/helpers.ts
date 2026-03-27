@@ -46,10 +46,10 @@ export const getMediaType = (pathOrExtension: string): MediaType => {
   const withoutQuery = pathOrExtension.split("?")[0];
   const filename = withoutQuery.split("/").pop() ?? "";
   // If the filename has a dot, use its extension; otherwise treat the whole input as an extension
-  const ext = (filename.includes(".")
-    ? filename.split(".").pop()
-    : pathOrExtension
-  )?.toLowerCase().trim() ?? "";
+  const ext =
+    (filename.includes(".") ? filename.split(".").pop() : pathOrExtension)
+      ?.toLowerCase()
+      .trim() ?? "";
 
   if (IMAGE_EXTENSIONS.has(ext)) return "image";
   if (VIDEO_EXTENSIONS.has(ext)) return "video";
@@ -109,13 +109,12 @@ export function getDirtyValues<T>(
   return result;
 }
 
-
 /**
  * Determines if an item should be large based on the pattern:
- * 
+ *
  * Pattern A (index 0-4): Large at position 0 (left)
  * Pattern B (index 5-9): Large at position 9 (right)
- * 
+ *
  * Repeats every 10 items
  */
 export const isLargeItem = (index: number): boolean => {
@@ -126,17 +125,27 @@ export const isLargeItem = (index: number): boolean => {
   return cycleIndex === 0 || cycleIndex === 9;
 };
 
-export const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1);
+export const capitalize = (str: string) =>
+  str?.charAt(0).toUpperCase() + str?.slice(1);
 
-export type TButtonStatus = "follow" | "unfollow" | "requested"
+export type TButtonStatus = "follow" | "unfollow" | "requested";
 
-export const getNextButtonStatus = (isOpenProfile: boolean, status: TButtonStatus): TButtonStatus => {
-  if (status === "unfollow") return "follow"
-  if (status === "requested") return "unfollow"
+export const getNextButtonStatus = (
+  isOpenProfile: boolean,
+  status: TButtonStatus,
+): TButtonStatus => {
+  if (status === "unfollow") return "follow";
+  // Cancel pending request → not following (not "unfollow", which means accepted follower in this API)
+  if (status === "requested") return "follow";
 
-  if (status === "follow") return isOpenProfile ? "unfollow" : "requested"
+  if (status === "follow") return isOpenProfile ? "unfollow" : "requested";
 
-  return status
+  return status;
+};
+
+/** Matches backend: only "unfollow" means the viewer is an accepted follower. */
+export function isFollowingFromFollowStatus(status: TButtonStatus): boolean {
+  return status === "unfollow";
 }
 
 export const getMentionQuery = (text: string, cursorPosition: number) => {
@@ -160,7 +169,7 @@ export const getMentionQuery = (text: string, cursorPosition: number) => {
 
 export function debounce<T extends (...args: any[]) => void>(
   func: T,
-  wait: number
+  wait: number,
 ): T {
   let timeout: ReturnType<typeof setTimeout> | null = null;
 

@@ -1,15 +1,14 @@
+import { useNotificationBadgeStore } from "@/src/features/notifications/notification-badge.store";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Tabs } from "expo-router";
-import { Platform, View } from "react-native";
+import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-const TAB_BAR_HEIGHT = 48;
-const TAB_BAR_PADDING_BOTTOM = Platform.OS === "ios" ? 24 : 12;
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
+  const unreadCount = useNotificationBadgeStore((s) => s.unreadCount);
 
   return (
     <View
@@ -25,8 +24,6 @@ export default function TabsLayout() {
           tabBarActiveTintColor: theme.colors.primary,
           tabBarInactiveTintColor: theme.colors.textSecondary,
           tabBarStyle: {
-            height: TAB_BAR_HEIGHT + TAB_BAR_PADDING_BOTTOM,
-            paddingBottom: TAB_BAR_PADDING_BOTTOM,
             backgroundColor: theme.colors.background,
             borderTopColor: theme.colors.border,
             borderTopWidth: 1,
@@ -42,6 +39,7 @@ export default function TabsLayout() {
           options={{
             headerShown: false,
             title: "Home",
+
             tabBarIcon: ({ color, size, focused }) => (
               <Ionicons
                 name={focused ? "home" : "home-outline"}
@@ -84,6 +82,12 @@ export default function TabsLayout() {
           name="notifications"
           options={{
             title: "Alerts",
+            tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
+            tabBarBadgeStyle: {
+              backgroundColor: theme.colors.primary,
+              color: theme.colors.background,
+              fontSize: 10,
+            },
             tabBarIcon: ({ color, size, focused }) => (
               <Ionicons
                 name={focused ? "notifications" : "notifications-outline"}

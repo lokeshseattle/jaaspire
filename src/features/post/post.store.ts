@@ -22,10 +22,16 @@ export const usePostStore = create<PostStore>((set, get) => ({
             const updated = { ...state.posts };
 
             posts.forEach((post) => {
-                updated[post.id] = {
-                    ...(state.posts[post.id] ?? {}),
+                const existing = state.posts[post.id];
+                const merged: Post = {
+                    ...(existing ?? {}),
                     ...post,
                 };
+                // Search/explore payloads sometimes omit `user` or send null; don't wipe a good user from feed.
+                if (post.user == null && existing?.user != null) {
+                    merged.user = existing.user;
+                }
+                updated[post.id] = merged;
             });
 
             return { posts: updated };

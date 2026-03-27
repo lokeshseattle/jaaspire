@@ -7,6 +7,18 @@ import type {
 } from "expo-video";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+/** Native player may be released while JS ref still exists (NativeSharedObjectNotFound). */
+function safePlayerSnapshot(p: VideoPlayer): {
+    status: VideoPlayer["status"];
+    playing: boolean;
+} | null {
+    try {
+        return { status: p.status, playing: p.playing };
+    } catch {
+        return null;
+    }
+}
+
 export function useManagedVideoPlayer(
     postId: number,
     url: string | null,
@@ -51,26 +63,33 @@ export function useManagedVideoPlayer(
 
         // --- CHECK INITIAL STATUS (fixes race condition) ---
         // The player might already be ready if it was preloaded or cached
-        const initialStatus = p.status;
-        console.log(`🎬 [${currentPostId}] Initial status: ${initialStatus}`);
-
-        if (initialStatus === "readyToPlay") {
-            setIsReady(true);
-            setIsBuffering(false);
-            // Auto-play if visible
-            if (isVisibleRef.current) {
-                videoManager.play(currentPostId);
-            }
-        } else if (initialStatus === "loading") {
-            setIsBuffering(true);
+        const initial = safePlayerSnapshot(p);
+        if (!initial) {
             setIsReady(false);
+            setIsBuffering(false);
+            setIsPlaying(false);
         } else {
-            setIsReady(false);
-            setIsBuffering(false);
-        }
+            const initialStatus = initial.status;
+            console.log(`🎬 [${currentPostId}] Initial status: ${initialStatus}`);
 
-        // Sync initial playing state
-        setIsPlaying(p.playing);
+            if (initialStatus === "readyToPlay") {
+                setIsReady(true);
+                setIsBuffering(false);
+                // Auto-play if visible
+                if (isVisibleRef.current) {
+                    videoManager.play(currentPostId);
+                }
+            } else if (initialStatus === "loading") {
+                setIsBuffering(true);
+                setIsReady(false);
+            } else {
+                setIsReady(false);
+                setIsBuffering(false);
+            }
+
+            // Sync initial playing state
+            setIsPlaying(initial.playing);
+        }
 
         // --- ATTACH LISTENERS ---
         const statusSub = p.addListener(
@@ -140,18 +159,20 @@ export function useManagedVideoPlayer(
         if (!p) return;
 
         const currentPostId = postIdRef.current;
+        const snap = safePlayerSnapshot(p);
+        if (!snap) return;
 
         if (isVisible) {
             // Only play if ready
-            if (p.status === "readyToPlay") {
+            if (snap.status === "readyToPlay") {
                 console.log(`👁️ [${currentPostId}] Visible & ready, playing`);
                 videoManager.play(currentPostId);
             } else {
-                console.log(`👁️ [${currentPostId}] Visible but status: ${p.status}`);
+                console.log(`👁️ [${currentPostId}] Visible but status: ${snap.status}`);
             }
         } else {
             // Pause when not visible
-            if (p.playing) {
+            if (snap.playing) {
                 console.log(`👁️ [${currentPostId}] Not visible, pausing`);
                 videoManager.pause(currentPostId);
             }
@@ -169,10 +190,12 @@ export function useManagedVideoPlayer(
     // --- Actions ---
     const togglePlayPause = useCallback(() => {
         const p = playerRef.current;
-        if (!p || p.status !== "readyToPlay") return;
+        if (!p) return;
+        const snap = safePlayerSnapshot(p);
+        if (!snap || snap.status !== "readyToPlay") return;
 
         const currentPostId = postIdRef.current;
-        if (p.playing) {
+        if (snap.playing) {
             videoManager.pause(currentPostId);
         } else {
             videoManager.play(currentPostId);
@@ -192,7 +215,9 @@ export function useManagedVideoPlayer(
 
     const play = useCallback(() => {
         const p = playerRef.current;
-        if (!p || p.status !== "readyToPlay") return;
+        if (!p) return;
+        const snap = safePlayerSnapshot(p);
+        if (!snap || snap.status !== "readyToPlay") return;
         videoManager.play(postIdRef.current);
     }, []);
 

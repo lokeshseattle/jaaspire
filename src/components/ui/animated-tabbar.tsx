@@ -1,3 +1,4 @@
+import { useTheme } from "@/src/theme/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
 import {
@@ -39,12 +40,16 @@ function AnimatedTab<T extends string>({
     isActive,
     onPress,
     onLayout,
+    colorActive,
+    colorInactive,
 }: {
     tabKey: T;
     config: TabConfig;
     isActive: boolean;
     onPress: () => void;
     onLayout: (event: LayoutChangeEvent) => void;
+    colorActive: string;
+    colorInactive: string;
 }) {
     const scale = useSharedValue(1);
     const progress = useSharedValue(isActive ? 1 : 0);
@@ -56,17 +61,23 @@ function AnimatedTab<T extends string>({
         });
     }, [isActive]);
 
-    const animatedTextStyle = useAnimatedStyle(() => ({
-        color: interpolateColor(progress.value, [0, 1], ["#999", "#000"]),
-        transform: [
-            {
-                scale: withSpring(scale.value, {
-                    damping: 15,
-                    stiffness: 150,
-                }),
-            },
-        ],
-    }));
+    const animatedTextStyle = useAnimatedStyle(
+        () => ({
+            color: interpolateColor(progress.value, [0, 1], [
+                colorInactive,
+                colorActive,
+            ]),
+            transform: [
+                {
+                    scale: withSpring(scale.value, {
+                        damping: 15,
+                        stiffness: 150,
+                    }),
+                },
+            ],
+        }),
+        [colorActive, colorInactive],
+    );
 
     const animatedIconStyle = useAnimatedStyle(() => ({
         transform: [
@@ -94,7 +105,7 @@ function AnimatedTab<T extends string>({
                             isActive && config.activeIcon ? config.activeIcon : config.icon
                         }
                         size={22}
-                        color={isActive ? "#000" : "#999"}
+                        color={isActive ? colorActive : colorInactive}
                     />
                 </Animated.View>
             )}
@@ -118,6 +129,7 @@ export function AnimatedTabBar<T extends string>({
     activeKey,
     onTabChange,
 }: AnimatedTabBarProps<T>) {
+    const { theme } = useTheme();
     const [tabLayouts, setTabLayouts] = useState<
         Record<string, { x: number; width: number }>
     >({});
@@ -160,8 +172,16 @@ export function AnimatedTabBar<T extends string>({
             }));
         };
 
+    const colorActive = theme.colors.primary;
+    const colorInactive = theme.colors.textSecondary;
+
     return (
-        <View style={styles.container}>
+        <View
+            style={[
+                styles.container,
+                { borderBottomColor: theme.colors.border },
+            ]}
+        >
             {tabKeys.map((key) => (
                 <AnimatedTab
                     key={key}
@@ -170,10 +190,18 @@ export function AnimatedTabBar<T extends string>({
                     isActive={key === activeKey}
                     onPress={() => onTabChange(key)}
                     onLayout={handleLayout(key)}
+                    colorActive={colorActive}
+                    colorInactive={colorInactive}
                 />
             ))}
 
-            <Animated.View style={[styles.indicator, indicatorStyle]} />
+            <Animated.View
+                style={[
+                    styles.indicator,
+                    indicatorStyle,
+                    { backgroundColor: theme.colors.primary },
+                ]}
+            />
         </View>
     );
 }
@@ -186,7 +214,6 @@ const styles = StyleSheet.create({
     container: {
         flexDirection: "row",
         borderBottomWidth: 1,
-        borderColor: "#eee",
         position: "relative",
     },
     tab: {
@@ -205,7 +232,6 @@ const styles = StyleSheet.create({
         bottom: 0,
         left: 0,
         height: 2,
-        backgroundColor: "#000",
         borderRadius: 2,
     },
 });

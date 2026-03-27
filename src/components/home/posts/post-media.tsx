@@ -3,19 +3,29 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { VideoView } from "expo-video";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import {
+  Component,
+  type ErrorInfo,
+  type ReactNode,
+  memo,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Dimensions,
   Pressable,
   StyleSheet,
+  Text,
   View,
 } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
-  withTiming
+  withTiming,
 } from "react-native-reanimated";
 
 interface Props {
@@ -26,8 +36,8 @@ interface Props {
   isVisible: boolean;
   isLiked: boolean;
   onLike: () => void;
-  nextPostId?: number;   // For preloading
-  nextPostUrl?: string;  // For preloading
+  nextPostId?: number; // For preloading
+  nextPostUrl?: string; // For preloading
 }
 
 // Double-tap detection window (ms)
@@ -38,7 +48,35 @@ const SCREEN_WIDTH = Dimensions.get("window").width;
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 const MAX_MEDIA_HEIGHT = SCREEN_HEIGHT * 0.75;
 
-function PostMedia({
+type ErrorBoundaryState = { hasError: boolean };
+
+class PostMediaErrorBoundary extends Component<
+  { children: ReactNode },
+  ErrorBoundaryState
+> {
+  state: ErrorBoundaryState = { hasError: false };
+
+  static getDerivedStateFromError(): ErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.warn("[PostMedia] Error boundary caught:", error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={styles.errorFallback}>
+          <Text style={styles.errorFallbackText}>Something went wrong!</Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function PostMediaInner({
   postId,
   type,
   media,
@@ -85,8 +123,8 @@ function PostMedia({
     postId,
     type === "video" ? media : null,
     isVisible,
-    nextPostUrl,  // Pass for preloading
-    nextPostId    // Pass for preloading
+    nextPostUrl, // Pass for preloading
+    nextPostId, // Pass for preloading
   );
 
   // Dynamic Aspect Ratio
@@ -118,7 +156,7 @@ function PostMedia({
         if (finished) {
           scale.value = withSpring(1, { damping: 10, stiffness: 250 });
         }
-      }
+      },
     );
     // Fade out after delay
     opacity.value = withTiming(0, { duration: 600 }, undefined);
@@ -213,7 +251,9 @@ function PostMedia({
   // Show loading overlay when buffering or not ready
   const showLoadingOverlay = type === "video" && (isBuffering || !isReady);
 
-  const calculatedHeight = aspectRatio ? SCREEN_WIDTH / aspectRatio : SCREEN_WIDTH;
+  const calculatedHeight = aspectRatio
+    ? SCREEN_WIDTH / aspectRatio
+    : SCREEN_WIDTH;
   const containerHeight = Math.min(calculatedHeight, MAX_MEDIA_HEIGHT);
 
   return (
@@ -244,7 +284,7 @@ function PostMedia({
                 style={[
                   StyleSheet.absoluteFill,
                   // Hide thumbnail once video is ready and playing
-                  { opacity: isReady && isPlaying ? 0 : 1 }
+                  { opacity: isReady && isPlaying ? 0 : 1 },
                 ]}
                 contentFit="cover"
                 cachePolicy="disk"
@@ -270,11 +310,11 @@ function PostMedia({
             )}
 
             {/* Play/Pause indicator (briefly shows on tap) */}
-            {!isPlaying && isReady && isVisible && (
+            {/* {!isPlaying && isReady && isVisible && (
               <View style={styles.playIndicator}>
                 <Ionicons name="play" size={50} color="white" />
               </View>
-            )}
+            )} */}
 
             {/* Mute button */}
             <AnimatedPressable
@@ -308,9 +348,28 @@ function PostMedia({
   );
 }
 
+function PostMedia(props: Props) {
+  return (
+    <PostMediaErrorBoundary>
+      <PostMediaInner {...props} />
+    </PostMediaErrorBoundary>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     position: "relative",
+  },
+  errorFallback: {
+    width: "100%",
+    minHeight: 200,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#000",
+  },
+  errorFallbackText: {
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 15,
   },
   media: {
     width: "100%",
