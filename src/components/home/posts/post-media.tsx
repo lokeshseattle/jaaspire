@@ -35,9 +35,38 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 
+// ─── Types ───────────────────────────────────────────────────────────────────
+
 export type PostMediaViewer = Post["viewer"];
 
-/** Whether the current user may see full media (no paywall / preview lock). */
+interface Props {
+  postId: number;
+  type: string;
+  media: string;
+  thumbnail?: string;
+  price?: number;
+  fullDuration?: number | string | null;
+  viewer?: PostMediaViewer;
+  isExclusive?: boolean;
+  isVisible: boolean;
+  isLiked: boolean;
+  onLike: () => void;
+  nextPostId?: number;
+  nextPostUrl?: string;
+}
+
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const DOUBLE_TAP_DELAY = 300;
+const SCREEN_WIDTH = Dimensions.get("window").width;
+const SCREEN_HEIGHT = Dimensions.get("window").height;
+const MAX_MEDIA_HEIGHT = SCREEN_HEIGHT * 0.75;
+const MIN_MEDIA_HEIGHT = Math.min(440, Math.max(450, SCREEN_HEIGHT * 0.42));
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+// ─── Utilities ───────────────────────────────────────────────────────────────
+
 function viewerCanViewPostMedia(
   viewer: PostMediaViewer | undefined,
   price: number,
@@ -46,39 +75,21 @@ function viewerCanViewPostMedia(
   if (viewer?.is_owner === true) return true;
   if (price > 0 && !viewer?.has_purchased) return false;
   if (isExclusive && !viewer?.has_subscription) return false;
-
   return true;
 }
 
-interface Props {
-  postId: number;
-  type: string;
-  media: string;
-  thumbnail?: string;
-  /** When > 0, drives paid preview timeline when user cannot view full video. */
-  price?: number;
-  /** Full content duration in seconds (from API). Drives the progress bar length for paid videos. */
-  fullDuration?: number | string | null;
-  /** API viewer flags: owner always sees full media; exclusive needs subscription; price above 1 needs purchase. */
-  viewer?: PostMediaViewer;
-  /** Subscriber-only post from API. */
-  isExclusive?: boolean;
-  isVisible: boolean;
-  isLiked: boolean;
-  onLike: () => void;
-  nextPostId?: number; // For preloading
-  nextPostUrl?: string; // For preloading
+/** Normalizes API duration (number, numeric string, or "20s") to seconds. */
+function parseDuration(value: unknown): number | null {
+  if (value == null) return null;
+  if (typeof value === "number") return value > 0 ? value : null;
+  if (typeof value === "string") {
+    const n = Number.parseFloat(value.replace(/[^\d.]/g, ""));
+    return n > 0 ? n : null;
+  }
+  return null;
 }
 
-// Double-tap detection window (ms)
-const DOUBLE_TAP_DELAY = 300;
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
-const SCREEN_WIDTH = Dimensions.get("window").width;
-const SCREEN_HEIGHT = Dimensions.get("window").height;
-const MAX_MEDIA_HEIGHT = SCREEN_HEIGHT * 0.75;
-/** Min box height so paywall / lock UI is not clipped; wide media letterboxes inside via contain. */
-const MIN_MEDIA_HEIGHT = Math.min(440, Math.max(450, SCREEN_HEIGHT * 0.42));
+// ─── Error Boundary ───────────────────────────────────────────────────────────
 
 type ErrorBoundaryState = { hasError: boolean };
 
@@ -112,16 +123,222 @@ class PostMediaErrorBoundary extends Component<
   }
 }
 
-/** Normalizes API duration (number, numeric string, or "20s") to seconds. */
-function parseDuration(value: unknown): number | null {
-  if (value == null) return null;
-  if (typeof value === "number") return value > 0 ? value : null;
-  if (typeof value === "string") {
-    const n = Number.parseFloat(value.replace(/[^\d.]/g, ""));
-    return n > 0 ? n : null;
-  }
-  return null;
+// ─── Shared Sub-Components ────────────────────────────────────────────────────
+
+interface PaywallContentProps {
+  price: number;
+  isExclusive: boolean;
+  onPay: () => void;
+  onWatchAgain?: () => void;
 }
+
+function PaywallContent({
+  price,
+  isExclusive,
+  onPay,
+  onWatchAgain,
+}: PaywallContentProps) {
+  const hintText =
+    price > 1
+      ? "One-time purchase · Instant access"
+      : isExclusive
+        ? "Subscribe for access"
+        : "Unlock for full access";
+
+  return (
+    <View style={styles.paywallContent}>
+      <LinearGradient
+        colors={Colors.gradient as [string, string, string]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.lockBadge}
+      >
+        <Ionicons name="lock-closed" size={28} color="#fff" />
+      </LinearGradient>
+
+      <Text style={styles.paywallTitle}>Exclusive Content</Text>
+      <Text style={styles.paywallSubtitle}>
+        Unlock this post and get access to premium content from this creator.
+      </Text>
+
+      {price > 0 && (
+        <View style={styles.priceBadge}>
+          <Ionicons name="pricetag" size={14} color={Colors.gradient[2]} />
+          <Text style={styles.priceText}>${price.toFixed(2)}</Text>
+        </View>
+      )}
+
+      <Pressable
+        onPress={onPay}
+        style={({ pressed }) => [
+          styles.payButton,
+          pressed && styles.payButtonPressed,
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel="Pay to unlock"
+      >
+        <LinearGradient
+          colors={Colors.gradient as [string, string, string]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.payButtonGradient}
+        >
+          <Ionicons name="flash" size={16} color="#fff" />
+          <Text style={styles.payButtonText}>Unlock Now</Text>
+        </LinearGradient>
+      </Pressable>
+
+      {onWatchAgain && (
+        <Pressable
+          onPress={onWatchAgain}
+          style={({ pressed }) => [
+            styles.watchAgainButton,
+            pressed && styles.watchAgainButtonPressed,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Watch preview again"
+        >
+          <Ionicons name="refresh" size={18} color="rgba(255,255,255,0.95)" />
+          <Text style={styles.watchAgainText}>Watch again</Text>
+        </Pressable>
+      )}
+
+      <Text style={styles.paywallHint}>{hintText}</Text>
+    </View>
+  );
+}
+
+interface ImagePaywallProps {
+  price: number;
+  isExclusive: boolean;
+  containerHeight: number;
+  onPay: () => void;
+}
+
+function ImagePaywall({
+  price,
+  isExclusive,
+  containerHeight,
+  onPay,
+}: ImagePaywallProps) {
+  return (
+    <LinearGradient
+      colors={["#1a1040", "#0f0d2b"]}
+      style={[styles.paidImagePlaceholder, { height: containerHeight }]}
+    >
+      <View style={styles.paywallBlobTop} />
+      <View style={styles.paywallBlobBottom} />
+      <PaywallContent price={price} isExclusive={isExclusive} onPay={onPay} />
+    </LinearGradient>
+  );
+}
+
+interface VideoLockedPaywallProps {
+  price: number;
+  isExclusive: boolean;
+  thumbnail?: string;
+  onPay: () => void;
+  onImageLoad: (e: any) => void;
+}
+
+function VideoLockedPaywall({
+  price,
+  isExclusive,
+  thumbnail,
+  onPay,
+  onImageLoad,
+}: VideoLockedPaywallProps) {
+  return (
+    <>
+      {thumbnail ? (
+        <Image
+          source={{ uri: thumbnail }}
+          style={StyleSheet.absoluteFill}
+          contentFit="contain"
+          cachePolicy="disk"
+          onLoad={onImageLoad}
+        />
+      ) : (
+        <View
+          style={[StyleSheet.absoluteFill, styles.media]}
+          accessibilityElementsHidden
+        />
+      )}
+      <LinearGradient
+        colors={["#1a1040", "#0f0d2b"]}
+        style={styles.videoLockedFullOverlay}
+      >
+        <View style={styles.paywallBlobTop} />
+        <View style={styles.paywallBlobBottom} />
+        <PaywallContent price={price} isExclusive={isExclusive} onPay={onPay} />
+      </LinearGradient>
+    </>
+  );
+}
+
+interface VideoPreviewEndedOverlayProps {
+  price: number;
+  isExclusive: boolean;
+  onPay: () => void;
+  onWatchAgain: () => void;
+}
+
+function VideoPreviewEndedOverlay({
+  price,
+  isExclusive,
+  onPay,
+  onWatchAgain,
+}: VideoPreviewEndedOverlayProps) {
+  return (
+    <LinearGradient
+      colors={["rgba(15,13,43,0.85)", "rgba(26,16,64,0.95)"]}
+      style={styles.videoPaywallOverlay}
+    >
+      <PaywallContent
+        price={price}
+        isExclusive={isExclusive}
+        onPay={onPay}
+        onWatchAgain={onWatchAgain}
+      />
+    </LinearGradient>
+  );
+}
+
+interface VideoProgressBarProps {
+  progressStyle: ReturnType<typeof useAnimatedStyle>;
+  thumbAnimatedStyle: ReturnType<typeof useAnimatedStyle>;
+  progressBarAnimatedStyle: ReturnType<typeof useAnimatedStyle>;
+  lockedSegmentStyle: ReturnType<typeof useAnimatedStyle>;
+  barGesture: ReturnType<typeof Gesture.Simultaneous>;
+  onLayout: (e: any) => void;
+}
+
+// function VideoProgressBar({
+//   progressStyle,
+//   thumbAnimatedStyle,
+//   progressBarAnimatedStyle,
+//   lockedSegmentStyle,
+//   barGesture,
+//   onLayout,
+// }: VideoProgressBarProps) {
+//   return (
+//     <GestureDetector gesture={barGesture}>
+//       <Animated.View
+//         style={[styles.progressContainer, progressBarAnimatedStyle]}
+//         hitSlop={{ top: 10, bottom: 10 }}
+//         onLayout={onLayout}
+//       >
+//         <Animated.View style={[styles.progressFill, progressStyle]} />
+//         <Animated.View
+//           style={[styles.progressLockedSegment, lockedSegmentStyle]}
+//         />
+//         <Animated.View style={[styles.thumb, thumbAnimatedStyle]} />
+//       </Animated.View>
+//     </GestureDetector>
+//   );
+// }
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 function PostMediaInner({
   postId,
@@ -138,27 +355,23 @@ function PostMediaInner({
   nextPostId,
   nextPostUrl,
 }: Props) {
-  // Refs for tap handling
+  // ── Tap / double-tap tracking ──────────────────────────────────────────────
   const lastTapRef = useRef<number>(0);
   const singleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Animation values for heart
-  const scale = useSharedValue(0);
-  const opacity = useSharedValue(0);
-
-  // Animation values for mute icon
+  // ── Animation shared values ────────────────────────────────────────────────
+  const heartScale = useSharedValue(0);
+  const heartOpacity = useSharedValue(0);
   const muteOpacity = useSharedValue(0);
+  const progress = useSharedValue(0);
+  const maxProgressRatio = useSharedValue(1);
+  const progressBarWidth = useSharedValue(0);
+  const isScrubbing = useSharedValue(false);
+
+  // ── Mute icon timer ────────────────────────────────────────────────────────
   const muteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-    opacity: opacity.value,
-  }));
-
-  const animatedMuteStyle = useAnimatedStyle(() => ({
-    opacity: muteOpacity.value,
-  }));
-
+  // ── Access control ─────────────────────────────────────────────────────────
   const canView = useMemo(
     () => viewerCanViewPostMedia(viewer, price, isExclusive),
     [
@@ -171,16 +384,17 @@ function PostMediaInner({
   );
 
   const parsedDuration = parseDuration(fullDuration);
-  const isPaidVideo = !canView && type === "video" && price > 0;
 
-  console.log({ isPaidVideo, canView, postId });
-
+  // Capped preview: paid posts or subscriber-exclusive posts (same rules as paid)
+  const isPaidVideo =
+    !canView && type === "video" && (price > 0 || isExclusive);
+  // Fallback when locked but not treated as preview-cap (should not happen with current access rules)
   const showVideoBlockPaywall = !canView && type === "video" && !isPaidVideo;
 
   const videoUrlForPlayer =
     type === "video" && media && (canView || isPaidVideo) ? media : null;
 
-  // Video player hook - now with preloading support
+  // ── Video player ───────────────────────────────────────────────────────────
   const {
     player,
     isReady,
@@ -195,31 +409,67 @@ function PostMediaInner({
     postId,
     videoUrlForPlayer,
     isVisible,
-    nextPostUrl, // Pass for preloading
-    nextPostId, // Pass for preloading
+    nextPostUrl,
+    nextPostId,
   );
 
-  // console.log("isPaidVideo", isPaidVideo, postId);
+  // ── Preview-ended state ────────────────────────────────────────────────────
   const [previewEnded, setPreviewEnded] = useState(false);
   const previewEndedRef = useRef(false);
 
-  // Dynamic Aspect Ratio
+  // ── Aspect ratio ───────────────────────────────────────────────────────────
   const [aspectRatio, setAspectRatio] = useState<number | null>(null);
 
-  const progress = useSharedValue(0);
-  const maxProgressRatio = useSharedValue(1);
+  // ─── Animated styles ───────────────────────────────────────────────────────
+
+  const heartAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: heartScale.value }],
+    opacity: heartOpacity.value,
+  }));
+
+  const animatedMuteStyle = useAnimatedStyle(() => ({
+    opacity: muteOpacity.value,
+  }));
+
+  const progressStyle = useAnimatedStyle(() => ({
+    width: `${progress.value * 100}%`,
+  }));
+
+  const thumbAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: progress.value * progressBarWidth.value - 5 },
+      { scale: withTiming(isScrubbing.value ? 1.4 : 0.8) },
+    ],
+    opacity: withTiming(isScrubbing.value ? 1 : 0),
+  }));
+
+  const progressBarAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: isScrubbing.value ? 1 : muteOpacity.value,
+  }));
+
+  const lockedSegmentStyle = useAnimatedStyle(() => {
+    const ratio = maxProgressRatio.value;
+    return {
+      left: `${ratio * 100}%`,
+      width: `${(1 - ratio) * 100}%`,
+      opacity: ratio < 1 ? 1 : 0,
+    };
+  });
+
+  // ─── Seek logic ────────────────────────────────────────────────────────────
 
   const seekTo = useCallback(
     (value: number) => {
       if (!player?.duration) return;
+
       if (isPaidVideo && parsedDuration) {
         const cap = player.duration;
-        const t = Math.min(value * parsedDuration, cap);
-        player.currentTime = t;
-        progress.value = t / parsedDuration;
-        const epsilon = 0.08;
-        const atEnd = t >= cap - epsilon;
-        if (atEnd) {
+        const targetTime = Math.min(value * parsedDuration, cap);
+        player.currentTime = targetTime;
+        progress.value = targetTime / parsedDuration;
+
+        const reachedEnd = targetTime >= cap - 0.08;
+        if (reachedEnd) {
           pause();
           if (!previewEndedRef.current) {
             previewEndedRef.current = true;
@@ -236,6 +486,49 @@ function PostMediaInner({
     [player, isPaidVideo, parsedDuration, pause, progress],
   );
 
+  // ─── Gesture handlers ──────────────────────────────────────────────────────
+
+  const tapSeekGesture = Gesture.Tap()
+    .maxDistance(14)
+    .onEnd((e) => {
+      "worklet";
+      const w = progressBarWidth.value;
+      if (w <= 0) return;
+      const raw = Math.max(0, Math.min(e.x / w, 1));
+      const clamped =
+        maxProgressRatio.value < 1
+          ? Math.min(raw, maxProgressRatio.value)
+          : raw;
+      progress.value = clamped;
+      runOnJS(seekTo)(clamped);
+    });
+
+  const panGesture = Gesture.Pan()
+    .activeOffsetX([-14, 14])
+    .onBegin(() => {
+      isScrubbing.value = true;
+    })
+    .onUpdate((e) => {
+      const w = progressBarWidth.value;
+      if (w <= 0) return;
+      const raw = Math.max(0, Math.min(e.x / w, 1));
+      progress.value =
+        maxProgressRatio.value < 1
+          ? Math.min(raw, maxProgressRatio.value)
+          : raw;
+    })
+    .onEnd(() => {
+      runOnJS(seekTo)(progress.value);
+    })
+    .onFinalize(() => {
+      isScrubbing.value = false;
+    });
+
+  const barGesture = Gesture.Simultaneous(tapSeekGesture, panGesture);
+
+  // ─── Effects ───────────────────────────────────────────────────────────────
+
+  // Progress polling for paid preview cap
   useEffect(() => {
     if (!player) return;
 
@@ -269,7 +562,7 @@ function PostMediaInner({
     return () => clearInterval(interval);
   }, [player, isPaidVideo, parsedDuration, pause]);
 
-  // Paid preview must not loop — global manager sets loop=true on all players.
+  // Disable looping for paid previews
   useEffect(() => {
     if (!player || !isPaidVideo) return;
     let previousLoop = true;
@@ -288,158 +581,69 @@ function PostMediaInner({
     };
   }, [player, isPaidVideo]);
 
-  const progressBarWidth = useSharedValue(0);
-
-  const progressStyle = useAnimatedStyle(() => ({
-    width: `${progress.value * 100}%`,
-  }));
-  const isScrubbing = useSharedValue(false);
-  // const thumbStyle = useAnimatedStyle(() => ({
-  //   transform: [
-  //     {
-  //       translateX: progress.value * progressBarWidth.value - 5,
-  //     },
-  //   ],
-  // }));
-
-  const thumbAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateX: progress.value * progressBarWidth.value - 5,
-      },
-      {
-        scale: withTiming(isScrubbing.value ? 1.4 : 0.8),
-      },
-    ],
-    opacity: withTiming(isScrubbing.value ? 1 : 0),
-  }));
-
-  const progressBarAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: isScrubbing.value ? 1 : muteOpacity.value,
-  }));
-
-  const lockedSegmentStyle = useAnimatedStyle(() => {
-    const ratio = maxProgressRatio.value;
-    return {
-      left: `${ratio * 100}%`,
-      width: `${(1 - ratio) * 100}%`,
-      opacity: ratio < 1 ? 1 : 0,
-    };
-  });
-
-  const tapSeekGesture = Gesture.Tap()
-    .maxDistance(14)
-    .onEnd((e) => {
-      "worklet";
-      const w = progressBarWidth.value;
-      if (w <= 0) return;
-      const raw = Math.max(0, Math.min(e.x / w, 1));
-      const p =
-        maxProgressRatio.value < 1
-          ? Math.min(raw, maxProgressRatio.value)
-          : raw;
-      progress.value = p;
-      runOnJS(seekTo)(p);
-    });
-
-  const panGesture = Gesture.Pan()
-    .activeOffsetX([-14, 14])
-    .onBegin(() => {
-      isScrubbing.value = true;
-    })
-    .onUpdate((e) => {
-      const w = progressBarWidth.value;
-      if (w <= 0) return;
-      const raw = Math.max(0, Math.min(e.x / w, 1));
-      progress.value =
-        maxProgressRatio.value < 1
-          ? Math.min(raw, maxProgressRatio.value)
-          : raw;
-    })
-    .onEnd(() => {
-      runOnJS(seekTo)(progress.value);
-    })
-    .onFinalize(() => {
-      isScrubbing.value = false;
-    });
-
-  const barGesture = Gesture.Simultaneous(tapSeekGesture, panGesture);
-
+  // Derive aspect ratio from video track once ready
   useEffect(() => {
     if (type === "video" && isReady && player?.videoTrack?.size) {
       const { width, height } = player.videoTrack.size;
-      if (width && height) {
-        setAspectRatio(width / height);
-      }
+      if (width && height) setAspectRatio(width / height);
     }
   }, [type, isReady, player]);
 
-  const handleImageLoad = useCallback((e: any) => {
-    if (e.source?.width && e.source?.height) {
-      setAspectRatio(e.source.width / e.source.height);
+  // Reset preview state when post scrolls off screen
+  useEffect(() => {
+    if (!isVisible && previewEndedRef.current) {
+      previewEndedRef.current = false;
+      setPreviewEnded(false);
     }
-  }, []);
+  }, [isVisible]);
 
-  // Heart animation
+  // ─── UI event handlers ─────────────────────────────────────────────────────
+
   const triggerHeartAnimation = useCallback(() => {
-    scale.value = 0.6;
-    opacity.value = 1;
-    scale.value = withSpring(
+    heartScale.value = 0.6;
+    heartOpacity.value = 1;
+    heartScale.value = withSpring(
       1.3,
       { damping: 8, stiffness: 300, mass: 0.5 },
       (finished) => {
-        if (finished) {
-          scale.value = withSpring(1, { damping: 10, stiffness: 250 });
-        }
+        if (finished)
+          heartScale.value = withSpring(1, { damping: 10, stiffness: 250 });
       },
     );
-    // Fade out after delay
-    opacity.value = withTiming(0, { duration: 600 }, undefined);
+    heartOpacity.value = withTiming(0, { duration: 600 }, undefined);
   }, []);
-
-  // Double-tap handler (like)
-  const handleDoubleTap = useCallback(() => {
-    triggerHeartAnimation();
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (!isLiked) {
-      onLike();
-    }
-  }, [isLiked, onLike, triggerHeartAnimation]);
 
   const showMuteIcon = useCallback(() => {
     muteOpacity.value = withTiming(1, { duration: 200 });
-    if (muteTimerRef.current) {
-      clearTimeout(muteTimerRef.current);
-    }
+    if (muteTimerRef.current) clearTimeout(muteTimerRef.current);
     muteTimerRef.current = setTimeout(() => {
       muteOpacity.value = withTiming(0, { duration: 500 });
     }, 1000);
   }, []);
 
-  // Single-tap handler (show mute icon for video, nothing for image)
+  const handleDoubleTap = useCallback(() => {
+    triggerHeartAnimation();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (!isLiked) onLike();
+  }, [isLiked, onLike, triggerHeartAnimation]);
+
   const handleSingleTap = useCallback(() => {
-    if (type === "video") {
-      showMuteIcon();
-    }
+    if (type === "video") showMuteIcon();
   }, [type, showMuteIcon]);
 
-  // Unified tap handler with debounce to distinguish single vs double
   const handleTap = useCallback(() => {
     const now = Date.now();
     const timeSinceLastTap = now - lastTapRef.current;
 
-    // Clear any pending single-tap action
     if (singleTapTimerRef.current) {
       clearTimeout(singleTapTimerRef.current);
       singleTapTimerRef.current = null;
     }
 
     if (timeSinceLastTap < DOUBLE_TAP_DELAY) {
-      // Double tap detected
-      lastTapRef.current = 0; // Reset to prevent triple-tap issues
+      lastTapRef.current = 0;
       handleDoubleTap();
     } else {
-      // Potential single tap - wait to see if another tap comes
       lastTapRef.current = now;
       singleTapTimerRef.current = setTimeout(() => {
         handleSingleTap();
@@ -448,34 +652,21 @@ function PostMediaInner({
     }
   }, [handleDoubleTap, handleSingleTap]);
 
-  // Long press handlers (pause video while held)
   const handleLongPressIn = useCallback(() => {
-    // Cancel any pending single-tap action when long press starts
     if (singleTapTimerRef.current) {
       clearTimeout(singleTapTimerRef.current);
       singleTapTimerRef.current = null;
     }
-
     if (type === "video" && isPlaying) {
       pause();
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
   }, [type, isPlaying, pause]);
 
-  useEffect(() => {
-    if (!isVisible && previewEndedRef.current) {
-      previewEndedRef.current = false;
-      setPreviewEnded(false);
-    }
-  }, [isVisible]);
-
   const handleLongPressOut = useCallback(() => {
-    if (type === "video" && isVisible && !previewEnded) {
-      play();
-    }
+    if (type === "video" && isVisible && !previewEnded) play();
   }, [type, isVisible, play, previewEnded]);
 
-  // Mute button handler - stop propagation to prevent tap handler
   const handleMutePress = useCallback(() => {
     toggleMute();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -493,22 +684,25 @@ function PostMediaInner({
       player.currentTime = 0;
       progress.value = 0;
     }
-    if (isVisible) {
-      play();
-    }
+    if (isVisible) play();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, [player, play, isVisible, progress]);
 
+  const handleImageLoad = useCallback((e: any) => {
+    if (e.source?.width && e.source?.height) {
+      setAspectRatio(e.source.width / e.source.height);
+    }
+  }, []);
+
+  // ─── Derived display flags ─────────────────────────────────────────────────
+
   const viewerSeesImagePaywall = !canView && type === "image";
+
   if (!media && !viewerSeesImagePaywall && !isPaidVideo) return null;
 
-  // Determine if we should show the video player
-  // Show VideoView as soon as player exists (not gated on isReady)
-  // VideoView handles its own loading state internally
   const showVideoView = player !== null;
-
-  // Show loading overlay when buffering or not ready
   const showLoadingOverlay = type === "video" && (isBuffering || !isReady);
+  const showPremiumBadge = price > 0 || isExclusive;
 
   const calculatedHeight = aspectRatio
     ? SCREEN_WIDTH / aspectRatio
@@ -518,81 +712,18 @@ function PostMediaInner({
     Math.min(calculatedHeight, MAX_MEDIA_HEIGHT),
   );
 
-  const showImagePaywall = viewerSeesImagePaywall;
-
-  const showPremiumBadge = price > 0 || isExclusive;
+  // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
     <View style={styles.container}>
       {type === "image" ? (
-        showImagePaywall ? (
-          <LinearGradient
-            colors={["#1a1040", "#0f0d2b"]}
-            style={[styles.paidImagePlaceholder, { height: containerHeight }]}
-          >
-            {/* Decorative blobs */}
-            <View style={styles.paywallBlobTop} />
-            <View style={styles.paywallBlobBottom} />
-
-            <View style={styles.paywallContent}>
-              {/* Lock badge */}
-              <LinearGradient
-                colors={Colors.gradient as [string, string, string]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.lockBadge}
-              >
-                <Ionicons name="lock-closed" size={28} color="#fff" />
-              </LinearGradient>
-
-              <Text style={styles.paywallTitle}>Exclusive Content</Text>
-              <Text style={styles.paywallSubtitle}>
-                Unlock this post and get access to premium content from this
-                creator.
-              </Text>
-
-              {/* Price badge — hide when no PPV price */}
-              {price > 0 ? (
-                <View style={styles.priceBadge}>
-                  <Ionicons
-                    name="pricetag"
-                    size={14}
-                    color={Colors.gradient[2]}
-                  />
-                  <Text style={styles.priceText}>${price.toFixed(2)}</Text>
-                </View>
-              ) : null}
-
-              {/* CTA button */}
-              <Pressable
-                onPress={handlePayPress}
-                style={({ pressed }) => [
-                  styles.payButton,
-                  pressed && styles.payButtonPressed,
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel="Pay to unlock"
-              >
-                <LinearGradient
-                  colors={Colors.gradient as [string, string, string]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.payButtonGradient}
-                >
-                  <Ionicons name="flash" size={16} color="#fff" />
-                  <Text style={styles.payButtonText}>Unlock Now</Text>
-                </LinearGradient>
-              </Pressable>
-
-              <Text style={styles.paywallHint}>
-                {price > 1
-                  ? "One-time purchase · Instant access"
-                  : isExclusive
-                    ? "Subscribe for access"
-                    : "Unlock for full access"}
-              </Text>
-            </View>
-          </LinearGradient>
+        viewerSeesImagePaywall ? (
+          <ImagePaywall
+            price={price}
+            isExclusive={isExclusive}
+            containerHeight={containerHeight}
+            onPay={handlePayPress}
+          />
         ) : (
           <Pressable onPress={handleTap}>
             <Image
@@ -606,6 +737,7 @@ function PostMediaInner({
           </Pressable>
         )
       ) : (
+        /* Video */
         <Pressable
           onPress={handleTap}
           onLongPress={handleLongPressIn}
@@ -614,97 +746,21 @@ function PostMediaInner({
         >
           <View style={[styles.media, { height: containerHeight }]}>
             {showVideoBlockPaywall ? (
-              <>
-                {thumbnail ? (
-                  <Image
-                    source={{ uri: thumbnail }}
-                    style={StyleSheet.absoluteFill}
-                    contentFit="contain"
-                    cachePolicy="disk"
-                    onLoad={handleImageLoad}
-                  />
-                ) : (
-                  <View
-                    style={[StyleSheet.absoluteFill, styles.media]}
-                    accessibilityElementsHidden
-                  />
-                )}
-                <LinearGradient
-                  colors={["#1a1040", "#0f0d2b"]}
-                  style={styles.videoLockedFullOverlay}
-                >
-                  <View style={styles.paywallBlobTop} />
-                  <View style={styles.paywallBlobBottom} />
-                  <View style={styles.paywallContent}>
-                    <LinearGradient
-                      colors={Colors.gradient as [string, string, string]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.lockBadge}
-                    >
-                      <Ionicons name="lock-closed" size={28} color="#fff" />
-                    </LinearGradient>
-
-                    <Text style={styles.paywallTitle}>
-                      Exclusive Content hai
-                    </Text>
-                    <Text style={styles.paywallSubtitle}>
-                      Unlock this post and get access to premium content from
-                      this creator.
-                    </Text>
-
-                    {price > 0 ? (
-                      <View style={styles.priceBadge}>
-                        <Ionicons
-                          name="pricetag"
-                          size={14}
-                          color={Colors.gradient[2]}
-                        />
-                        <Text style={styles.priceText}>
-                          ${price.toFixed(2)}
-                        </Text>
-                      </View>
-                    ) : null}
-
-                    <Pressable
-                      onPress={handlePayPress}
-                      style={({ pressed }) => [
-                        styles.payButton,
-                        pressed && styles.payButtonPressed,
-                      ]}
-                      accessibilityRole="button"
-                      accessibilityLabel="Pay to unlock"
-                    >
-                      <LinearGradient
-                        colors={Colors.gradient as [string, string, string]}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={styles.payButtonGradient}
-                      >
-                        <Ionicons name="flash" size={16} color="#fff" />
-                        <Text style={styles.payButtonText}>Unlock Now</Text>
-                      </LinearGradient>
-                    </Pressable>
-
-                    <Text style={styles.paywallHint}>
-                      {price > 1
-                        ? "One-time purchase · Instant access"
-                        : isExclusive
-                          ? "Subscribe for access"
-                          : "Unlock for full access"}
-                    </Text>
-                  </View>
-                </LinearGradient>
-              </>
+              <VideoLockedPaywall
+                price={price}
+                isExclusive={isExclusive}
+                thumbnail={thumbnail}
+                onPay={handlePayPress}
+                onImageLoad={handleImageLoad}
+              />
             ) : (
               <>
-                {/* Thumbnail as background while loading */}
+                {/* Thumbnail shown while video loads */}
                 {thumbnail && (
                   <Image
                     source={{ uri: thumbnail }}
                     style={[
                       StyleSheet.absoluteFill,
-                      // Hide thumbnail once video is ready and playing
                       { opacity: isReady && isPlaying ? 0 : 1 },
                     ]}
                     contentFit="contain"
@@ -712,7 +768,7 @@ function PostMediaInner({
                   />
                 )}
 
-                {/* Video player - render as soon as player exists */}
+                {/* Video player + scrub bar */}
                 {showVideoView && (
                   <View style={{ flex: 1 }}>
                     <VideoView
@@ -744,7 +800,6 @@ function PostMediaInner({
                             lockedSegmentStyle,
                           ]}
                         />
-
                         <Animated.View
                           style={[styles.thumb, thumbAnimatedStyle]}
                         />
@@ -753,94 +808,19 @@ function PostMediaInner({
                   </View>
                 )}
 
-                {/* Loading overlay */}
                 {showLoadingOverlay && (
                   <View style={styles.loadingOverlay}>
                     <ActivityIndicator color="white" size="large" />
                   </View>
                 )}
 
-                {/* Video paywall overlay — shown when preview ends on paid videos */}
                 {previewEnded && isPaidVideo && (
-                  <LinearGradient
-                    colors={["rgba(15,13,43,0.85)", "rgba(26,16,64,0.95)"]}
-                    style={styles.videoPaywallOverlay}
-                  >
-                    <View style={styles.paywallContent}>
-                      <LinearGradient
-                        colors={Colors.gradient as [string, string, string]}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={styles.lockBadge}
-                      >
-                        <Ionicons name="lock-closed" size={28} color="#fff" />
-                      </LinearGradient>
-
-                      <Text style={styles.paywallTitle}>Exclusive Content</Text>
-                      <Text style={styles.paywallSubtitle}>
-                        Unlock this post and get access to premium content from
-                        this creator.
-                      </Text>
-
-                      {price > 0 ? (
-                        <View style={styles.priceBadge}>
-                          <Ionicons
-                            name="pricetag"
-                            size={14}
-                            color={Colors.gradient[2]}
-                          />
-                          <Text style={styles.priceText}>
-                            ${price.toFixed(2)}
-                          </Text>
-                        </View>
-                      ) : null}
-
-                      <Pressable
-                        onPress={handlePayPress}
-                        style={({ pressed }) => [
-                          styles.payButton,
-                          pressed && styles.payButtonPressed,
-                        ]}
-                        accessibilityRole="button"
-                        accessibilityLabel="Pay to unlock"
-                      >
-                        <LinearGradient
-                          colors={Colors.gradient as [string, string, string]}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 0 }}
-                          style={styles.payButtonGradient}
-                        >
-                          <Ionicons name="flash" size={16} color="#fff" />
-                          <Text style={styles.payButtonText}>Unlock Now</Text>
-                        </LinearGradient>
-                      </Pressable>
-
-                      <Pressable
-                        onPress={handleWatchAgain}
-                        style={({ pressed }) => [
-                          styles.watchAgainButton,
-                          pressed && styles.watchAgainButtonPressed,
-                        ]}
-                        accessibilityRole="button"
-                        accessibilityLabel="Watch preview again"
-                      >
-                        <Ionicons
-                          name="refresh"
-                          size={18}
-                          color="rgba(255,255,255,0.95)"
-                        />
-                        <Text style={styles.watchAgainText}>Watch again</Text>
-                      </Pressable>
-
-                      <Text style={styles.paywallHint}>
-                        {price > 1
-                          ? "One-time purchase · Instant access"
-                          : isExclusive
-                            ? "Subscribe for access"
-                            : "Unlock for full access"}
-                      </Text>
-                    </View>
-                  </LinearGradient>
+                  <VideoPreviewEndedOverlay
+                    price={price}
+                    isExclusive={isExclusive}
+                    onPay={handlePayPress}
+                    onWatchAgain={handleWatchAgain}
+                  />
                 )}
 
                 <AnimatedPressable
@@ -860,9 +840,9 @@ function PostMediaInner({
         </Pressable>
       )}
 
-      {/* Heart overlay for double-tap like */}
+      {/* Heart animation overlay */}
       <Animated.View
-        style={[styles.heartContainer, animatedStyle]}
+        style={[styles.heartContainer, heartAnimatedStyle]}
         pointerEvents="none"
       >
         <Ionicons
@@ -893,6 +873,8 @@ function PostMediaInner({
     </View>
   );
 }
+
+// ─── Public export (wrapped in error boundary) ────────────────────────────────
 
 function PostMedia(props: Props) {
   return (
