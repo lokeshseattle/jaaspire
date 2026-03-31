@@ -114,6 +114,15 @@ export default function AppLayout() {
       />
 
       <Stack.Screen
+        name="wallet"
+        options={{
+          headerShown: true,
+          headerTitle: "Wallet",
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+
+      <Stack.Screen
         name="messages"
         options={{
           headerShown: true,
@@ -143,7 +152,6 @@ export default function AppLayout() {
       <Stack.Screen
         name="user/[username]"
         options={({ route }) => {
-          const { username } = route.params as { username: string };
           return {
             headerShown: true,
             headerBackButtonDisplayMode: "minimal",

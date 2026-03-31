@@ -1,20 +1,27 @@
-import { useDebounce } from '@/hooks/use-debounce';
-import ExploreGrid from '@/src/components/explore/ExploreGrid';
-import { ExploreSearchBar } from '@/src/components/explore/ExploreSearchBar';
-import { ProfileSuggestion, ProfileSuggestions } from '@/src/components/explore/ProfileSuggestions';
-import { useGetExploreQuery } from '@/src/features/post/explore.hooks';
-import { useSearchUserQuery } from '@/src/features/profile/profile.hooks';
-import { AppTheme } from '@/src/theme';
-import { useTheme } from '@/src/theme/ThemeProvider';
-import { router } from 'expo-router';
-import React, { useCallback, useState } from 'react';
-import { Keyboard, StyleSheet, View } from 'react-native';
+import { useDebounce } from "@/hooks/use-debounce";
+import ExploreGrid from "@/src/components/explore/ExploreGrid";
+import { ExploreSearchBar } from "@/src/components/explore/ExploreSearchBar";
+import {
+  ProfileSuggestion,
+  ProfileSuggestions,
+} from "@/src/components/explore/ProfileSuggestions";
+import { useGetExploreQuery } from "@/src/features/post/explore.hooks";
+import {
+  useGetProfile,
+  useSearchUserQuery,
+} from "@/src/features/profile/profile.hooks";
+import { AppTheme } from "@/src/theme";
+import { useTheme } from "@/src/theme/ThemeProvider";
+import { router } from "expo-router";
+import React, { useCallback, useState } from "react";
+import { Keyboard, StyleSheet, View } from "react-native";
 
 export default function SearchScreen() {
-  const { theme } = useTheme()
-  const styles = createStyles(theme)
-
-  const [searchText, setSearchText] = useState('');
+  const { theme } = useTheme();
+  const styles = createStyles(theme);
+  const { data: profileData } = useGetProfile();
+  const me = profileData?.data;
+  const [searchText, setSearchText] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const debouncedSearch = useDebounce(searchText, 500);
 
@@ -40,7 +47,7 @@ export default function SearchScreen() {
   }, []);
 
   const handleSearchClear = useCallback(() => {
-    setSearchText('');
+    setSearchText("");
   }, []);
 
   const handleSubmitSearch = useCallback(() => {
@@ -49,28 +56,37 @@ export default function SearchScreen() {
     setIsSearchFocused(false);
     if (trimmed.length === 0) return;
     router.push({
-      pathname: '/global-search',
+      pathname: "/global-search",
       params: { q: trimmed },
     });
   }, [searchText]);
 
-  const handleProfileSelect = useCallback((profile: ProfileSuggestion) => {
-    // Handle profile selection - navigate to profile screen
-    console.log('Selected profile:', profile);
-    handleSearchBlur();
-    router.push({
-      pathname: '/user/[username]',
-      params: {
-        username: profile.username
+  const handleProfileSelect = useCallback(
+    (profile: ProfileSuggestion) => {
+      // Handle profile selection - navigate to profile screen
+      console.log("Selected profile:", profile);
+      handleSearchBlur();
+      if (profile.id === me?.id) {
+        router.push({
+          pathname: "/(app)/(tabs)/profile",
+        });
+        return;
       }
-    });
-  }, [handleSearchBlur]);
+      router.push({
+        pathname: "/user/[username]",
+        params: {
+          username: profile.username,
+        },
+      });
+    },
+    [handleSearchBlur],
+  );
 
   const handlePostPress = useCallback((postId: number) => {
     // Navigate to post detail screen
-    console.log('Post pressed:', postId);
+    console.log("Post pressed:", postId);
     router.push({
-      pathname: '/post/[postId]',
+      pathname: "/post/[postId]",
       params: {
         postId: postId.toString(),
       },
@@ -124,13 +140,14 @@ export default function SearchScreen() {
   );
 }
 
-const createStyles = (theme: AppTheme) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
-  content: {
-    flex: 1,
-    position: 'relative',
-  },
-});
+const createStyles = (theme: AppTheme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    content: {
+      flex: 1,
+      position: "relative",
+    },
+  });

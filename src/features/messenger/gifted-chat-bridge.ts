@@ -1,5 +1,7 @@
 import type { ComponentType } from "react";
 
+import type { MessengerMediaAttachment } from "@/src/services/api/api.types";
+
 export type GiftedUser = {
   _id: string | number;
   name?: string;
@@ -14,6 +16,8 @@ export type GiftedIMessage = {
   pending?: boolean;
   /** Outgoing: peer has opened the thread (WhatsApp-style read receipt). */
   isSeen?: boolean;
+  /** Media attached to the message (images, videos, etc.). */
+  messengerAttachments?: MessengerMediaAttachment[];
 };
 
 /* Avoid resolving package `types` to .tsx sources (strict TS errors in the library). */

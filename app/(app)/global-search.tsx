@@ -4,11 +4,12 @@ import {
   useGlobalSearchPostsQuery,
   useGlobalSearchQuery,
 } from "@/src/features/post/explore.hooks";
+import { useGetProfile } from "@/src/features/profile/profile.hooks";
 import type { SearchResultUser } from "@/src/services/api/api.types";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { Image } from "expo-image";
-import { Stack, router, useLocalSearchParams } from "expo-router";
+import { router, Stack, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -42,9 +43,7 @@ function useNormalizedQueryParam(): string {
 }
 
 function flattenPostIds(
-  data:
-    | ReturnType<typeof useGlobalSearchPostsQuery>["data"]
-    | undefined,
+  data: ReturnType<typeof useGlobalSearchPostsQuery>["data"] | undefined,
 ): number[] {
   if (!data?.pages) return [];
   return data.pages.flatMap((page) =>
@@ -134,6 +133,8 @@ function PeopleSearchTab({
   fetchNextPage: () => void;
 }) {
   const { theme } = useTheme();
+  const { data: profileData } = useGetProfile();
+  const me = profileData?.data;
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const onEndReached = useCallback(() => {
@@ -154,12 +155,18 @@ function PeopleSearchTab({
         </View>
         <Pressable
           style={styles.viewProfileBtn}
-          onPress={() =>
+          onPress={() => {
+            if (item.id === me?.id) {
+              router.push({
+                pathname: "/(app)/(tabs)/profile",
+              });
+              return;
+            }
             router.push({
               pathname: "/user/[username]",
               params: { username: item.username },
-            })
-          }
+            });
+          }}
         >
           <Text style={styles.viewProfileLabel}>View profile</Text>
         </Pressable>

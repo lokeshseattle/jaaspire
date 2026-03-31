@@ -832,6 +832,28 @@ export type MessengerUser = {
   [key: string]: unknown;
 };
 
+export type MessengerMediaAttachment = {
+  id: string;
+  filename: string;
+  thumbnail: string;
+  driver: number;
+  type: string; // e.g. "webp"
+  user_id: number;
+  post_id: number | null;
+  message_id: number | null;
+  coconut_id: string | null;
+  has_thumbnail: number; // consider boolean if API can change
+  duration: number | null;
+  preview_duration: number | null;
+  status: string | null;
+  created_at: string; // ISO date
+  updated_at: string; // ISO date
+  payment_request_id: number | null;
+  attachmentType: "image" | "video" | "audio" | "file"; // extend if needed
+  path: string;
+  previewurl: string | null;
+};
+
 export type MessengerMessage = {
   id: number;
   sender_id: number;
@@ -844,6 +866,7 @@ export type MessengerMessage = {
   updated_at?: string;
   sender: MessengerUser;
   receiver: MessengerUser;
+  attachments: MessengerMediaAttachment[];
 };
 
 export type MessengerThreadPagination = {
@@ -862,12 +885,42 @@ export type MessengerMessagesResponse = {
 export type SendMessengerMessageRequest = {
   message: string;
   price: number;
+  attachments: string[];
+};
+
+export type MessengerMessageUser = {
+  id: number;
+  name: string;
+  username: string;
+  avatar: string;
+  profileUrl: string;
+  verified_user: boolean;
+  canEarnMoney?: boolean;
+};
+export type MessengerMessageAttachment = unknown; // replace when you know the shape
+
+export type MessengerMessagePayload = {
+  id: number;
+  sender_id: number;
+  receiver_id: number;
+  message: string;
+  isSeen: 0 | 1; // 0 | 1 if you want to narrow
+  price: number;
+  is_ai_conversation: 0 | 1; // 0 | 1 if you want to narrow
+  created_at: string;
+  hasUserUnlockedMessage: boolean;
+  sender: MessengerMessageUser;
+  receiver: MessengerMessageUser;
+  attachments: MessengerMediaAttachment[];
 };
 
 /** Generic success; adjust if backend returns a message payload. */
 export type SendMessengerMessageResponse = {
-  status?: string;
-  data?: unknown;
+  status: string;
+  data: {
+    message: MessengerMessagePayload;
+  };
+  errors: boolean;
 };
 
 export type SendAiChatMessageRequest = {
@@ -898,4 +951,10 @@ export type NotificationCountsResponse = {
     messages: number | string;
     wallet_balance: number | string;
   };
+};
+
+export type UploadChunkResponse = {
+  success: boolean;
+  uploaded_chunk: number;
+  file_id: string;
 };

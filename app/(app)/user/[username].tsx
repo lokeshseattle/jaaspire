@@ -70,6 +70,8 @@ export default function UserProfileScreen() {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const headerHeight = useHeaderHeight();
   const { data: me } = useGetProfile();
+
+  console.log(981792891);
   const {
     data: profileByUsername,
     isLoading: profileByUsernameLoading,
@@ -230,6 +232,19 @@ export default function UserProfileScreen() {
     styles.headerRightButton,
   ]);
 
+  console.log({ activeTab }, 981792891);
+
+  const mode = useMemo(() => {
+    switch (activeTab) {
+      case "video":
+        return "video";
+      case "premium":
+        return "exclusive";
+      default:
+        return "";
+    }
+  }, [activeTab]);
+
   const {
     data: feedData,
     refetch: refetchFeed,
@@ -237,7 +252,7 @@ export default function UserProfileScreen() {
     hasNextPage,
     fetchNextPage,
     isFetchingNextPage,
-  } = useGetUserFeedQuery(username, activeTab === "video" ? "video" : "", {
+  } = useGetUserFeedQuery(username, mode, {
     enabled: feedEnabled,
   });
 
@@ -276,9 +291,9 @@ export default function UserProfileScreen() {
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // Handle tab change with video cleanup
-  const handleTabChange = useCallback((key: string) => {
-    setActiveTab(key as TabKey);
-  }, []);
+  const handleTabChange = (key: TabKey) => {
+    setActiveTab(key);
+  };
 
   // Shared header component for both views
   const ListHeader = useMemo(
@@ -314,9 +329,10 @@ export default function UserProfileScreen() {
     switch (activeTab) {
       case "gallery":
       case "video":
+      case "premium":
         return (
           <ProfileGridView
-            postIds={canViewPosts ? postIds : []}
+            postIds={postIds}
             ListHeaderComponent={ListHeader}
             onRefresh={handleRefresh}
             isRefreshing={isRefetchingFeed}
@@ -330,28 +346,13 @@ export default function UserProfileScreen() {
       case "home_feed":
         return (
           <ProfileFeedView
-            postIds={canViewPosts ? postIds : []}
+            postIds={postIds}
             ListHeaderComponent={ListHeader}
             onRefresh={handleRefresh}
             isRefreshing={isRefetchingFeed}
             onEndReached={handleEndReached}
             isFetchingNextPage={isFetchingNextPage}
             isTabActive={activeTab === "home_feed"}
-            ListEmptyComponent={postsListEmpty}
-          />
-        );
-
-      case "premium":
-        // TODO: Implement premium view
-        return (
-          <ProfileGridView
-            postIds={[]}
-            ListHeaderComponent={ListHeader}
-            onRefresh={handleRefresh}
-            isRefreshing={isRefetchingFeed}
-            onEndReached={handleEndReached}
-            isFetchingNextPage={isFetchingNextPage}
-            postRouteUsername={username ?? undefined}
             ListEmptyComponent={postsListEmpty}
           />
         );

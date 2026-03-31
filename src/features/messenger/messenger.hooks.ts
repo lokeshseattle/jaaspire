@@ -2,15 +2,22 @@ import { apiClient } from "@/src/services/api/api.client";
 import {
   MarkMessengerMessagesReadResponse,
   MessengerContactsResponse,
+  MessengerMediaAttachment,
+  MessengerMessage,
+  MessengerMessagePayload,
   MessengerMessagesResponse,
+  MessengerMessageUser,
+  MessengerUser,
   PossibleErrorResponse,
   SendAiChatMessageRequest,
   SendAiChatMessageResponse,
   SendMessengerMessageRequest,
-  SendMessengerMessageResponse,
+  SendMessengerMessageResponse
 } from "@/src/services/api/api.types";
 import {
+  InfiniteData,
   keepPreviousData,
+  QueryClient,
   useInfiniteQuery,
   useMutation,
   UseMutationResult,
@@ -68,6 +75,34 @@ function resolveMessengerNextBeforeId(
   return Math.min(...ids);
 }
 
+/** Align attachment fields from API (e.g. snake_case preview URL). */
+function normalizeMessengerAttachment(
+  a: MessengerMediaAttachment,
+): MessengerMediaAttachment {
+  const raw = a as MessengerMediaAttachment & {
+    preview_url?: string | null;
+  };
+  const preview =
+    firstNonEmptyString(a.previewurl ?? undefined, raw.preview_url ?? undefined) ??
+    a.previewurl ??
+    null;
+  return {
+    ...a,
+    previewurl: preview,
+  };
+}
+
+function firstNonEmptyString(
+  ...vals: (string | null | undefined)[]
+): string | undefined {
+  for (const v of vals) {
+    if (typeof v !== "string") continue;
+    const t = v.trim();
+    if (t.length > 0) return t;
+  }
+  return undefined;
+}
+
 /** Coerce message ids to numbers so deduping across pages is stable. */
 function normalizeMessengerMessagesPage(
   body: MessengerMessagesResponse,
@@ -78,9 +113,118 @@ function normalizeMessengerMessagesPage(
     ...body,
     data: {
       ...body.data,
-      messages: list.map((m) => ({ ...m, id: Number(m.id) })),
+      messages: list.map((m) => ({
+        ...m,
+        id: Number(m.id),
+        message: m.message ?? "",
+        attachments: m.attachments?.map(normalizeMessengerAttachment),
+      })),
     },
   };
+}
+
+function messengerMessageUserToMessengerUser(
+  u: MessengerMessageUser,
+): MessengerUser {
+  return {
+    id: u.id,
+    name: u.name,
+    username: u.username,
+    avatar: u.avatar,
+    bio: "",
+    profileUrl: u.profileUrl,
+    canEarnMoney: u.canEarnMoney ?? false,
+  };
+}
+
+/** Maps send API payload into the same shape used by GET thread messages. */
+export function messengerPayloadToMessage(
+  payload: MessengerMessagePayload,
+): MessengerMessage {
+  const id = Number(payload.id);
+  return {
+    id,
+    sender_id: payload.sender_id,
+    receiver_id: payload.receiver_id,
+    message: payload.message ?? "",
+    isSeen: Boolean(payload.isSeen),
+    price: payload.price,
+    is_ai_conversation: Boolean(payload.is_ai_conversation),
+    created_at: payload.created_at,
+    sender: messengerMessageUserToMessengerUser(payload.sender),
+    receiver: messengerMessageUserToMessengerUser(payload.receiver),
+    attachments: payload.attachments?.map(normalizeMessengerAttachment),
+  };
+}
+
+/** Deduped merge into page 0; avoids refetch after POST /send. */
+export function mergeMessengerMessageIntoInfiniteCache(
+  queryClient: QueryClient,
+  peerUserId: number,
+  message: MessengerMessage,
+): void {
+  const key = messengerMessagesQueryKey(peerUserId);
+  const id = Number(message.id);
+  const safeMessage: MessengerMessage = {
+    ...message,
+    id,
+    message: message.message ?? "",
+    attachments: message.attachments?.map(normalizeMessengerAttachment),
+  };
+  queryClient.setQueryData<InfiniteData<MessengerMessagesResponse>>(
+    key,
+    (prev) => {
+      const normalized = normalizeMessengerMessagesPage({
+        status: "success",
+        data: {
+          messages: [safeMessage],
+          pagination: { hasMore: false, oldestMessageId: id },
+        },
+      });
+      if (!prev || prev.pages.length === 0) {
+        return {
+          pageParams: [undefined],
+          pages: [normalized],
+        };
+      }
+      for (const page of prev.pages) {
+        if (page.data.messages.some((m) => Number(m.id) === id)) {
+          return prev;
+        }
+      }
+      const firstPage = prev.pages[0];
+      const nextMessages = [...firstPage.data.messages, safeMessage];
+      return {
+        ...prev,
+        pages: [
+          {
+            ...firstPage,
+            data: {
+              ...firstPage.data,
+              messages: nextMessages,
+            },
+          },
+          ...prev.pages.slice(1),
+        ],
+      };
+    },
+  );
+}
+
+/** Used by realtime to skip redundant refetches when POST already merged the row. */
+export function isMessengerMessageIdInThreadCache(
+  queryClient: QueryClient,
+  peerUserId: number,
+  messageId: number,
+): boolean {
+  if (!Number.isFinite(messageId)) return false;
+  const cached = queryClient.getQueryData<
+    InfiniteData<MessengerMessagesResponse>
+  >(messengerMessagesQueryKey(peerUserId));
+  if (!cached) return false;
+  return cached.pages.some((page) =>
+    page.data.messages.some((m) => Number(m.id) === messageId),
+  );
 }
 
 export const useInfiniteMessengerMessages = (peerUserId: number) => {
@@ -119,8 +263,15 @@ export const useSendMessengerMessage = (
           body,
         )
         .then((r) => r.data),
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["messenger", "contacts"] });
+    onSuccess: (response) => {
+      const payload = response?.data?.message;
+      if (payload) {
+        mergeMessengerMessageIntoInfiniteCache(
+          queryClient,
+          peerUserId,
+          messengerPayloadToMessage(payload),
+        );
+      }
     },
   });
 };
@@ -136,9 +287,6 @@ export const useSendAiChatMessage = (): UseMutationResult<
       apiClient
         .post<SendAiChatMessageResponse>("/ai-chat/send", body)
         .then((r) => r.data),
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["messenger", "contacts"] });
-    },
   });
 };
 

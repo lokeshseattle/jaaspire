@@ -1,8 +1,10 @@
+import { PickedFile, useMediaPicker } from "@/hooks/use-media-picker";
 import {
   appendGiftedMessages,
   GiftedChat,
   type GiftedIMessage,
 } from "@/src/features/messenger/gifted-chat-bridge";
+import { MessageMediaStack } from "@/src/features/messenger/messenger-message-media";
 import { messengerMessagesQueryKey } from "@/src/features/messenger/messenger-query-keys";
 import {
   useGetMessengerContacts,
@@ -12,6 +14,10 @@ import {
   useSendMessengerMessage,
 } from "@/src/features/messenger/messenger.hooks";
 import { useGetProfile } from "@/src/features/profile/profile.hooks";
+import {
+  uploadAndProcessMessageAttachment,
+  uploadImageAttachment,
+} from "@/src/features/upload/upload.hooks";
 import { useChatRealtime } from "@/src/lib/pusher";
 import type {
   MessengerMessage,
@@ -20,6 +26,7 @@ import type {
 } from "@/src/services/api/api.types";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
+import { normalizeImage } from "@/src/utils/helpers";
 import { getMessengerPeer } from "@/src/utils/messenger-contact";
 import { Ionicons } from "@expo/vector-icons";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -38,6 +45,7 @@ import React, {
   useLayoutEffect,
   useMemo,
   useState,
+  type ComponentProps,
 } from "react";
 import {
   ActivityIndicator,
@@ -51,10 +59,9 @@ import {
 } from "react-native";
 import {
   Bubble,
-  Composer,
+  InputToolbar,
   Send,
   type BubbleProps,
-  type ComposerProps,
   type SendProps,
 } from "react-native-gifted-chat";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -72,7 +79,7 @@ function peerMessengerUser(
 function toGiftedMessage(m: MessengerMessage): GiftedIMessage {
   return {
     _id: m.id,
-    text: m.message,
+    text: m.message ?? "",
     createdAt: new Date(m.created_at),
     user: {
       _id: m.sender_id,
@@ -80,6 +87,7 @@ function toGiftedMessage(m: MessengerMessage): GiftedIMessage {
       avatar: m.sender.avatar,
     },
     isSeen: m.isSeen,
+    messengerAttachments: m.attachments?.length > 0 ? m.attachments : undefined,
   };
 }
 
@@ -89,9 +97,9 @@ function paramString(v: string | string[] | undefined): string | undefined {
 }
 
 /** GiftedChat passes full toolbar props to renderComposer at runtime; types only list ComposerProps. */
-type GiftedComposerToolbarProps = ComposerProps & {
-  onSend?: SendProps<GiftedIMessage>["onSend"];
-};
+// type GiftedComposerToolbarProps = ComposerProps & {
+//   onSend?: SendProps<GiftedIMessage>["onSend"];
+// };
 
 const MERGED_INPUT_MIN_H = 40;
 const MERGED_INPUT_MAX_H = 120;
@@ -226,47 +234,149 @@ type MergedComposerStyles = ReturnType<typeof createStyles>;
  * so multiline grows like stock chat apps. We only style + cap max height; the outer bubble
  * grows with the composer row.
  */
-function MergedComposerRow({
-  text,
-  textInputProps,
-  onSend,
-  styles,
+// function MergedComposerRow({
+//   text,
+//   textInputProps,
+//   onSend,
+//   styles,
+//   theme,
+// }: {
+//   text?: string;
+//   textInputProps?: ComposerProps["textInputProps"];
+//   onSend?: GiftedComposerToolbarProps["onSend"];
+//   styles: MergedComposerStyles;
+//   theme: AppTheme;
+// }) {
+//   return (
+//     <View style={styles.mergedComposer}>
+//       <View style={styles.mergedComposerInputWrap}>
+//         <Composer
+//           text={text}
+//           textInputProps={{
+//             ...textInputProps,
+//             textAlignVertical: "top",
+//             style: [styles.mergedTextInput, textInputProps?.style],
+//           }}
+//         />
+//       </View>
+//       <Send
+//         text={text}
+//         onSend={onSend}
+//         isSendButtonAlwaysVisible
+//         containerStyle={styles.mergedSendWrap}
+//         sendButtonProps={{
+//           accessibilityLabel: "Send message",
+//           hitSlop: { top: 6, bottom: 6, left: 6, right: 6 },
+//         }}
+//       >
+//         <View
+//           style={[styles.sendButton, { backgroundColor: theme.colors.primary }]}
+//         >
+//           <Ionicons name="send" size={18} color="#fff" />
+//         </View>
+//       </Send>
+//     </View>
+//   );
+// }
+
+function AttachmentPreview({
+  attachment,
+  onRemove,
+  isUploading,
   theme,
 }: {
-  text?: string;
-  textInputProps?: ComposerProps["textInputProps"];
-  onSend?: GiftedComposerToolbarProps["onSend"];
-  styles: MergedComposerStyles;
+  attachment: PickedFile | null;
+  onRemove: () => void;
+  isUploading: boolean;
   theme: AppTheme;
 }) {
+  if (!attachment) return null;
+
   return (
-    <View style={styles.mergedComposer}>
-      <View style={styles.mergedComposerInputWrap}>
-        <Composer
-          text={text}
-          textInputProps={{
-            ...textInputProps,
-            textAlignVertical: "top",
-            style: [styles.mergedTextInput, textInputProps?.style],
-          }}
-        />
-      </View>
-      <Send
-        text={text}
-        onSend={onSend}
-        isSendButtonAlwaysVisible
-        containerStyle={styles.mergedSendWrap}
-        sendButtonProps={{
-          accessibilityLabel: "Send message",
-          hitSlop: { top: 6, bottom: 6, left: 6, right: 6 },
+    <View
+      style={{
+        paddingHorizontal: 12,
+        paddingTop: 8,
+        paddingBottom: 4,
+        backgroundColor: theme.colors.background,
+      }}
+    >
+      <View
+        style={{
+          borderRadius: 16,
+          backgroundColor: theme.colors.surface,
+          padding: 6,
+          flexDirection: "row",
+          alignItems: "center",
         }}
       >
+        {/* Preview */}
+        <Image
+          source={{ uri: attachment.uri }}
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: 12,
+          }}
+          contentFit="cover"
+        />
+
+        {/* Meta */}
         <View
-          style={[styles.sendButton, { backgroundColor: theme.colors.primary }]}
+          style={{
+            flex: 1,
+            marginLeft: 10,
+          }}
         >
-          <Ionicons name="send" size={18} color="#fff" />
+          <Text
+            style={{
+              color: theme.colors.textPrimary,
+              fontSize: 14,
+              fontWeight: "500",
+            }}
+            numberOfLines={1}
+          >
+            {attachment.type.startsWith("video/")
+              ? "Video selected"
+              : "Image selected"}
+          </Text>
+
+          <Text
+            style={{
+              color: theme.colors.textSecondary,
+              fontSize: 12,
+              marginTop: 2,
+            }}
+          >
+            {isUploading ? "Uploading attachment..." : "Tap + to replace"}
+          </Text>
         </View>
-      </Send>
+
+        {/* Remove */}
+        <Pressable
+          onPress={onRemove}
+          disabled={isUploading}
+          hitSlop={8}
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 14,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: theme.colors.background,
+          }}
+        >
+          {isUploading ? (
+            <ActivityIndicator size="small" color={theme.colors.primary} />
+          ) : (
+            <Ionicons
+              name="close"
+              size={16}
+              color={theme.colors.textSecondary}
+            />
+          )}
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -279,6 +389,11 @@ export default function MessengerChatScreen() {
   const systemScheme = useColorScheme();
   const colorScheme: "light" | "dark" =
     mode === "system" ? (systemScheme ?? "light") : mode;
+  const [attachments, setAttachments] = useState<PickedFile | null>(null);
+  const [processedAttachmentId, setProcessedAttachmentId] = useState<
+    string | null
+  >(null);
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
 
   const { senderId, name, username, avatar, isAiBot } = useLocalSearchParams<{
     senderId?: string | string[];
@@ -310,7 +425,49 @@ export default function MessengerChatScreen() {
   const sendAiChatMutation = useSendAiChatMessage();
   const markMessageAsReadMutation = useMarkMessageAsRead();
   const queryClient = useQueryClient();
+  const { openMediaPicker } = useMediaPicker();
 
+  const handleAttachMedia = useCallback(() => {
+    openMediaPicker({
+      mediaTypes: ["images", "videos"],
+      allowsEditing: false,
+      onChange: async (file: PickedFile) => {
+        setAttachments(file);
+        setProcessedAttachmentId(null);
+        setIsUploadingAttachment(true);
+        try {
+          if (file.type.startsWith("image/")) {
+            const normalized = await normalizeImage(file.uri);
+            const uploaded = await uploadImageAttachment(
+              normalized.uri,
+              file.name ?? "image.jpg",
+              "image/jpeg",
+            );
+            setProcessedAttachmentId(uploaded.attachmentID);
+          } else {
+            const { processed } = await uploadAndProcessMessageAttachment({
+              fileUri: file.uri,
+              fileName: file.name ?? "video.mp4",
+            });
+            setProcessedAttachmentId(processed.attachmentID);
+          }
+        } catch {
+          Alert.alert(
+            "Upload failed",
+            "Could not upload this attachment. Please try again.",
+          );
+          setAttachments(null);
+          setProcessedAttachmentId(null);
+        } finally {
+          setIsUploadingAttachment(false);
+        }
+      },
+    });
+  }, [openMediaPicker]);
+  const removeAttachment = useCallback(() => {
+    setAttachments(null);
+    setProcessedAttachmentId(null);
+  }, []);
   useChatRealtime(peerId, myId);
 
   useEffect(() => {
@@ -423,14 +580,14 @@ export default function MessengerChatScreen() {
     const serverCountByText = new Map<string, number>();
     for (const m of serverMessages) {
       if (m.sender_id !== myId) continue;
-      const t = m.message.trim();
+      const t = (m.message ?? "").trim();
       serverCountByText.set(t, (serverCountByText.get(t) ?? 0) + 1);
     }
 
     const pendingQueueByText = new Map<string, GiftedIMessage[]>();
     for (const p of pending) {
       if (typeof p._id !== "string" || !p._id.startsWith("temp-")) continue;
-      const t = p.text.trim();
+      const t = (p.text ?? "").trim();
       const q = pendingQueueByText.get(t) ?? [];
       q.push(p);
       pendingQueueByText.set(t, q);
@@ -440,7 +597,7 @@ export default function MessengerChatScreen() {
       if (typeof msg._id !== "string" || !msg._id.startsWith("temp-")) {
         return true;
       }
-      const t = msg.text.trim();
+      const t = (msg.text ?? "").trim();
       const queue = pendingQueueByText.get(t) ?? [];
       const ordinal = queue.findIndex((p) => p._id === msg._id) + 1;
       if (ordinal === 0) return true;
@@ -464,15 +621,56 @@ export default function MessengerChatScreen() {
   const onSend = useCallback(
     async (messages: GiftedIMessage[]) => {
       if (myId == null) return;
-      // if (sendMutation.isPending) return;
+      if (sendMutation.isPending || sendAiChatMutation.isPending) return;
       const msg = messages[0];
-      const trimmed = msg?.text?.trim();
-      if (!trimmed) return;
+      const trimmed = msg?.text?.trim() ?? "";
+      const picked = attachments;
+      if (!trimmed && !picked) return;
+      if (picked && !processedAttachmentId) {
+        if (isUploadingAttachment) {
+          Alert.alert("Please wait", "Your attachment is still uploading.");
+        } else {
+          Alert.alert(
+            "Attachment not ready",
+            "Wait for the upload to finish or remove the attachment.",
+          );
+        }
+        return;
+      }
       const tempId = `temp-${Date.now()}`;
+      const optimisticAttachments = picked
+        ? [
+            {
+              id: processedAttachmentId ?? `temp-attachment-${Date.now()}`,
+              filename: picked.name,
+              thumbnail: picked.uri,
+              driver: 0,
+              type: picked.type,
+              user_id: myId,
+              post_id: null,
+              message_id: null,
+              coconut_id: null,
+              has_thumbnail: 1,
+              duration: null,
+              preview_duration: null,
+              status: null,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              payment_request_id: null,
+              attachmentType: (picked.type.startsWith("video/")
+                ? "video"
+                : "image") as "video" | "image",
+              path: picked.uri,
+              previewurl: null,
+            },
+          ]
+        : undefined;
       const optimistic: GiftedIMessage = {
         ...msg,
+        text: trimmed || " ",
         _id: tempId,
         pending: true,
+        messengerAttachments: optimisticAttachments,
         user: {
           _id: myId,
           name: me?.data?.name,
@@ -482,6 +680,14 @@ export default function MessengerChatScreen() {
       setPending((prev) => appendGiftedMessages(prev, [optimistic]));
       try {
         if (isAiConversation) {
+          if (!trimmed) {
+            Alert.alert(
+              "Message required",
+              "Please add a message before sending to this chat.",
+            );
+            setPending((prev) => prev.filter((m) => m._id !== tempId));
+            return;
+          }
           const res = await sendAiChatMutation.mutateAsync({
             message: trimmed,
           });
@@ -538,21 +744,16 @@ export default function MessengerChatScreen() {
               };
             },
           );
-          await queryClient.invalidateQueries({
-            queryKey: ["messenger", "contacts"],
-          });
+          setAttachments(null);
+          setProcessedAttachmentId(null);
         } else {
-          await sendMutation.mutateAsync(
-            { message: trimmed, price: 0 },
-            {
-              onSuccess: (data) => {
-                console.log("121212", data.data);
-              },
-            },
-          );
-          await queryClient.refetchQueries({
-            queryKey: messengerMessagesQueryKey(peerId),
+          await sendMutation.mutateAsync({
+            message: trimmed,
+            price: 0,
+            attachments: processedAttachmentId ? [processedAttachmentId] : [],
           });
+          setAttachments(null);
+          setProcessedAttachmentId(null);
         }
         /** Let React Query subscribers apply cache before dropping the temp row (prevents flicker). */
         await new Promise<void>((resolve) => queueMicrotask(() => resolve()));
@@ -571,6 +772,9 @@ export default function MessengerChatScreen() {
       queryClient,
       peerId,
       isAiConversation,
+      attachments,
+      processedAttachmentId,
+      isUploadingAttachment,
     ],
   );
 
@@ -584,26 +788,65 @@ export default function MessengerChatScreen() {
 
   const styles = useMemo(() => createStyles(theme), [theme]);
 
+  const renderInputToolbar = useCallback(
+    (toolbarProps: ComponentProps<typeof InputToolbar<GiftedIMessage>>) => (
+      <View
+        style={[
+          styles.inputToolbarOuter,
+          { paddingBottom: Math.min(insets.bottom, 6) },
+        ]}
+      >
+        <AttachmentPreview
+          attachment={attachments}
+          onRemove={removeAttachment}
+          isUploading={isUploadingAttachment}
+          theme={theme}
+        />
+        <InputToolbar<GiftedIMessage>
+          {...toolbarProps}
+          containerStyle={[
+            styles.inputToolbarInner,
+            toolbarProps.containerStyle,
+          ]}
+        />
+      </View>
+    ),
+    [
+      attachments,
+      removeAttachment,
+      isUploadingAttachment,
+      theme,
+      insets.bottom,
+      styles,
+    ],
+  );
+
   const renderTicks = useCallback(
     (currentMessage: GiftedIMessage) => {
       if (myId == null || currentMessage.user._id !== myId) return null;
+
       return (
         <View style={styles.tickRow}>
           {currentMessage.pending ? (
+            // ⏳ Sending
             <Ionicons
               name="time-outline"
               size={12}
               color="rgba(255,255,255,0.88)"
             />
-          ) : (
+          ) : currentMessage.isSeen ? (
+            // ✅✅ Seen (blue double tick)
             <Ionicons
               name="checkmark-done"
               size={14}
-              color={
-                currentMessage.isSeen
-                  ? READ_RECEIPT_BLUE
-                  : "rgba(255,255,255,0.62)"
-              }
+              color={READ_RECEIPT_BLUE}
+            />
+          ) : (
+            // ✅ Delivered (single tick)
+            <Ionicons
+              name="checkmark"
+              size={14}
+              color="rgba(255,255,255,0.62)"
             />
           )}
         </View>
@@ -660,6 +903,12 @@ export default function MessengerChatScreen() {
         onSend={onSend}
         user={currentUser}
         renderBubble={renderBubble}
+        renderCustomView={(bubbleProps: BubbleProps<GiftedIMessage>) => {
+          const atts = bubbleProps.currentMessage?.messengerAttachments;
+          if (!atts?.length) return null;
+          return <MessageMediaStack attachments={atts} theme={theme} />;
+        }}
+        renderInputToolbar={renderInputToolbar}
         isUsernameVisible={false}
         colorScheme={colorScheme}
         isInverted
@@ -673,14 +922,32 @@ export default function MessengerChatScreen() {
           label: "Load earlier messages",
           isInfiniteScrollEnabled: true,
         }}
+        renderActions={() => (
+          <View style={styles.attachActionsWrap}>
+            <Pressable
+              onPress={handleAttachMedia}
+              disabled={isUploadingAttachment}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+              style={styles.attachButton}
+              accessibilityRole="button"
+              accessibilityLabel="Attach photo or video"
+            >
+              <Ionicons
+                name={attachments ? "refresh-outline" : "add-outline"}
+                size={28}
+                color={
+                  attachments
+                    ? theme.colors.primary
+                    : theme.colors.textSecondary
+                }
+              />
+            </Pressable>
+          </View>
+        )}
         messagesContainerStyle={{
           backgroundColor: theme.colors.background,
         }}
         // minInputToolbarHeight={78}
-        containerStyle={[
-          styles.inputToolbarContainer,
-          { paddingBottom: Math.min(insets.bottom, 6) },
-        ]}
         primaryStyle={styles.inputToolbarPrimary}
         textInputProps={{
           placeholder: "Message",
@@ -705,6 +972,10 @@ export default function MessengerChatScreen() {
           <Send
             {...props}
             containerStyle={styles.mergedSendWrap}
+            isSendButtonAlwaysVisible={Boolean(
+              attachments && processedAttachmentId,
+            )}
+            isTextOptional={Boolean(attachments)}
             sendButtonProps={{
               accessibilityLabel: "Send message",
               style: styles.sendButton,
@@ -749,19 +1020,25 @@ const createStyles = (theme: AppTheme) =>
       fontSize: 15,
       fontWeight: "600",
     },
-    inputToolbarContainer: {
+    inputToolbarOuter: {
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: theme.colors.border,
-      // backgroundColor: theme.colors.background,
-      // backgroundColor: "blue",
-      // height: 100,
-      // height: MERGED_INPUT_MAX_H,
+      backgroundColor: theme.colors.background,
+    },
+    inputToolbarInner: {
+      borderTopWidth: 0,
+      backgroundColor: theme.colors.background,
     },
     inputToolbarPrimary: {
       paddingHorizontal: theme.spacing.sm,
       paddingTop: 6,
       paddingBottom: 4,
       alignItems: "flex-end",
+    },
+    attachActionsWrap: {
+      justifyContent: "flex-end",
+      alignItems: "flex-end",
+      paddingBottom: 4,
     },
     mergedComposer: {
       flex: 1,
@@ -797,16 +1074,24 @@ const createStyles = (theme: AppTheme) =>
       alignSelf: "flex-end",
       marginBottom: 2,
     },
+
+    tickRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginLeft: 5,
+    },
+    attachButton: {
+      paddingHorizontal: 6,
+      paddingVertical: 6,
+    },
+
     sendButton: {
       width: 36,
       height: 36,
       borderRadius: 18,
       alignItems: "center",
       justifyContent: "center",
-    },
-    tickRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      marginLeft: 5,
+      backgroundColor: theme.colors.background,
+      elevation: 2,
     },
   });

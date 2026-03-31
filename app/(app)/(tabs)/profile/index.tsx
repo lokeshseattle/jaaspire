@@ -12,7 +12,7 @@ import { useNavigation } from "expo-router";
 import { useCallback, useLayoutEffect, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 
-export type TabKey = "gallery" | "home_feed" | "premium";
+export type TabKey = "gallery" | "home_feed" | "exclusive" | "video";
 
 export type TabConfig = {
   label?: string;
@@ -29,9 +29,13 @@ const tabs: Record<TabKey, TabConfig> = {
     icon: "layers-outline",
     activeIcon: "layers",
   },
-  premium: {
+  exclusive: {
     icon: "heart-circle-outline",
     activeIcon: "heart",
+  },
+  video: {
+    icon: "play-circle-outline",
+    activeIcon: "play",
   },
 };
 
@@ -63,7 +67,10 @@ export default function ProfileScreen() {
     hasNextPage,
     fetchNextPage,
     isFetchingNextPage,
-  } = useGetUserFeedQuery(username);
+  } = useGetUserFeedQuery(
+    username,
+    activeTab as "" | "video" | "exclusive" | undefined,
+  );
 
   // Get post IDs from query
   const postIds = useMemo(() => {
@@ -102,25 +109,12 @@ export default function ProfileScreen() {
         </View>
       </>
     ),
-    [username, activeTab, handleTabChange, styles.tabContainer]
+    [username, activeTab, handleTabChange, styles.tabContainer],
   );
 
   // Render content based on active tab
   const renderContent = () => {
     switch (activeTab) {
-      case "gallery":
-        return (
-          <ProfileGridView
-            postIds={postIds}
-            ListHeaderComponent={ListHeader}
-            onRefresh={handleRefresh}
-            isRefreshing={isRefetchingProfile || isRefetchingFeed}
-            onEndReached={handleEndReached}
-            isFetchingNextPage={isFetchingNextPage}
-            postRouteUsername={username}
-          />
-        );
-
       case "home_feed":
         return (
           <ProfileFeedView
@@ -134,10 +128,12 @@ export default function ProfileScreen() {
           />
         );
 
-      case "premium":
+      case "exclusive":
+      case "video":
+      case "gallery":
         return (
           <ProfileGridView
-            postIds={[]} // Empty for now
+            postIds={postIds} // Empty for now
             ListHeaderComponent={ListHeader}
             onRefresh={handleRefresh}
             isRefreshing={isRefetchingProfile || isRefetchingFeed}

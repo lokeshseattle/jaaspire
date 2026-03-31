@@ -60,7 +60,7 @@ export const useGetFeedQuery = () => {
 
 export const useGetUserFeedQuery = (
   username: string | undefined,
-  type: "video" | "" = "",
+  type: "video" | "" | "exclusive" = "",
   options?: { enabled?: boolean },
 ) => {
   const enabledByOption = options?.enabled ?? true;

@@ -13,6 +13,8 @@ import {
 } from "@tanstack/react-query";
 import { File, Paths } from "expo-file-system/next";
 
+const DEFAULT_PREVIEW_DURATION = 6;
+
 const CHUNK_SIZE = 4 * 1024 * 1024; // 5MB per chunk
 
 // Dynamic chunk size for post video uploads (2 MB–30 MB)
@@ -379,19 +381,21 @@ async function processUploadedAttachment(params: {
   file_id: string;
   original_name: string;
   previewDuration: number;
-  type: "post";
-  selectedThumbnailFile: { uri: string; name: string; type: string };
+  type: "post" | "message";
+  selectedThumbnailFile?: { uri: string; name: string; type: string };
 }): Promise<ProcessUploadResponse> {
   const formData = new FormData();
   formData.append("file_id", params.file_id);
   formData.append("original_name", params.original_name);
-  formData.append("previewDuration", String(params.previewDuration));
+  formData.append("previewDuration", params.previewDuration.toString());
   formData.append("type", params.type);
-  formData.append("selectedThumbnailFile", {
-    uri: params.selectedThumbnailFile.uri,
-    name: params.selectedThumbnailFile.name,
-    type: params.selectedThumbnailFile.type,
-  } as any);
+  if (params.selectedThumbnailFile) {
+    formData.append("selectedThumbnailFile", {
+      uri: params.selectedThumbnailFile.uri,
+      name: params.selectedThumbnailFile.name,
+      type: params.selectedThumbnailFile.type,
+    } as any);
+  }
 
   const { data } = await apiClient.post<ProcessUploadResponse>(
     "/attachments/process-upload",
@@ -428,7 +432,10 @@ export async function uploadImageAttachment(
 }
 
 export function useUploadImageAndCreatePost(): UseMutationResult<
-  { attachment: UploadImageAttachmentResponse; post: CreatePostResponse["data"] },
+  {
+    attachment: UploadImageAttachmentResponse;
+    post: CreatePostResponse["data"];
+  },
   PossibleErrorResponse,
   {
     fileUri: string;
@@ -484,9 +491,32 @@ export async function uploadAndProcessPostAttachment(params: {
   const processed = await processUploadedAttachment({
     file_id: merged.file_id,
     original_name: merged.original_name,
-    previewDuration: params.previewDuration ?? 6,
+    previewDuration: params.previewDuration ?? DEFAULT_PREVIEW_DURATION,
     type: "post",
     selectedThumbnailFile: params.selectedThumbnailFile,
+  });
+  return { merged, processed };
+}
+
+export async function uploadAndProcessMessageAttachment(params: {
+  fileUri: string;
+  fileName: string;
+
+  onProgress?: (progress: number) => void;
+}): Promise<{
+  merged: UploadPostChunkResponse & { isComplete?: boolean };
+  processed: ProcessUploadResponse;
+}> {
+  const merged = await uploadVideoPostInChunks(
+    params.fileUri,
+    params.fileName,
+    params.onProgress,
+  );
+  const processed = await processUploadedAttachment({
+    file_id: merged.file_id,
+    original_name: merged.original_name,
+    previewDuration: DEFAULT_PREVIEW_DURATION,
+    type: "message",
   });
   return { merged, processed };
 }
@@ -506,7 +536,7 @@ export function useUploadAndCreatePost(): UseMutationResult<
       text,
       price,
       is_exclusive,
-      previewDuration = 6,
+      previewDuration = DEFAULT_PREVIEW_DURATION,
       selectedThumbnailFile,
       onProgress,
     }) => {
@@ -533,8 +563,7 @@ export function useUploadAndCreatePost(): UseMutationResult<
         const a = attachmentInputs[idx];
         const attachmentProgress =
           totalAttachments > 1
-            ? (p: number) =>
-                onProgress?.((idx + p) / totalAttachments)
+            ? (p: number) => onProgress?.((idx + p) / totalAttachments)
             : onProgress;
         processedAttachments.push(
           await uploadAndProcessPostAttachment({
@@ -753,4 +782,17 @@ export async function uploadVideoPostInChunks(
   }
 
   return { ...finalizeRes.data, isComplete };
+}
+
+export function useUploadImageDirectly(): UseMutationResult<
+  UploadImageAttachmentResponse,
+  PossibleErrorResponse,
+  { fileUri: string; fileName: string; fileType: string },
+  unknown
+> {
+  return useMutation({
+    mutationKey: POST_UPLOAD_KEY,
+    mutationFn: ({ fileUri, fileName, fileType }) =>
+      uploadImageAttachment(fileUri, fileName, fileType),
+  });
 }

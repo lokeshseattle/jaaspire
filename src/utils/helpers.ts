@@ -1,3 +1,5 @@
+import { ImageManipulator } from "expo-image-manipulator";
+
 export type MediaType = "image" | "video";
 
 const IMAGE_EXTENSIONS = new Set<string>([
@@ -183,3 +185,13 @@ const uriToBlob = async (uri: string): Promise<Blob> => {
   const res = await fetch(uri);
   return await res.blob();
 };
+export async function normalizeImage(uri: string) {
+  return await ImageManipulator.manipulateAsync(
+    uri,
+    [{ resize: { width: 1280 } }],
+    {
+      compress: 0.8,
+      format: ImageManipulator.SaveFormat.JPEG,
+    },
+  );
+}

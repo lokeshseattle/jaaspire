@@ -1,5 +1,6 @@
 import { usePost } from "@/src/context/post-context";
 import { useBookmarkPostMutation } from "@/src/features/post/post.hooks";
+import { useGetProfile } from "@/src/features/profile/profile.hooks";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { timeAgo } from "@/src/utils/helpers";
@@ -28,7 +29,8 @@ const PostHeader: React.FC = () => {
   const styles = createStyles(theme);
 
   const { post } = usePost();
-
+  const { data: profileData } = useGetProfile();
+  const me = profileData?.data;
   const iconRef = useRef<View>(null);
 
   const [menuVisible, setMenuVisible] = useState(false);
@@ -84,11 +86,16 @@ const PostHeader: React.FC = () => {
   };
 
   const navigateToUser = () => {
-    if (user.username)
+    if (user.id === me?.id) {
       router.push({
-        pathname: "/user/[username]",
-        params: { username: user.username },
+        pathname: "/(app)/(tabs)/profile",
       });
+      return;
+    }
+    router.push({
+      pathname: "/user/[username]",
+      params: { username: user.username },
+    });
   };
 
   return (
@@ -114,7 +121,11 @@ const PostHeader: React.FC = () => {
           <Text style={styles.time}>{timeAgo(post.created_at)}</Text>
 
           <Pressable ref={iconRef} onPress={openMenu} hitSlop={10}>
-            <Feather name="more-horizontal" size={22} color={theme.colors.icon} />
+            <Feather
+              name="more-horizontal"
+              size={22}
+              color={theme.colors.icon}
+            />
           </Pressable>
         </View>
       </View>
@@ -190,12 +201,7 @@ const MenuItem: React.FC<MenuItemProps> = ({
         size={18}
         color={danger ? DANGER_COLOR : theme.colors.textPrimary}
       />
-      <Text
-        style={[
-          styles.menuText,
-          danger && { color: DANGER_COLOR },
-        ]}
-      >
+      <Text style={[styles.menuText, danger && { color: DANGER_COLOR }]}>
         {label}
       </Text>
     </TouchableOpacity>

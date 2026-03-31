@@ -22,10 +22,20 @@ const LOG_REQUEST = true;
 const LOG_RESPONSE = true;
 const LOG_ERROR = false;
 
+const buildFullUrl = (config: InternalAxiosRequestConfig) => {
+  if (!config.params) return config.url;
+
+  const query = new URLSearchParams(config.params as any).toString();
+  return `${config.url}?${query}`;
+};
+
 const logger = {
   request: (config: InternalAxiosRequestConfig, hasToken: boolean) => {
     if (!__DEV__ || !LOG_REQUEST) return;
-    console.log(`\n🚀 ${config.method?.toUpperCase()} ${config.url}`);
+
+    const fullUrl = buildFullUrl(config);
+
+    console.log(`\n🚀 ${config.method?.toUpperCase()} ${fullUrl}`);
     console.log(`📦 Body: ${JSON.stringify(config.data) ?? "None"}`);
     console.log(`🔑 Auth: ${hasToken ? "Yes" : "No"}\n`);
   },

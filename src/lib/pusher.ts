@@ -7,9 +7,13 @@ import { useFocusEffect, usePathname } from "expo-router";
 import { useCallback, useEffect, useMemo } from "react";
 import { AppState, AppStateStatus } from "react-native";
 import { messengerMessagesQueryKey } from "../features/messenger/messenger-query-keys";
-import { useMarkMessageAsRead } from "../features/messenger/messenger.hooks";
+import {
+  isMessengerMessageIdInThreadCache,
+  useMarkMessageAsRead,
+} from "../features/messenger/messenger.hooks";
 import { useNotificationBadgeStore } from "../features/notifications/notification-badge.store";
 import { notificationCountsQueryKey } from "../features/profile/notification.hooks";
+import { useGetProfile } from "../features/profile/profile.hooks";
 import { apiClient } from "../services/api/api.client";
 import type { NotificationCountsResponse } from "../services/api/api.types";
 import {
@@ -75,11 +79,12 @@ export type EventPayloadMap = {
     notification_type: string;
   };
 
-  // "message.read": {
-  //   chatId: string;
-  //   messageIds: string[];
-  //   readBy: string;
-  // };
+  /** Laravel DM read broadcast; `read_by` is the user who read messages. */
+  "message.read": {
+    read_by: number;
+    read_by_username?: string;
+    messages_read?: number;
+  };
 
   "notification.new": {
     id: string;
@@ -712,6 +717,29 @@ function bridgeEventPayload<K extends keyof EventPayloadMap>(
         ),
       } as EventPayloadMap[K];
     }
+    case "message.read": {
+      const p = inner;
+      const rawBy = p.read_by ?? p.readBy;
+      const read_by =
+        typeof rawBy === "number" ? rawBy : rawBy != null ? Number(rawBy) : NaN;
+      const rawCount = p.messages_read ?? p.messagesRead;
+      const messages_read =
+        rawCount != null && typeof rawCount !== "object"
+          ? Number(rawCount)
+          : undefined;
+      return {
+        read_by: Number.isFinite(read_by) ? read_by : 0,
+        read_by_username:
+          typeof p.read_by_username === "string"
+            ? p.read_by_username
+            : typeof p.readByUsername === "string"
+              ? p.readByUsername
+              : undefined,
+        messages_read: Number.isFinite(messages_read ?? NaN)
+          ? messages_read
+          : undefined,
+      } as EventPayloadMap[K];
+    }
     default:
       return inner as EventPayloadMap[K];
   }
@@ -723,7 +751,9 @@ function bridgeEventPayload<K extends keyof EventPayloadMap>(
 
 export const useUnreadMessengerBadgeRealtime = () => {
   const pathname = usePathname();
+  const { data: me } = useGetProfile();
 
+  const myUserId = me?.data?.id;
   useEffect(() => {
     const handler = (data: EventPayloadMap["message.new"]) => {
       // Only adjust badge optimistically when the home feed is active.
@@ -747,7 +777,8 @@ export const useUnreadMessengerBadgeRealtime = () => {
             typeof raw === "string" ? parseInt(raw, 10) : Number(raw ?? 0);
           const next =
             Number.isFinite(current) && current >= 0
-              ? data?.notification_type === "new-message"
+              ? data?.notification_type === "new-message" ||
+                data.senderId === String(myUserId)
                 ? current
                 : current + 1
               : 1;
@@ -771,7 +802,8 @@ export const useUnreadMessengerBadgeRealtime = () => {
 };
 
 /**
- * Update messenger thread cache + contacts when realtime events match this DM.
+ * Update messenger thread cache when realtime events match this DM.
+ * Contacts list refetch is handled on the messages inbox screen only.
  * Thread updates use targeted cache merges so infinite-query “load earlier” pages are not dropped.
  * @param peerUserId - Peer user id (same as `senderId` in REST paths).
  * @param myUserId - Current user id (for canonical chat id match with Pusher payload).
@@ -788,13 +820,23 @@ export const useChatRealtime = (
 
   useEffect(() => {
     const handleNewMessage = (data: EventPayloadMap["message.new"]) => {
-      console.log(myUserId, "myUserId");
       if (myUserId == null) return;
       const matchesCanonicalChat = Boolean(chatId) && data.chatId === chatId;
       const incomingFromPeer =
         String(data.senderId) === String(peerUserId) &&
         String(data.senderId) !== String(myUserId);
       if (!matchesCanonicalChat && !incomingFromPeer) return;
+
+      const messageIdNum = Number(data.id);
+      const isOwnMessage = String(data.senderId) === String(myUserId);
+      /** POST /send already merged this id; Pusher would duplicate GETs. */
+      if (
+        isOwnMessage &&
+        Number.isFinite(messageIdNum) &&
+        isMessengerMessageIdInThreadCache(queryClient, peerUserId, messageIdNum)
+      ) {
+        return;
+      }
 
       pusherDebug("useChatRealtime message.new", {
         chatId,
@@ -804,34 +846,31 @@ export const useChatRealtime = (
       queryClient.invalidateQueries({
         queryKey: messengerMessagesQueryKey(peerUserId),
       });
-      // queryClient.invalidateQueries({ queryKey: ["messenger", "contacts"] });
-      // console.log("Staring refetch");
-      queryClient.refetchQueries({ queryKey: ["messenger", "contacts"] });
-      // console.log("Refetched");
       markMessageAsReadMutation.mutate(peerUserId);
       // queryClient.invalidateQueries({ queryKey: ["contacts"] });
     };
 
-    // const handleRead = (data: EventPayloadMap["message.read"]) => {
-    //   if (!chatId || data.chatId !== chatId) return;
+    const handleRead = (data: EventPayloadMap["message.read"]) => {
+      if (myUserId == null) return;
+      /** Payload has no chat id; `read_by` identifies who read (usually the peer in this thread). */
+      if (String(data.read_by) !== String(peerUserId)) return;
 
-    //   pusherDebug("useChatRealtime message.read", {
-    //     chatId,
-    //     count: data.messageIds?.length,
-    //   });
-    //   queryClient.invalidateQueries({
-    //     queryKey: messengerMessagesQueryKey(peerUserId),
-    //   });
-    //   queryClient.invalidateQueries({ queryKey: ["messenger", "contacts"] });
-    //   // queryClient.invalidateQueries({ queryKey: ["contacts"] });
-    // };
+      pusherDebug("useChatRealtime message.read", {
+        chatId,
+        read_by: data.read_by,
+        peerUserId,
+      });
+      queryClient.invalidateQueries({
+        queryKey: messengerMessagesQueryKey(peerUserId),
+      });
+    };
 
     eventBus.on("message.new", handleNewMessage);
-    // eventBus.on("message.read", handleRead);
+    eventBus.on("message.read", handleRead);
 
     return () => {
       eventBus.off("message.new", handleNewMessage);
-      // eventBus.off("message.read", handleRead);
+      eventBus.off("message.read", handleRead);
     };
   }, [chatId, peerUserId, myUserId]);
 };
@@ -857,22 +896,17 @@ export const useMessengerContactsRealtimeWhileFocused = (
         queryClient.invalidateQueries({ queryKey: ["messenger", "contacts"] });
       };
 
-      // const handleRead = (data: EventPayloadMap["message.read"]) => {
-      //   if (!data.chatId || !directChatIdInvolvesUser(data.chatId, myUserId)) {
-      //     return;
-      //   }
-      //   pusherDebug("useMessengerContactsRealtimeWhileFocused message.read", {
-      //     chatId: data.chatId,
-      //   });
-      //   queryClient.invalidateQueries({ queryKey: ["messenger", "contacts"] });
-      // };
+      const handleRead = (_data: EventPayloadMap["message.read"]) => {
+        pusherDebug("useMessengerContactsRealtimeWhileFocused message.read");
+        queryClient.invalidateQueries({ queryKey: ["messenger", "contacts"] });
+      };
 
       eventBus.on("message.new", handleNewMessage);
-      // eventBus.on("message.read", handleRead);
+      eventBus.on("message.read", handleRead);
 
       return () => {
         eventBus.off("message.new", handleNewMessage);
-        // eventBus.off("message.read", handleRead);
+        eventBus.off("message.read", handleRead);
       };
     }, [myUserId]),
   );

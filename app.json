@@ -16,7 +16,8 @@
         "NSPhotoLibraryUsageDescription": "This app needs access to your photos so you can upload images.",
         "NSCameraUsageDescription": "This app needs access to your camera to take photos.",
         "NSPhotoLibraryAddUsageDescription": "This app needs permission to save photos to your library."
-      }
+      },
+      "appleTeamId": "T6Y9862AD6"
     },
     "android": {
       "package": "com.flickios.jaaspire",
@@ -27,7 +28,10 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static",

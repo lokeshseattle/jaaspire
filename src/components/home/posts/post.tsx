@@ -58,7 +58,7 @@ export default function Post({
       toggleLike: handleToggleLike,
       onPressComments,
     }),
-    [post, isLiked, handleToggleLike, onPressComments]
+    [post, isLiked, handleToggleLike, onPressComments],
   );
 
   return (
@@ -68,6 +68,10 @@ export default function Post({
         postId={post.id}
         media={currentMedia?.path}
         type={mediaType}
+        price={post.price}
+        fullDuration={currentMedia?.duration}
+        viewer={post.viewer}
+        isExclusive={post.is_exclusive}
         isVisible={isVisible}
         isLiked={isLiked}
         onLike={handleToggleLike}

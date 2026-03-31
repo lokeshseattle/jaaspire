@@ -97,7 +97,12 @@ export default function SettingsScreen() {
           icon="shield-checkmark-outline"
           label="Privacy"
         />
-        <Item theme={theme} icon="wallet-outline" label="Wallet" />
+        <Item
+          theme={theme}
+          icon="wallet-outline"
+          label="Wallet"
+          onPress={() => router.push("/wallet")}
+        />
       </View>
 
       <View style={styles.section}>
