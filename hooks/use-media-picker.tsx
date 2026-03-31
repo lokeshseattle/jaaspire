@@ -74,7 +74,8 @@ export const useMediaPicker = () => {
     } = options;
 
     const finalAspect = circular ? [1, 1] : aspect;
-    const finalAllowsEditing = circular ? true : allowsEditing;
+    /** Native square crop is skipped when circular — app uses profile-crop for pan/zoom. */
+    const finalAllowsEditing = circular ? false : allowsEditing;
 
     showActionSheetWithOptions(
       {

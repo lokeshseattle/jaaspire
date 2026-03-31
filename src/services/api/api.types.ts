@@ -124,10 +124,10 @@ export type Post = {
   attachments: Array<{
     id: string;
     type: string;
-    status: any;
+    status: "pending" | "completed";
     path: string;
     thumbnail: string;
-    duration: any;
+    duration: null | string;
   }>;
   attachments_count: number;
   reactions: Array<{

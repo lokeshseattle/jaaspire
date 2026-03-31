@@ -13,6 +13,7 @@ import {
     FlatList,
     Pressable,
     StyleSheet,
+    Text,
     View,
 } from "react-native";
 
@@ -21,147 +22,172 @@ const ITEM_SIZE = width / 3;
 const NUM_COLUMNS = 3;
 
 type GridItem = {
-    id: string;
-    postId: number;
-    image: string;
-    type: "image" | "video";
+  id: string;
+  postId: number;
+  image: string;
+  type: "image" | "video";
+  status: "pending" | "completed";
 };
 
 interface ProfileGridViewProps {
-    postIds: number[];
-    ListHeaderComponent: React.ReactElement;
-    onRefresh: () => Promise<void>;
-    isRefreshing: boolean;
-    onEndReached: () => void;
-    isFetchingNextPage: boolean;
-    /** When set, opens user-scoped post detail (`mode=user` API). Otherwise `/post/:id` (explore). */
-    postRouteUsername?: string;
-    ListEmptyComponent?: React.ReactElement | null;
+  postIds: number[];
+  ListHeaderComponent: React.ReactElement;
+  onRefresh: () => Promise<void>;
+  isRefreshing: boolean;
+  onEndReached: () => void;
+  isFetchingNextPage: boolean;
+  /** When set, opens user-scoped post detail (`mode=user` API). Otherwise `/post/:id` (explore). */
+  postRouteUsername?: string;
+  ListEmptyComponent?: React.ReactElement | null;
 }
 
 export function ProfileGridView({
-    postIds,
-    ListHeaderComponent,
-    onRefresh,
-    isRefreshing,
-    onEndReached,
-    isFetchingNextPage,
-    postRouteUsername,
-    ListEmptyComponent,
+  postIds,
+  ListHeaderComponent,
+  onRefresh,
+  isRefreshing,
+  onEndReached,
+  isFetchingNextPage,
+  postRouteUsername,
+  ListEmptyComponent,
 }: ProfileGridViewProps) {
-    const { theme } = useTheme();
-    const styles = useMemo(() => createStyles(theme), [theme]);
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
-    // Get posts from Zustand store
-    const posts = usePostStore((state) => state.posts);
+  // Get posts from Zustand store
+  const posts = usePostStore((state) => state.posts);
 
-    // Transform post IDs into grid items
-    const gridData = useMemo<GridItem[]>(() => {
-        const items: GridItem[] = [];
+  // Transform post IDs into grid items
+  const gridData = useMemo<GridItem[]>(() => {
+    const items: GridItem[] = [];
 
-        for (const postId of postIds) {
-            const post = posts[postId];
-            if (!post?.attachments) continue;
+    for (const postId of postIds) {
+      const post = posts[postId];
+      if (!post?.attachments) continue;
 
-            for (const att of post.attachments) {
-                const mediaType = getMediaType(att.type);
-                items.push({
-                    id: att.id,
-                    postId: post.id,
-                    image: mediaType === "image" ? att.path : att.thumbnail,
-                    type: mediaType as "image" | "video",
-                });
-            }
-        }
+      for (const att of post.attachments) {
+        const mediaType = getMediaType(att.type);
+        items.push({
+          id: att.id,
+          postId: post.id,
+          image: mediaType === "image" ? att.path : att.thumbnail,
+          type: mediaType as "image" | "video",
+          status: post.attachments[0].status,
+        });
+      }
+    }
 
-        return items;
-    }, [postIds, posts]);
+    return items;
+  }, [postIds, posts]);
 
-    const handleItemPress = useCallback(
-        (postId: number) => {
-            if (postRouteUsername) {
-                router.push(`/user/${postRouteUsername}/posts/${postId}`);
-            } else {
-                router.push(`/post/${postId}`);
-            }
-        },
-        [postRouteUsername],
-    );
+  const handleItemPress = useCallback(
+    (postId: number) => {
+      if (postRouteUsername) {
+        router.push(`/user/${postRouteUsername}/posts/${postId}`);
+      } else {
+        router.push(`/post/${postId}`);
+      }
+    },
+    [postRouteUsername],
+  );
 
-    const renderItem = useCallback(
-        ({ item }: { item: GridItem }) => (
-            <Pressable onPress={() => handleItemPress(item.postId)}>
-                <View style={styles.gridItemContainer}>
-                    <Image
-                        source={{ uri: item.image }}
-                        style={styles.gridImage}
-                        contentFit="cover"
-                        cachePolicy="disk"
-                        transition={200}
-                    />
-                    {item.type === "video" && (
-                        <View style={styles.videoIndicator}>
-                            <Ionicons name="play" size={14} color="white" />
-                        </View>
-                    )}
-                </View>
-            </Pressable>
-        ),
-        [styles, handleItemPress]
-    );
+  const renderItem = useCallback(
+    ({ item }: { item: GridItem }) => {
+      const isPending = item.status === "pending";
 
-    const keyExtractor = useCallback(
-        (item: GridItem) => `grid-${item.id}`,
-        []
-    );
+      return (
+        <Pressable
+          disabled={isPending}
+          onPress={() => handleItemPress(item.postId)}
+        >
+          <View style={styles.gridItemContainer}>
+            <Image
+              source={{ uri: item.image }}
+              style={styles.gridImage}
+              contentFit="cover"
+              cachePolicy="disk"
+              transition={200}
+            />
 
-    const ListFooter = useMemo(
-        () =>
-            isFetchingNextPage ? (
-                <ActivityIndicator style={styles.loader} />
-            ) : null,
-        [isFetchingNextPage, styles.loader]
-    );
+            {/* Video Indicator */}
+            {item.type === "video" && !isPending && (
+              <View style={styles.videoIndicator}>
+                <Ionicons name="play" size={14} color="white" />
+              </View>
+            )}
 
-    return (
-        <FlatList
-            data={gridData}
-            renderItem={renderItem}
-            keyExtractor={keyExtractor}
-            numColumns={NUM_COLUMNS}
-            ListHeaderComponent={ListHeaderComponent}
-            ListEmptyComponent={ListEmptyComponent ?? undefined}
-            ListFooterComponent={ListFooter}
-            onRefresh={onRefresh}
-            refreshing={isRefreshing}
-            onEndReached={onEndReached}
-            onEndReachedThreshold={0.5}
-            showsVerticalScrollIndicator={false}
-            removeClippedSubviews={true}
-        />
-    );
+            {/* Pending Overlay */}
+            {isPending && (
+              <View style={styles.overlay}>
+                <Text style={styles.overlayText}>Processing...</Text>
+              </View>
+            )}
+          </View>
+        </Pressable>
+      );
+    },
+    [styles, handleItemPress],
+  );
+
+  const keyExtractor = useCallback((item: GridItem) => `grid-${item.id}`, []);
+
+  const ListFooter = useMemo(
+    () =>
+      isFetchingNextPage ? <ActivityIndicator style={styles.loader} /> : null,
+    [isFetchingNextPage, styles.loader],
+  );
+
+  return (
+    <FlatList
+      data={gridData}
+      renderItem={renderItem}
+      keyExtractor={keyExtractor}
+      numColumns={NUM_COLUMNS}
+      ListHeaderComponent={ListHeaderComponent}
+      ListEmptyComponent={ListEmptyComponent ?? undefined}
+      ListFooterComponent={ListFooter}
+      onRefresh={onRefresh}
+      refreshing={isRefreshing}
+      onEndReached={onEndReached}
+      onEndReachedThreshold={0.5}
+      showsVerticalScrollIndicator={false}
+      removeClippedSubviews={true}
+    />
+  );
 }
 
 const createStyles = (theme: AppTheme) =>
-    StyleSheet.create({
-        gridItemContainer: {
-            width: ITEM_SIZE,
-            height: ITEM_SIZE,
-            padding: 1,
-        },
-        gridImage: {
-            flex: 1,
-            backgroundColor: theme.colors.surface ?? "#1a1a1a",
-        },
-        videoIndicator: {
-            position: "absolute",
-            top: 6,
-            right: 6,
-            backgroundColor: "rgba(0,0,0,0.6)",
-            borderRadius: 4,
-            padding: 3,
-        },
-        loader: {
-            padding: 20,
-        },
-    });
+  StyleSheet.create({
+    gridItemContainer: {
+      width: ITEM_SIZE,
+      height: ITEM_SIZE,
+      padding: 1,
+    },
+    gridImage: {
+      flex: 1,
+      backgroundColor: theme.colors.surface ?? "#1a1a1a",
+    },
+    videoIndicator: {
+      position: "absolute",
+      top: 6,
+      right: 6,
+      backgroundColor: "rgba(0,0,0,0.6)",
+      borderRadius: 4,
+      padding: 3,
+    },
+    loader: {
+      padding: 20,
+    },
+    overlay: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+
+    overlayText: {
+      color: "#fff",
+      fontSize: 12,
+      fontWeight: "600",
+    },
+  });

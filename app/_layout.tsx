@@ -14,6 +14,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import "react-native-reanimated";
 
 SplashScreen.preventAutoHideAsync();
@@ -74,7 +75,9 @@ function RootLayoutInner() {
 export default function RootLayout() {
   return (
     <ThemeProvider>
-      <RootLayoutInner />
+      <SafeAreaProvider style={{ flex: 1 }}>
+        <RootLayoutInner />
+      </SafeAreaProvider>
     </ThemeProvider>
   );
 }

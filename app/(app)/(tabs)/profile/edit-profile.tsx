@@ -129,14 +129,17 @@ export default function EditProfileScreen() {
       onChange: (file) => {
         router.push({
           pathname: "/profile/profile-crop",
-          params: { uri: file.uri },
+          params: { uri: encodeURIComponent(file.uri) },
         });
       },
     });
   };
 
   const onSubmit = (formData: EditProfileFormValues) => {
-    const changedData: UpdateProfileRequest = getDirtyValues(dirtyFields, formData);
+    const changedData: UpdateProfileRequest = getDirtyValues(
+      dirtyFields,
+      formData,
+    );
 
     if (changedData.birthdate instanceof Date) {
       changedData.birthdate = new Date(changedData.birthdate)
@@ -150,7 +153,11 @@ export default function EditProfileScreen() {
         router.back();
       },
       onError: (e) => {
-        setServerErrors<EditProfileFormValues>(e.data?.errors, setError, FIELD_MAP);
+        setServerErrors<EditProfileFormValues>(
+          e.data?.errors,
+          setError,
+          FIELD_MAP,
+        );
       },
     });
   };
@@ -204,8 +211,12 @@ export default function EditProfileScreen() {
           </Pressable>
         </View>
         <View style={styles.loadingContainer}>
-          <Text style={{ color: theme.colors.textSecondary, textAlign: "center" }}>
-            {isError ? "Could not load your profile. Try again later." : "Unable to load profile."}
+          <Text
+            style={{ color: theme.colors.textSecondary, textAlign: "center" }}
+          >
+            {isError
+              ? "Could not load your profile. Try again later."
+              : "Unable to load profile."}
           </Text>
         </View>
       </View>
@@ -222,7 +233,7 @@ export default function EditProfileScreen() {
         <ScrollView
           contentContainerStyle={{
             paddingHorizontal: theme.spacing.lg,
-            paddingTop: insets.top,
+
             paddingBottom: theme.spacing.xl + insets.bottom,
             gap: theme.spacing.lg,
           }}

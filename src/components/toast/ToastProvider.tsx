@@ -1,11 +1,24 @@
 import React, {
-    createContext,
-    useCallback,
-    useContext,
-    useRef,
-    useState,
+  createContext,
+  useCallback,
+  useContext,
+  useRef,
+  useState,
 } from "react";
-import { Animated, StyleSheet, Text, TextStyle, ViewStyle } from "react-native";
+import {
+  Animated,
+  Platform,
+  StyleSheet,
+  Text,
+  TextStyle,
+  View,
+  ViewStyle,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+/** Core tab row height; safe area (home indicator) is added via insets. */
+const TAB_BAR_BASE_HEIGHT = Platform.OS === "ios" ? 49 : 56;
+const GAP_ABOVE_TAB_BAR = 6;
 
 type Variant = "success" | "error" | "info" | "warning";
 
@@ -16,10 +29,14 @@ type ToastContextType = {
 const ToastContext = createContext<ToastContextType | null>(null);
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
+  const insets = useSafeAreaInsets();
   const translateY = useRef(new Animated.Value(100)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isVisibleRef = useRef(false);
+
+  const bottomOffset =
+    TAB_BAR_BASE_HEIGHT + insets.bottom + GAP_ABOVE_TAB_BAR;
 
   const [message, setMessage] = useState("");
   const [variant, setVariant] = useState<Variant>("info");
@@ -81,8 +98,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const containerStyle = [
-    styles.container,
+  const bubbleStyle = [
+    styles.bubble,
     variantStyles[variant].container,
   ] as ViewStyle[];
 
@@ -95,14 +112,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       <Animated.View
         pointerEvents="none"
         style={[
-          containerStyle,
+          styles.anchor,
           {
+            bottom: bottomOffset,
             opacity,
             transform: [{ translateY }],
           },
         ]}
       >
-        <Text style={textStyle}>{message}</Text>
+        <View style={bubbleStyle}>
+          <Text style={textStyle}>{message}</Text>
+        </View>
       </Animated.View>
     </ToastContext.Provider>
   );
@@ -117,36 +137,60 @@ export function useToast() {
 }
 
 const styles = StyleSheet.create({
-  container: {
+  anchor: {
     position: "absolute",
-    bottom: 40,
-    left: 20,
-    right: 20,
-    paddingVertical: 14,
-    borderRadius: 16,
+    left: 0,
+    right: 0,
     alignItems: "center",
-    elevation: 8,
+  },
+  bubble: {
+    maxWidth: "88%",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    backgroundColor: "rgba(28, 28, 30, 0.72)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 6,
+      },
+      android: { elevation: 3 },
+      default: {},
+    }),
   },
   text: {
-    fontWeight: "600",
+    fontWeight: "500",
+    fontSize: 13,
+    lineHeight: 17,
+    color: "rgba(255, 255, 255, 0.88)",
+    textAlign: "center",
   },
 });
 
-const variantStyles = {
+/** Variant only nudges a slim accent — shared glass surface keeps UI calm. */
+const variantStyles: Record<
+  Variant,
+  { container: ViewStyle; text: TextStyle }
+> = {
   success: {
-    container: { backgroundColor: "#22c55e" },
-    text: { color: "white" },
+    container: { borderLeftWidth: 2, borderLeftColor: "rgba(134, 239, 172, 0.55)" },
+    text: {},
   },
   error: {
-    container: { backgroundColor: "#ef4444" },
-    text: { color: "white" },
+    container: { borderLeftWidth: 2, borderLeftColor: "rgba(252, 165, 165, 0.5)" },
+    text: {},
   },
   info: {
-    container: { backgroundColor: "#3b82f6" },
-    text: { color: "white" },
+    container: { borderLeftWidth: 2, borderLeftColor: "rgba(186, 186, 190, 0.45)" },
+    text: {},
   },
   warning: {
-    container: { backgroundColor: "#f59e0b" },
-    text: { color: "white" },
+    container: { borderLeftWidth: 2, borderLeftColor: "rgba(253, 224, 71, 0.45)" },
+    text: {},
   },
 };

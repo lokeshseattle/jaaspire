@@ -35,6 +35,7 @@ import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 
 import { PickedFile, useMediaPicker } from "@/hooks/use-media-picker";
 import MentionSuggestionsList from "@/src/components/mentions/MentionSuggestionsList";
+import { useToast } from "@/src/components/toast/ToastProvider";
 import { useImageEditStore } from "@/src/features/post-editor/store/useImageEditorStore";
 import { useVideoPostDraftStore } from "@/src/features/post-editor/store/useVideoPostDraftStore";
 import {
@@ -109,7 +110,7 @@ function CreateContent() {
   const [mentionIndicator, setMentionIndicator] = useState<string | null>(null);
   const [mentionQuery, setMentionQuery] = useState("");
   const [debouncedMentionQuery, setDebouncedMentionQuery] = useState("");
-
+  const { trigger } = useToast();
   const debouncedSetMentionQuery = useMemo(
     () => debounce((q: string) => setDebouncedMentionQuery(q), 200),
     [],
@@ -242,7 +243,6 @@ function CreateContent() {
   };
 
   const canPost =
-    caption.trim().length > 0 &&
     (!!selectedImage || (!!selectedVideo && !!selectedVideoThumbnail)) &&
     (postType !== "paid" || isPriceValid(price));
 
@@ -278,7 +278,7 @@ function CreateContent() {
                 setCaptionInputKey((k) => k + 1);
                 resetMentionSession();
                 resetVideoDraft();
-                router.replace("/profile");
+                trigger("Post created successfully", "success");
               },
             },
           );
@@ -561,13 +561,14 @@ function CreateContent() {
       <Modal
         visible={mentionIndicator === "@"}
         animationType="slide"
-        presentationStyle={
-          Platform.OS === "ios" ? "fullScreen" : undefined
-        }
+        presentationStyle={Platform.OS === "ios" ? "fullScreen" : undefined}
         onRequestClose={handleDismissMentionPicker}
       >
         <SafeAreaView
-          style={[styles.mentionModalRoot, { backgroundColor: theme.colors.background }]}
+          style={[
+            styles.mentionModalRoot,
+            { backgroundColor: theme.colors.background },
+          ]}
           edges={["top", "left", "right"]}
         >
           <KeyboardAvoidingView
@@ -594,10 +595,7 @@ function CreateContent() {
                     </Text>
                   </Pressable>
                 </View>
-                <Text
-                  style={styles.mentionModalTitle}
-                  pointerEvents="none"
-                >
+                <Text style={styles.mentionModalTitle} pointerEvents="none">
                   Mention
                 </Text>
                 <View style={styles.mentionModalHeaderRightSpacer} />
