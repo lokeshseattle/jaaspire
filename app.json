@@ -30,6 +30,7 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
+        "android.permission.RECORD_AUDIO",
         "android.permission.RECORD_AUDIO"
       ]
     },
@@ -84,6 +85,12 @@
         "projectId": "239223f2-2e9c-40db-992f-eb46109b3696"
       }
     },
-    "owner": "convoia"
+    "owner": "convoia",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/239223f2-2e9c-40db-992f-eb46109b3696"
+    }
   }
 }

@@ -38,10 +38,12 @@ import MentionSuggestionsList from "@/src/components/mentions/MentionSuggestions
 import { useToast } from "@/src/components/toast/ToastProvider";
 import { useImageEditStore } from "@/src/features/post-editor/store/useImageEditorStore";
 import { useVideoPostDraftStore } from "@/src/features/post-editor/store/useVideoPostDraftStore";
+import { useGetProfile } from "@/src/features/profile/profile.hooks";
 import {
   useUploadAndCreatePost,
   useUploadImageAndCreatePost,
 } from "@/src/features/upload/upload.hooks";
+import { queryClient } from "@/src/lib/query-client";
 import { MentionUser } from "@/src/services/api/api.types";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
@@ -70,6 +72,8 @@ function CreateContent() {
   const { theme } = useTheme();
   const styles = createStyles(theme);
   const { openMediaPicker } = useMediaPicker();
+  const { data: me } = useGetProfile();
+  const username = me?.data?.username;
   // const router = useRouter();
   const headerHeight = useHeaderHeight();
   const {
@@ -279,6 +283,9 @@ function CreateContent() {
                 resetMentionSession();
                 resetVideoDraft();
                 trigger("Post created successfully", "success");
+                queryClient.invalidateQueries({
+                  queryKey: ["user_feed", username],
+                });
               },
             },
           );
@@ -310,7 +317,10 @@ function CreateContent() {
                 resetMentionSession();
                 setSelectedImage(null);
                 reset();
-                router.replace("/profile");
+                trigger("Post created successfully", "success");
+                queryClient.invalidateQueries({
+                  queryKey: ["user_feed", username],
+                });
               },
             },
           );

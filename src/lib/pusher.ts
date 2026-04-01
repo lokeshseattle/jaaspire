@@ -133,8 +133,18 @@ export type EventPayloadMap = {
   };
 
   "video.ready": {
-    postId: string;
-    url: string;
+    id: string;
+    notification_type: "video-finalized";
+    message: string;
+    from_user_id: string;
+    from_user: {
+      id: number;
+      name: string;
+      username: string;
+      avatar: string;
+    };
+    post_id: number;
+    created_at: string; // ISO
   };
 };
 
@@ -1003,4 +1013,21 @@ export const useNotificationRealtime = () => {
       eventBus.off("notification.new", handler);
     };
   }, [incrementUnread, clearBadge, pathname]);
+};
+
+export const useVideoFinalized = () => {
+  const { data: me } = useGetProfile();
+
+  const username = me?.data?.username;
+
+  useEffect(() => {
+    const handler = (data: EventPayloadMap["video.ready"]) => {
+      queryClient.refetchQueries({ queryKey: ["user_feed", username] });
+    };
+    eventBus.on("video.ready", handler);
+
+    return () => {
+      eventBus.off("video.ready", handler);
+    };
+  }, [username]);
 };

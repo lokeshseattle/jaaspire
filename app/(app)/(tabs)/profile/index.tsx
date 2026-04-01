@@ -5,6 +5,7 @@ import ProfileHeader from "@/src/components/profile/ProfileHeader";
 import { AnimatedTabBar } from "@/src/components/ui/animated-tabbar";
 import { useGetUserFeedQuery } from "@/src/features/post/post.hooks";
 import { useGetProfile } from "@/src/features/profile/profile.hooks";
+import { useVideoFinalized } from "@/src/lib/pusher";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
@@ -71,6 +72,8 @@ export default function ProfileScreen() {
     username,
     activeTab as "" | "video" | "exclusive" | undefined,
   );
+
+  useVideoFinalized();
 
   // Get post IDs from query
   const postIds = useMemo(() => {
