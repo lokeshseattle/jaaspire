@@ -10,7 +10,7 @@ import {
 import { useUnreadMessengerCount } from "@/src/features/profile/notification.hooks";
 import { useGetAllStories } from "@/src/features/story/story.hooks";
 import { useUnreadMessengerBadgeRealtime } from "@/src/lib/pusher";
-import { videoManager } from "@/src/lib/video-manager.android";
+import { videoManager } from "@/src/lib/video-manager";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -47,18 +47,13 @@ export default function Home() {
   const flatListRef = useRef<FlatList>(null);
   const scrollOffsetRef = useRef(0);
   const lastScrollY = useRef(0);
-  const headerTranslateY = useRef(new Animated.Value(0)).current;
-  const currentHeaderTranslate = useRef(0);
-  const navigation = useNavigation();
 
-  // ✅ FIX: Use refs for values that change on every scroll so renderItem
-  // doesn't need them in its dependency array.  PostWrapper reads these
-  // via props that are compared in its custom memo — but the renderItem
-  // function identity stays stable, preventing FlatList from re-rendering
-  // every mounted cell on each scroll stop.
   const visiblePostIdRef = useRef<number | null>(null);
   const visibleFeedIndexRef = useRef<number>(-1);
   const isScreenFocusedRef = useRef(true);
+  const headerTranslateY = useRef(new Animated.Value(0)).current;
+  const currentHeaderTranslate = useRef(0);
+  const navigation = useNavigation();
 
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -110,7 +105,6 @@ export default function Home() {
     return postIds.indexOf(visiblePostId);
   }, [visiblePostId, postIds]);
 
-  // Keep refs in sync
   visiblePostIdRef.current = visiblePostId;
   visibleFeedIndexRef.current = visibleFeedIndex;
   isScreenFocusedRef.current = isScreenFocused;
@@ -127,10 +121,9 @@ export default function Home() {
     }, []),
   );
 
-  // ✅ FIX: memoize handleRefresh so the tabPress effect doesn't re-subscribe every render
-  const handleRefresh = useCallback(async () => {
+  const handleRefresh = async () => {
     await Promise.all([refetch(), storyRefetch()]);
-  }, [refetch, storyRefetch]);
+  };
 
   useUnreadMessengerBadgeRealtime();
   const unreadMessageCount = useUnreadMessengerCount();
@@ -151,11 +144,7 @@ export default function Home() {
 
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-      // console.log("viewableItems", viewableItems);
-      if (viewableItems.length === 0) {
-        setVisiblePostId(null);
-        return;
-      }
+      if (viewableItems.length === 0) return;
 
       let mostVisibleItem = viewableItems[0];
 
@@ -169,14 +158,13 @@ export default function Home() {
       const newVisibleId = mostVisibleItem.item as number;
 
       setVisiblePostId((prevId) => {
-        if (prevId !== newVisibleId) {
-          // if (__DEV__) {
-          //   console.log(
-          //     `[Feed/Android] Primary post: ${prevId} → ${newVisibleId}`,
-          //   );
-          // }
-          trackPostViewRef.current.mutate(newVisibleId);
+        if (prevId === newVisibleId) return prevId;
+        if (__DEV__) {
+          console.log(
+            `[Feed/Android] Primary post: ${prevId} → ${newVisibleId}`,
+          );
         }
+        trackPostViewRef.current.mutate(newVisibleId);
         return newVisibleId;
       });
     },
@@ -201,12 +189,6 @@ export default function Home() {
     [postIds],
   );
 
-  // ✅ FIX: renderItem only depends on stable references.
-  // visiblePostId / visibleFeedIndex / isScreenFocused are passed as props
-  // to PostItem, but we read them from state (not refs) via extraData trigger.
-  // The key insight: renderItem identity must stay stable so FlatList doesn't
-  // re-render ALL cells.  PostWrapper's memo comparator handles the fine-grained
-  // checks for which individual cells actually need re-rendering.
   const renderItem = useCallback(
     ({ item: id, index: feedIndex }: { item: number; index: number }) => {
       const nextId = getNextPostId(id);
@@ -303,16 +285,13 @@ export default function Home() {
         onEndReachedThreshold={0.5}
         onRefresh={handleRefresh}
         refreshing={isRefetching}
-        // ✅ removeClippedSubviews intentionally omitted — on Android it causes
-        // blank cells and black flashes with SurfaceView-backed VideoViews.
         windowSize={5}
-        maxToRenderPerBatch={2}
-        initialNumToRender={2}
-        updateCellsBatchingPeriod={100}
+        maxToRenderPerBatch={3}
+        initialNumToRender={3}
+        updateCellsBatchingPeriod={50}
         maintainVisibleContentPosition={{
           minIndexForVisible: 0,
         }}
-        // extraData triggers re-render of visible cells when visibility changes
         extraData={`${visiblePostId}-${visibleFeedIndex}-${isScreenFocused}`}
       />
 

@@ -111,7 +111,10 @@ const PostHeader: React.FC = () => {
           />
 
           <View>
-            <Text style={styles.username}>{user.name}</Text>
+            <Text style={styles.username}>
+              {__DEV__ ? user.name + " Post ID: " + post.id : user.name}
+            </Text>
+
             <Text style={styles.sub}>@{user.username}</Text>
           </View>
         </Pressable>

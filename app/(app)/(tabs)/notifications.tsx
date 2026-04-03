@@ -419,9 +419,6 @@ export default function NotificationsScreen() {
     return data?.pages.flatMap((page) => page.data.notifications) ?? [];
   }, [data]);
 
-  console.log("notifications", notifications);
-  console.log("data", data);
-
   const handleLoadMore = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) {
       fetchNextPage();

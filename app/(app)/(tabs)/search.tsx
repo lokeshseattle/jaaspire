@@ -63,8 +63,6 @@ export default function SearchScreen() {
 
   const handleProfileSelect = useCallback(
     (profile: ProfileSuggestion) => {
-      // Handle profile selection - navigate to profile screen
-      console.log("Selected profile:", profile);
       handleSearchBlur();
       if (profile.id === me?.id) {
         router.push({
@@ -83,8 +81,6 @@ export default function SearchScreen() {
   );
 
   const handlePostPress = useCallback((postId: number) => {
-    // Navigate to post detail screen
-    console.log("Post pressed:", postId);
     router.push({
       pathname: "/post/[postId]",
       params: {
