@@ -48,7 +48,10 @@ interface Props {
   fullDuration?: number | string | null;
   viewer?: PostMediaViewer;
   isExclusive?: boolean;
-  isVisible: boolean;
+  /** True when this post is the primary viewable item on the feed (only one plays video). */
+  isFocused: boolean;
+  /** Within ±2 of primary post — mount player + VideoView (paused) for preload. */
+  inVideoWindow: boolean;
   isLiked: boolean;
   onLike: () => void;
   nextPostId?: number;
@@ -148,6 +151,7 @@ function PaywallContent({
   return (
     <View style={styles.paywallContent}>
       <LinearGradient
+        pointerEvents="none"
         colors={Colors.gradient as [string, string, string]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -178,6 +182,7 @@ function PaywallContent({
         accessibilityLabel="Pay to unlock"
       >
         <LinearGradient
+          pointerEvents="none"
           colors={Colors.gradient as [string, string, string]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
@@ -304,43 +309,9 @@ function VideoPreviewEndedOverlay({
   );
 }
 
-interface VideoProgressBarProps {
-  progressStyle: ReturnType<typeof useAnimatedStyle>;
-  thumbAnimatedStyle: ReturnType<typeof useAnimatedStyle>;
-  progressBarAnimatedStyle: ReturnType<typeof useAnimatedStyle>;
-  lockedSegmentStyle: ReturnType<typeof useAnimatedStyle>;
-  barGesture: ReturnType<typeof Gesture.Simultaneous>;
-  onLayout: (e: any) => void;
-}
+// ─── Main Component (focused post — full interactive video) ──────────────────
 
-// function VideoProgressBar({
-//   progressStyle,
-//   thumbAnimatedStyle,
-//   progressBarAnimatedStyle,
-//   lockedSegmentStyle,
-//   barGesture,
-//   onLayout,
-// }: VideoProgressBarProps) {
-//   return (
-//     <GestureDetector gesture={barGesture}>
-//       <Animated.View
-//         style={[styles.progressContainer, progressBarAnimatedStyle]}
-//         hitSlop={{ top: 10, bottom: 10 }}
-//         onLayout={onLayout}
-//       >
-//         <Animated.View style={[styles.progressFill, progressStyle]} />
-//         <Animated.View
-//           style={[styles.progressLockedSegment, lockedSegmentStyle]}
-//         />
-//         <Animated.View style={[styles.thumb, thumbAnimatedStyle]} />
-//       </Animated.View>
-//     </GestureDetector>
-//   );
-// }
-
-// ─── Main Component ───────────────────────────────────────────────────────────
-
-function PostMediaInner({
+function PostMediaInnerMain({
   postId,
   type,
   media,
@@ -349,12 +320,18 @@ function PostMediaInner({
   fullDuration = null,
   viewer,
   isExclusive = false,
-  isVisible,
+  isFocused,
+  inVideoWindow,
   isLiked,
   onLike,
   nextPostId,
   nextPostUrl,
 }: Props) {
+  // ── Refs ───────────────────────────────────────────────────────────────────
+  const isFocusedRef = useRef(isFocused);
+  const isLongPressingRef = useRef(false);
+  isFocusedRef.current = isFocused;
+
   // ── Tap / double-tap tracking ──────────────────────────────────────────────
   const lastTapRef = useRef<number>(0);
   const singleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -385,14 +362,18 @@ function PostMediaInner({
 
   const parsedDuration = parseDuration(fullDuration);
 
-  // Capped preview: paid posts or subscriber-exclusive posts (same rules as paid)
+  // ── Preview-ended state ────────────────────────────────────────────────────
+  const [previewEnded, setPreviewEnded] = useState(false);
+  const previewEndedRef = useRef(false);
+
   const isPaidVideo =
     !canView && type === "video" && (price > 0 || isExclusive);
-  // Fallback when locked but not treated as preview-cap (should not happen with current access rules)
   const showVideoBlockPaywall = !canView && type === "video" && !isPaidVideo;
-
+  // To this — pass null explicitly and make sure your hook early-returns cleanly when url is null:
   const videoUrlForPlayer =
-    type === "video" && media && (canView || isPaidVideo) ? media : null;
+    type === "video" && inVideoWindow && media && (canView || isPaidVideo)
+      ? media
+      : null;
 
   // ── Video player ───────────────────────────────────────────────────────────
   const {
@@ -408,14 +389,37 @@ function PostMediaInner({
   } = useManagedVideoPlayer(
     postId,
     videoUrlForPlayer,
-    isVisible,
+    isFocused && !previewEnded,
     nextPostUrl,
     nextPostId,
   );
 
-  // ── Preview-ended state ────────────────────────────────────────────────────
-  const [previewEnded, setPreviewEnded] = useState(false);
-  const previewEndedRef = useRef(false);
+  // ── Poster crossfade: shared value driven by onFirstFrameRender ──────────
+  const firstFrameRendered = useRef(false);
+  const posterOpacity = useSharedValue(1);
+
+  useEffect(() => {
+    if (!isReady) {
+      firstFrameRendered.current = false;
+      posterOpacity.value = 1;
+    }
+  }, [isReady]);
+
+  useEffect(() => {
+    const shouldHide = firstFrameRendered.current && isFocused;
+    posterOpacity.value = shouldHide ? withTiming(0, { duration: 150 }) : 1;
+  }, [isFocused, isPlaying]);
+
+  const handleFirstFrameRender = useCallback(() => {
+    firstFrameRendered.current = true;
+    if (isFocusedRef.current) {
+      posterOpacity.value = withTiming(0, { duration: 150 });
+    }
+  }, []);
+
+  const posterAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: posterOpacity.value,
+  }));
 
   // ── Aspect ratio ───────────────────────────────────────────────────────────
   const [aspectRatio, setAspectRatio] = useState<number | null>(null);
@@ -528,74 +532,95 @@ function PostMediaInner({
 
   // ─── Effects ───────────────────────────────────────────────────────────────
 
-  // Progress polling for paid preview cap
   useEffect(() => {
-    if (!player) return;
+    if (!player || !isFocused) return;
 
-    const interval = setInterval(() => {
-      if (isScrubbing.value || !player.duration) return;
+    try {
+      (player as any).timeUpdateEventInterval = 0.25;
+    } catch {
+      /* property may not exist on older builds */
+    }
 
-      if (isPaidVideo && parsedDuration) {
-        const cap = player.duration;
-        maxProgressRatio.value = cap / parsedDuration;
+    const sub = player.addListener(
+      "timeUpdate" as any,
+      ({ currentTime }: { currentTime: number }) => {
+        if (isScrubbing.value || !player.duration) return;
 
-        if (player.currentTime >= cap - 0.1) {
-          pause();
-          player.currentTime = cap;
-          progress.value = cap / parsedDuration;
-          if (!previewEndedRef.current) {
-            previewEndedRef.current = true;
-            setPreviewEnded(true);
+        if (isPaidVideo && parsedDuration) {
+          const cap = player.duration;
+          maxProgressRatio.value = cap / parsedDuration;
+
+          if (currentTime >= cap - 0.1) {
+            pause();
+            progress.value = cap / parsedDuration;
+            if (!previewEndedRef.current) {
+              previewEndedRef.current = true;
+              setPreviewEnded(true);
+            }
+          } else {
+            progress.value = currentTime / parsedDuration;
+            // if (previewEndedRef.current) {
+            //   previewEndedRef.current = false;
+            //   setPreviewEnded(false);
+            // }
           }
         } else {
-          progress.value = player.currentTime / parsedDuration;
-          if (previewEndedRef.current) {
-            previewEndedRef.current = false;
-            setPreviewEnded(false);
-          }
+          progress.value = currentTime / player.duration;
         }
-      } else {
-        progress.value = player.currentTime / player.duration;
-      }
-    }, 100);
+      },
+    );
 
-    return () => clearInterval(interval);
-  }, [player, isPaidVideo, parsedDuration, pause]);
+    return () => sub.remove();
+  }, [player, isFocused, isPaidVideo, parsedDuration, pause]);
 
   // Disable looping for paid previews
   useEffect(() => {
-    if (!player || !isPaidVideo) return;
-    let previousLoop = true;
+    if (!player || !isFocused || !isPaidVideo) return;
+
     try {
-      previousLoop = player.loop;
       player.loop = false;
     } catch {
       return;
     }
+
+    const sub = player.addListener("playToEnd" as any, () => {
+      pause();
+      if (!previewEndedRef.current) {
+        previewEndedRef.current = true;
+        setPreviewEnded(true);
+      }
+    });
+
     return () => {
+      sub.remove();
       try {
-        player.loop = previousLoop;
+        player.loop = true;
       } catch {
         /* native object may be gone */
       }
     };
-  }, [player, isPaidVideo]);
+  }, [player, isFocused, isPaidVideo, pause]);
 
   // Derive aspect ratio from video track once ready
   useEffect(() => {
-    if (type === "video" && isReady && player?.videoTrack?.size) {
+    if (
+      type === "video" &&
+      inVideoWindow &&
+      isReady &&
+      player?.videoTrack?.size
+    ) {
       const { width, height } = player.videoTrack.size;
       if (width && height) setAspectRatio(width / height);
     }
-  }, [type, isReady, player]);
+  }, [type, inVideoWindow, isReady, player]);
 
   // Reset preview state when post scrolls off screen
   useEffect(() => {
-    if (!isVisible && previewEndedRef.current) {
+    if (!isFocused && previewEndedRef.current) {
       previewEndedRef.current = false;
       setPreviewEnded(false);
     }
-  }, [isVisible]);
+  }, [isFocused]);
 
   // ─── UI event handlers ─────────────────────────────────────────────────────
 
@@ -653,22 +678,25 @@ function PostMediaInner({
   }, [handleDoubleTap, handleSingleTap]);
 
   const handleLongPressIn = useCallback(() => {
+    isLongPressingRef.current = true; // ← add this
     if (singleTapTimerRef.current) {
       clearTimeout(singleTapTimerRef.current);
       singleTapTimerRef.current = null;
     }
     if (type === "video" && isPlaying) {
-      pause();
+      pause?.();
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
   }, [type, isPlaying, pause]);
 
   const handleLongPressOut = useCallback(() => {
-    if (type === "video" && isVisible && !previewEnded) play();
-  }, [type, isVisible, play, previewEnded]);
+    if (!isLongPressingRef.current) return; // ← guard
+    isLongPressingRef.current = false; // ← reset
+    if (type === "video" && isFocused && !previewEnded) play?.();
+  }, [type, isFocused, play, previewEnded]);
 
   const handleMutePress = useCallback(() => {
-    toggleMute();
+    toggleMute?.();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     showMuteIcon();
   }, [toggleMute, showMuteIcon]);
@@ -680,17 +708,39 @@ function PostMediaInner({
   const handleWatchAgain = useCallback(() => {
     previewEndedRef.current = false;
     setPreviewEnded(false);
+    progress.value = 0;
+
+    // Mark poster as "already rendered" so the poster-visibility effects
+    // (which check firstFrameRendered.current) don't keep it at opacity 1.
+    firstFrameRendered.current = true;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
     if (player) {
       player.currentTime = 0;
-      progress.value = 0;
+
+      // Delay so the seek settles and React state (previewEnded=false)
+      // has propagated. Then:
+      //  • Call player.play() directly — the hook's play() bails out if
+      //    the status isn't "readyToPlay" (which can happen mid-seek).
+      //  • Force the poster to hide — the isReady effect may have
+      //    reset firstFrameRendered during the seek transient.
+      setTimeout(() => {
+        firstFrameRendered.current = true; // re-set in case isReady effect cleared it
+        posterOpacity.value = withTiming(0, { duration: 150 });
+        try {
+          player.play();
+        } catch {
+          /* native object may be gone */
+        }
+      }, 150);
     }
-    if (isVisible) play();
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [player, play, isVisible, progress]);
+  }, [player, progress, posterOpacity]);
 
   const handleImageLoad = useCallback((e: any) => {
     if (e.source?.width && e.source?.height) {
-      setAspectRatio(e.source.width / e.source.height);
+      const ratio = e.source.width / e.source.height;
+      setAspectRatio((prev) => (prev === ratio ? prev : ratio)); // ← no re-render if same value
     }
   }, []);
 
@@ -700,129 +750,133 @@ function PostMediaInner({
 
   if (!media && !viewerSeesImagePaywall && !isPaidVideo) return null;
 
-  const showVideoView = player !== null;
-  const showLoadingOverlay = type === "video" && (isBuffering || !isReady);
+  // ✅ FIX: mount VideoView whenever we have a player and are in the video
+  // window — not just when focused.  This lets ±2 neighbors keep their
+  // VideoView connected (paused) so the first frame is already decoded
+  // when focus arrives.  `isFocused` only controls play/pause.
+  //
+  // Use a sticky ref so that once the VideoView has mounted (isReady=true),
+  // it stays mounted even during brief "loading" hiccups caused by seeks.
+  // Un-mounting / re-mounting the VideoView on Android causes a stuck-frame.
+  const videoViewMountedRef = useRef(false);
+  if (isReady && player) videoViewMountedRef.current = true;
+  if (!player) videoViewMountedRef.current = false;
+  const showVideoView =
+    isFocused && player !== null && (isReady || videoViewMountedRef.current);
+  const showLoadingOverlay =
+    type === "video" && isFocused && (isBuffering || !isReady);
   const showPremiumBadge = price > 0 || isExclusive;
 
-  const calculatedHeight = aspectRatio
-    ? SCREEN_WIDTH / aspectRatio
-    : SCREEN_WIDTH;
-  const containerHeight = Math.max(
-    MIN_MEDIA_HEIGHT,
-    Math.min(calculatedHeight, MAX_MEDIA_HEIGHT),
-  );
+  const containerHeight = useMemo(() => {
+    const calculatedHeight = aspectRatio
+      ? SCREEN_WIDTH / aspectRatio
+      : SCREEN_WIDTH;
+    return Math.max(
+      MIN_MEDIA_HEIGHT,
+      Math.min(calculatedHeight, MAX_MEDIA_HEIGHT),
+    );
+  }, [aspectRatio]);
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
     <View style={styles.container}>
-      {type === "image" ? (
-        viewerSeesImagePaywall ? (
-          <ImagePaywall
-            price={price}
-            isExclusive={isExclusive}
-            containerHeight={containerHeight}
-            onPay={handlePayPress}
-          />
-        ) : (
-          <Pressable onPress={handleTap}>
-            <Image
-              source={{ uri: media }}
-              style={[styles.media, { height: containerHeight }]}
-              contentFit="contain"
-              cachePolicy="disk"
-              transition={200}
-              onLoad={handleImageLoad}
+      <Pressable
+        onPress={handleTap}
+        onLongPress={handleLongPressIn}
+        onPressOut={handleLongPressOut}
+        delayLongPress={200}
+      >
+        <View style={[styles.media, { height: containerHeight }]}>
+          {showVideoBlockPaywall ? (
+            <VideoLockedPaywall
+              price={price}
+              isExclusive={isExclusive}
+              thumbnail={thumbnail}
+              onPay={handlePayPress}
+              onImageLoad={handleImageLoad}
             />
-          </Pressable>
-        )
-      ) : (
-        /* Video */
-        <Pressable
-          onPress={handleTap}
-          onLongPress={handleLongPressIn}
-          onPressOut={handleLongPressOut}
-          delayLongPress={200}
-        >
-          <View style={[styles.media, { height: containerHeight }]}>
-            {showVideoBlockPaywall ? (
-              <VideoLockedPaywall
-                price={price}
-                isExclusive={isExclusive}
-                thumbnail={thumbnail}
-                onPay={handlePayPress}
-                onImageLoad={handleImageLoad}
-              />
-            ) : (
-              <>
-                {/* Thumbnail shown while video loads */}
-                {thumbnail && (
+          ) : (
+            <>
+              {/* ✅ FIX: VideoView mounts for ALL posts in ±2 window (not just focused).
+                    This keeps the decoder connected so the first frame is already rendered
+                    when the post becomes focused — eliminating the black flash.
+
+                    surfaceType="textureView" prevents the SurfaceView z-ordering black flash.
+                    useExoShutter={false} prevents ExoPlayer's default black shutter layer.
+                    onFirstFrameRender replaces the timer-based poster hide. */}
+              {showVideoView && player && (
+                <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                  <VideoView
+                    style={StyleSheet.absoluteFill}
+                    player={player}
+                    contentFit="contain"
+                    nativeControls={false}
+                    allowsPictureInPicture={false}
+                    // allowsFullscreen={false}
+                    fullscreenOptions={{
+                      enable: false,
+                    }}
+                    // surfaceType="textureView"
+                    useExoShutter={false}
+                    onFirstFrameRender={handleFirstFrameRender}
+                  />
+                </View>
+              )}
+
+              {thumbnail ? (
+                <Animated.View
+                  style={[StyleSheet.absoluteFill, posterAnimatedStyle]}
+                  pointerEvents="none"
+                >
                   <Image
                     source={{ uri: thumbnail }}
-                    style={[
-                      StyleSheet.absoluteFill,
-                      { opacity: isReady && isPlaying ? 0 : 1 },
-                    ]}
+                    style={StyleSheet.absoluteFill}
                     contentFit="contain"
                     cachePolicy="disk"
+                    transition={0}
+                    onLoad={handleImageLoad}
                   />
-                )}
+                </Animated.View>
+              ) : (
+                <Animated.View
+                  style={[
+                    StyleSheet.absoluteFill,
+                    styles.videoPosterFallback,
+                    posterAnimatedStyle,
+                  ]}
+                  pointerEvents="none"
+                />
+              )}
 
-                {/* Video player + scrub bar */}
-                {showVideoView && (
-                  <View style={{ flex: 1 }}>
-                    <VideoView
-                      style={StyleSheet.absoluteFill}
-                      player={player}
-                      contentFit="contain"
-                      nativeControls={false}
-                      allowsPictureInPicture={false}
-                      allowsFullscreen={false}
+              {showLoadingOverlay && (
+                <View style={styles.loadingOverlay}>
+                  <ActivityIndicator color="white" size="large" />
+                </View>
+              )}
+
+              {/* Progress bar + controls only for focused post */}
+              {showVideoView && player && isFocused && (
+                <GestureDetector gesture={barGesture}>
+                  <Animated.View
+                    style={[styles.progressContainer, progressBarAnimatedStyle]}
+                    hitSlop={{ top: 10, bottom: 10 }}
+                    onLayout={(e) => {
+                      progressBarWidth.value = e.nativeEvent.layout.width;
+                    }}
+                  >
+                    <Animated.View
+                      style={[styles.progressFill, progressStyle]}
                     />
+                    <Animated.View
+                      style={[styles.progressLockedSegment, lockedSegmentStyle]}
+                    />
+                    <Animated.View style={[styles.thumb, thumbAnimatedStyle]} />
+                  </Animated.View>
+                </GestureDetector>
+              )}
 
-                    <GestureDetector gesture={barGesture}>
-                      <Animated.View
-                        style={[
-                          styles.progressContainer,
-                          progressBarAnimatedStyle,
-                        ]}
-                        hitSlop={{ top: 10, bottom: 10 }}
-                        onLayout={(e) => {
-                          progressBarWidth.value = e.nativeEvent.layout.width;
-                        }}
-                      >
-                        <Animated.View
-                          style={[styles.progressFill, progressStyle]}
-                        />
-                        <Animated.View
-                          style={[
-                            styles.progressLockedSegment,
-                            lockedSegmentStyle,
-                          ]}
-                        />
-                        <Animated.View
-                          style={[styles.thumb, thumbAnimatedStyle]}
-                        />
-                      </Animated.View>
-                    </GestureDetector>
-                  </View>
-                )}
-
-                {showLoadingOverlay && (
-                  <View style={styles.loadingOverlay}>
-                    <ActivityIndicator color="white" size="large" />
-                  </View>
-                )}
-
-                {previewEnded && isPaidVideo && (
-                  <VideoPreviewEndedOverlay
-                    price={price}
-                    isExclusive={isExclusive}
-                    onPay={handlePayPress}
-                    onWatchAgain={handleWatchAgain}
-                  />
-                )}
-
+              {isFocused && (
                 <AnimatedPressable
                   onPress={handleMutePress}
                   style={[styles.muteButton, animatedMuteStyle]}
@@ -834,10 +888,31 @@ function PostMediaInner({
                     color="white"
                   />
                 </AnimatedPressable>
-              </>
-            )}
-          </View>
-        </Pressable>
+              )}
+            </>
+          )}
+        </View>
+      </Pressable>
+
+      {/* Preview-ended paywall — rendered OUTSIDE the Pressable so its
+          Pressable buttons (Watch Again / Unlock Now) are directly tappable
+          instead of being swallowed by the parent Pressable's onPress. */}
+      {previewEnded && isPaidVideo && isFocused && (
+        <View
+          style={[
+            StyleSheet.absoluteFill,
+            { height: containerHeight, zIndex: 20 },
+          ]}
+          // Don't set pointerEvents="box-none" here — we WANT the overlay
+          // backdrop to block taps from reaching the video Pressable beneath.
+        >
+          <VideoPreviewEndedOverlay
+            price={price}
+            isExclusive={isExclusive}
+            onPay={handlePayPress}
+            onWatchAgain={handleWatchAgain}
+          />
+        </View>
       )}
 
       {/* Heart animation overlay */}
@@ -874,15 +949,111 @@ function PostMediaInner({
   );
 }
 
+const PostMediaInnerMainMemo = memo(PostMediaInnerMain);
+
 // ─── Public export (wrapped in error boundary) ────────────────────────────────
+
+const PostMediaImage = memo(function PostMediaImage({
+  media,
+  price = 0,
+  viewer,
+  isExclusive = false,
+  onLike,
+  isLiked,
+}: Props) {
+  const lastTapRef = useRef(0);
+  const singleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const canView = useMemo(
+    () => viewerCanViewPostMedia(viewer, price, isExclusive),
+    [viewer, price, isExclusive],
+  );
+
+  const viewerSeesImagePaywall = !canView;
+
+  const heartScale = useSharedValue(0);
+  const heartOpacity = useSharedValue(0);
+
+  const heartAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: heartScale.value }],
+    opacity: heartOpacity.value,
+  }));
+
+  const triggerHeartAnimation = useCallback(() => {
+    heartScale.value = 0.6;
+    heartOpacity.value = 1;
+    heartScale.value = withSpring(1.2);
+    heartOpacity.value = withTiming(0, { duration: 600 });
+  }, []);
+
+  const handleDoubleTap = useCallback(() => {
+    triggerHeartAnimation();
+    if (!isLiked) onLike();
+  }, [isLiked, onLike]);
+
+  const handleTap = useCallback(() => {
+    const now = Date.now();
+    const diff = now - lastTapRef.current;
+
+    if (singleTapTimerRef.current) {
+      clearTimeout(singleTapTimerRef.current);
+    }
+
+    if (diff < DOUBLE_TAP_DELAY) {
+      lastTapRef.current = 0;
+      handleDoubleTap();
+    } else {
+      lastTapRef.current = now;
+      singleTapTimerRef.current = setTimeout(() => {}, DOUBLE_TAP_DELAY);
+    }
+  }, [handleDoubleTap]);
+
+  if (!media && !viewerSeesImagePaywall) return null;
+
+  return (
+    <View style={styles.container}>
+      {viewerSeesImagePaywall ? (
+        <ImagePaywall
+          price={price}
+          isExclusive={isExclusive}
+          containerHeight={MIN_MEDIA_HEIGHT}
+          onPay={() => {}}
+        />
+      ) : (
+        <Pressable onPress={handleTap}>
+          <Image
+            source={{ uri: media }}
+            style={styles.imageMedia}
+            contentFit="contain"
+            cachePolicy="memory-disk"
+            transition={0}
+          />
+        </Pressable>
+      )}
+
+      <Animated.View
+        style={[styles.heartContainer, heartAnimatedStyle]}
+        pointerEvents="none"
+      >
+        <Ionicons name="heart" size={120} color="#ff3040" />
+      </Animated.View>
+    </View>
+  );
+});
 
 function PostMedia(props: Props) {
   return (
     <PostMediaErrorBoundary>
-      <PostMediaInner {...props} />
+      {props.type === "image" ? (
+        <PostMediaImage {...props} />
+      ) : (
+        <PostMediaInnerMainMemo {...props} />
+      )}
     </PostMediaErrorBoundary>
   );
 }
+
+export default memo(PostMedia);
 
 const styles = StyleSheet.create({
   container: {
@@ -898,11 +1069,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.5)",
     borderWidth: 1,
     borderColor: "rgba(245, 197, 66, 0.55)",
-    shadowColor: "#f5c542",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.45,
-    shadowRadius: 6,
-    elevation: 6,
+    // elevation removed — creates expensive bitmap layer on Android during scroll
   },
   errorFallback: {
     width: "100%",
@@ -920,6 +1087,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#000",
     overflow: "hidden",
   },
+  videoPosterFallback: {
+    backgroundColor: "#1c1c1e",
+  },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: "center",
@@ -928,7 +1098,7 @@ const styles = StyleSheet.create({
   },
   thumb: {
     position: "absolute",
-    top: -2, // center vertically over 3px bar
+    top: -2,
     width: 10,
     height: 10,
     borderRadius: 5,
@@ -958,7 +1128,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   heartIcon: {
-    // Shadow for visibility on light backgrounds
     textShadowColor: "rgba(0, 0, 0, 0.3)",
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
@@ -971,7 +1140,6 @@ const styles = StyleSheet.create({
     height: 6,
     backgroundColor: "rgba(255,255,255,0.3)",
   },
-
   progressFill: {
     height: "100%",
     backgroundColor: "#fff",
@@ -1040,11 +1208,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 4,
-    shadowColor: Colors.gradient[0],
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.6,
-    shadowRadius: 16,
-    elevation: 10,
+    elevation: 2,
   },
   paywallTitle: {
     fontSize: 20,
@@ -1080,11 +1244,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: "hidden",
     marginTop: 6,
-    shadowColor: Colors.gradient[1],
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 8,
+    elevation: 2,
   },
   payButtonPressed: {
     opacity: 0.85,
@@ -1132,6 +1292,10 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.35)",
     marginTop: 2,
   },
+  imageMedia: {
+    width: SCREEN_WIDTH,
+    height: undefined, // let aspectRatio drive it
+    aspectRatio: 4 / 5, // safe default (portrait); adjust to your typical content
+    backgroundColor: "#111", // dark but not pure black so it's clearly a placeholder
+  },
 });
-
-export default memo(PostMedia);

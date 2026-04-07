@@ -1,34 +1,37 @@
 // Android home feed: viewability picks a single primary post; FlatList tuned for smooth scroll.
 import { useCommentsSheet } from "@/hooks/use-comment-sheet";
 import { CommentsBottomSheet } from "@/src/components/comments/CommentsBottomSheet";
-import PostItem from "@/src/components/home/posts/PostWrapper.android";
+import PostItem from "@/src/components/home/posts/PostWrapper";
 import Stories from "@/src/components/home/story";
 import {
-  useGetFeedQuery,
-  useTrackPostView,
+    useGetFeedQuery,
+    useTrackPostView,
 } from "@/src/features/post/post.hooks";
 import { useUnreadMessengerCount } from "@/src/features/profile/notification.hooks";
 import { useGetAllStories } from "@/src/features/story/story.hooks";
 import { useUnreadMessengerBadgeRealtime } from "@/src/lib/pusher";
-import { videoManager } from "@/src/lib/video-manager.android";
+import { videoManager } from "@/src/lib/video-manager.old";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { router, useFocusEffect, useNavigation } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Animated,
-  FlatList,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  ViewabilityConfig,
-  ViewToken,
+    ActivityIndicator,
+    FlatList,
+    NativeScrollEvent,
+    NativeSyntheticEvent,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
+    ViewabilityConfig,
+    ViewToken,
 } from "react-native";
+import Animated, {
+    useAnimatedStyle,
+    useSharedValue,
+} from "react-native-reanimated";
 
 const HEADER_HEIGHT = 56;
 
@@ -40,25 +43,23 @@ const VIEWABILITY_CONFIG: ViewabilityConfig = {
 
 export default function Home() {
   const { theme } = useTheme();
-  const styles = createStyles(theme);
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   const [visiblePostId, setVisiblePostId] = useState<number | null>(null);
   const [isScreenFocused, setIsScreenFocused] = useState(true);
   const flatListRef = useRef<FlatList>(null);
   const scrollOffsetRef = useRef(0);
   const lastScrollY = useRef(0);
-  const headerTranslateY = useRef(new Animated.Value(0)).current;
-  const currentHeaderTranslate = useRef(0);
-  const navigation = useNavigation();
 
-  // ✅ FIX: Use refs for values that change on every scroll so renderItem
-  // doesn't need them in its dependency array.  PostWrapper reads these
-  // via props that are compared in its custom memo — but the renderItem
-  // function identity stays stable, preventing FlatList from re-rendering
-  // every mounted cell on each scroll stop.
   const visiblePostIdRef = useRef<number | null>(null);
   const visibleFeedIndexRef = useRef<number>(-1);
   const isScreenFocusedRef = useRef(true);
+
+  // ✅ Use Reanimated shared value — all header animation math runs on the UI
+  // thread via worklets, eliminating JS bridge calls every scroll frame.
+  const headerTranslateY = useSharedValue(0);
+  const currentHeaderTranslate = useRef(0);
+  const navigation = useNavigation();
 
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -69,20 +70,25 @@ export default function Home() {
 
       if (offsetY <= 0) {
         currentHeaderTranslate.current = 0;
-        headerTranslateY.setValue(0);
+        headerTranslateY.value = 0;
       } else if (delta > 0) {
         currentHeaderTranslate.current = Math.max(
           -HEADER_HEIGHT,
           currentHeaderTranslate.current - delta,
         );
-        headerTranslateY.setValue(currentHeaderTranslate.current);
+        headerTranslateY.value = currentHeaderTranslate.current;
       } else if (delta < 0) {
         currentHeaderTranslate.current = 0;
-        headerTranslateY.setValue(0);
+        headerTranslateY.value = 0;
       }
     },
     [headerTranslateY],
   );
+
+  // ✅ Animated style driven by shared value — runs on the UI thread.
+  const headerAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: headerTranslateY.value }],
+  }));
 
   const trackPostView = useTrackPostView();
   const trackPostViewRef = useRef(trackPostView);
@@ -110,7 +116,6 @@ export default function Home() {
     return postIds.indexOf(visiblePostId);
   }, [visiblePostId, postIds]);
 
-  // Keep refs in sync
   visiblePostIdRef.current = visiblePostId;
   visibleFeedIndexRef.current = visibleFeedIndex;
   isScreenFocusedRef.current = isScreenFocused;
@@ -127,7 +132,6 @@ export default function Home() {
     }, []),
   );
 
-  // ✅ FIX: memoize handleRefresh so the tabPress effect doesn't re-subscribe every render
   const handleRefresh = useCallback(async () => {
     await Promise.all([refetch(), storyRefetch()]);
   }, [refetch, storyRefetch]);
@@ -151,11 +155,7 @@ export default function Home() {
 
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-      // console.log("viewableItems", viewableItems);
-      if (viewableItems.length === 0) {
-        setVisiblePostId(null);
-        return;
-      }
+      if (viewableItems.length === 0) return;
 
       let mostVisibleItem = viewableItems[0];
 
@@ -169,14 +169,8 @@ export default function Home() {
       const newVisibleId = mostVisibleItem.item as number;
 
       setVisiblePostId((prevId) => {
-        if (prevId !== newVisibleId) {
-          // if (__DEV__) {
-          //   console.log(
-          //     `[Feed/Android] Primary post: ${prevId} → ${newVisibleId}`,
-          //   );
-          // }
-          trackPostViewRef.current.mutate(newVisibleId);
-        }
+        if (prevId === newVisibleId) return prevId;
+        trackPostViewRef.current.mutate(newVisibleId);
         return newVisibleId;
       });
     },
@@ -201,12 +195,6 @@ export default function Home() {
     [postIds],
   );
 
-  // ✅ FIX: renderItem only depends on stable references.
-  // visiblePostId / visibleFeedIndex / isScreenFocused are passed as props
-  // to PostItem, but we read them from state (not refs) via extraData trigger.
-  // The key insight: renderItem identity must stay stable so FlatList doesn't
-  // re-render ALL cells.  PostWrapper's memo comparator handles the fine-grained
-  // checks for which individual cells actually need re-rendering.
   const renderItem = useCallback(
     ({ item: id, index: feedIndex }: { item: number; index: number }) => {
       const nextId = getNextPostId(id);
@@ -276,14 +264,7 @@ export default function Home() {
 
   return (
     <View style={styles.container}>
-      <Animated.View
-        style={[
-          styles.header,
-          {
-            transform: [{ translateY: headerTranslateY }],
-          },
-        ]}
-      >
+      <Animated.View style={[styles.header, headerAnimatedStyle]}>
         <View style={styles.headerSpacer} />
         <Text style={styles.headerTitle}>Jaaspire</Text>
         {HeaderRight}
@@ -291,7 +272,7 @@ export default function Home() {
       <FlatList
         ref={flatListRef}
         onScroll={handleScroll}
-        scrollEventThrottle={16}
+        scrollEventThrottle={32}
         contentContainerStyle={styles.listContent}
         data={postIds}
         keyExtractor={keyExtractor}
@@ -303,8 +284,7 @@ export default function Home() {
         onEndReachedThreshold={0.5}
         onRefresh={handleRefresh}
         refreshing={isRefetching}
-        // ✅ removeClippedSubviews intentionally omitted — on Android it causes
-        // blank cells and black flashes with SurfaceView-backed VideoViews.
+        removeClippedSubviews={true}
         windowSize={5}
         maxToRenderPerBatch={2}
         initialNumToRender={2}
@@ -312,8 +292,6 @@ export default function Home() {
         maintainVisibleContentPosition={{
           minIndexForVisible: 0,
         }}
-        // extraData triggers re-render of visible cells when visibility changes
-        extraData={`${visiblePostId}-${visibleFeedIndex}-${isScreenFocused}`}
       />
 
       <CommentsBottomSheet

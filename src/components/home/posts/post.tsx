@@ -1,5 +1,4 @@
-// src/components/home/posts/post.tsx
-import { useCallback, useMemo } from "react";
+import { memo, useCallback, useMemo, useRef } from "react";
 import PostFooter from "./post-footer";
 import PostHeader from "./post-header";
 import PostMedia from "./post-media";
@@ -10,38 +9,44 @@ import type { Post as PostItem } from "@/src/services/api/api.types";
 import { getMediaType } from "@/src/utils/helpers";
 
 interface Props extends PostItem {
-  isVisible: boolean;
+  /** True when this post is the primary viewable item on the home feed (only one at a time). */
+  isFocused: boolean;
+  /** True when this row is within ±2 of the primary post — keep a native player mounted for preload. */
+  inVideoWindow: boolean;
   onPressComments: () => void;
-  nextPost?: PostItem; // Add nextPost prop
+  nextPost?: PostItem;
 }
 
-export default function Post({
-  isVisible,
+function Post({
+  isFocused,
+  inVideoWindow,
   onPressComments,
   nextPost,
   ...post
 }: Props) {
   const { attachments } = post;
 
+  // Keep a ref so context consumers always read the latest post without
+  // needing to be in the useMemo dependency array.
+  const postRef = useRef(post);
+  postRef.current = post;
+
   const isLiked = post.user_reaction === "love";
   const { mutate: toggleLike } = useToggleLikeMutation();
 
   const handleToggleLike = useCallback(() => {
     toggleLike(post.id);
-  }, [post.id, toggleLike]);
+  }, [post.id]);
 
-  // Extract current media info
   const currentMedia = attachments[0];
   const mediaType = getMediaType(currentMedia?.type);
 
-  // Extract next post's video info for preloading
   const nextVideoInfo = useMemo(() => {
     if (!nextPost?.attachments?.[0]) return null;
 
     const nextMedia = nextPost.attachments[0];
     const nextMediaType = getMediaType(nextMedia.type);
 
-    // Only preload if next post is a video
     if (nextMediaType !== "video") return null;
 
     return {
@@ -50,15 +55,31 @@ export default function Post({
     };
   }, [nextPost?.id, nextPost?.attachments]);
 
-  // Context value - memoized to prevent unnecessary re-renders
   const contextValue = useMemo(
     () => ({
-      post,
+      post: postRef.current,
       isLiked,
       toggleLike: handleToggleLike,
       onPressComments,
     }),
-    [post, isLiked, handleToggleLike, onPressComments],
+    // Fine-grained deps: only the fields PostHeader/PostFooter actually read.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      post.id,
+      post.user?.id,
+      post.user?.avatar,
+      post.user?.username,
+      post.user?.name,
+      post.user_reaction,
+      post.comments_count,
+      post.views_count,
+      post.is_bookmarked,
+      post.text,
+      post.created_at,
+      isLiked,
+      handleToggleLike,
+      onPressComments,
+    ],
   );
 
   return (
@@ -67,15 +88,16 @@ export default function Post({
       <PostMedia
         postId={post.id}
         media={currentMedia?.path}
+        thumbnail={currentMedia?.thumbnail}
         type={mediaType}
         price={post.price}
         fullDuration={currentMedia?.duration}
         viewer={post.viewer}
         isExclusive={post.is_exclusive}
-        isVisible={isVisible}
+        isFocused={isFocused}
+        inVideoWindow={inVideoWindow}
         isLiked={isLiked}
         onLike={handleToggleLike}
-        // Forward next video info for preloading
         nextPostId={nextVideoInfo?.postId}
         nextPostUrl={nextVideoInfo?.url}
       />
@@ -83,3 +105,5 @@ export default function Post({
     </PostContext.Provider>
   );
 }
+
+export default memo(Post);

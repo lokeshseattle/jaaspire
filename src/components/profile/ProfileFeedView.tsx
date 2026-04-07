@@ -2,20 +2,20 @@
 // Feed list behavior aligned with app/(app)/(tabs)/index.tsx (home).
 import { useCommentsSheet } from "@/hooks/use-comment-sheet";
 import { CommentsBottomSheet } from "@/src/components/comments/CommentsBottomSheet";
-import PostItem from "@/src/components/home/posts/PostWrapper";
+import PostItem from "@/src/components/home/posts/PostWrapper.old";
 import { useTrackPostView } from "@/src/features/post/post.hooks";
-import { videoManager } from "@/src/lib/video-manager";
+import { videoManager } from "@/src/lib/video-manager.old";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  FlatList,
-  StyleSheet,
-  View,
-  ViewabilityConfig,
-  ViewToken,
+    ActivityIndicator,
+    FlatList,
+    StyleSheet,
+    View,
+    ViewabilityConfig,
+    ViewToken,
 } from "react-native";
 
 // Match home feed — see app/(app)/(tabs)/index.tsx

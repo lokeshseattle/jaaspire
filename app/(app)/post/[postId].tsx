@@ -2,12 +2,12 @@
 
 import { useCommentsSheet } from "@/hooks/use-comment-sheet";
 import { CommentsBottomSheet } from "@/src/components/comments/CommentsBottomSheet";
-import PostItem from "@/src/components/home/posts/PostWrapper";
+import PostItem from "@/src/components/home/posts/PostWrapper.old";
 import {
   useGetSinglePost,
   useTrackPostView,
 } from "@/src/features/post/post.hooks";
-import { videoManager } from "@/src/lib/video-manager";
+import { videoManager } from "@/src/lib/video-manager.old";
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {

@@ -1,4 +1,5 @@
-import { videoManager } from "@/src/lib/video-manager.android";
+// src/hooks/use-video-player.ts
+import { videoManager } from "@/src/lib/video-manager.old";
 import type {
     PlayingChangeEventPayload,
     StatusChangeEventPayload,
@@ -6,6 +7,7 @@ import type {
 } from "expo-video";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+/** Native player may be released while JS ref still exists (NativeSharedObjectNotFound). */
 function safePlayerSnapshot(p: VideoPlayer): {
   status: VideoPlayer["status"];
   playing: boolean;
@@ -20,32 +22,32 @@ function safePlayerSnapshot(p: VideoPlayer): {
 export function useManagedVideoPlayer(
   postId: number,
   url: string | null,
-  isFocused: boolean,
+  isVisible: boolean,
   nextPostUrl?: string,
   nextPostId?: number,
 ) {
-  // Individual state atoms — React can bail out when the primitive value
-  // hasn't changed, unlike a single object where spread always creates
-  // a new reference.
-  const [player, setPlayer] = useState<VideoPlayer | null>(null);
   const [isReady, setIsReady] = useState(false);
-  const [isBuffering, setIsBuffering] = useState(false);
+  const [isBuffering, setIsBuffering] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(videoManager.getGlobalMuted());
+  const [player, setPlayer] = useState<VideoPlayer | null>(null);
 
-  const isFocusedRef = useRef(isFocused);
+  // Refs to avoid stale closures in event listeners
+  const isVisibleRef = useRef(isVisible);
   const postIdRef = useRef(postId);
+  const urlRef = useRef(url);
   const playerRef = useRef<VideoPlayer | null>(null);
 
-  isFocusedRef.current = isFocused;
+  // Keep refs in sync
+  isVisibleRef.current = isVisible;
   postIdRef.current = postId;
+  urlRef.current = url;
 
+  // --- Setup current video player + event listeners in ONE effect ---
+  // This prevents the race condition where player is ready before listener attaches
   useEffect(() => {
     if (!url) {
       setPlayer(null);
-      setIsReady(false);
-      setIsBuffering(false);
-      setIsPlaying(false);
       playerRef.current = null;
       return;
     }
@@ -53,42 +55,57 @@ export function useManagedVideoPlayer(
     const currentPostId = postId;
     const p = videoManager.getOrCreatePlayer(currentPostId, url);
 
+    setPlayer(p);
     playerRef.current = p;
+
+    // Mark as mounted IMMEDIATELY so manager knows not to evict
     videoManager.mount(currentPostId);
 
-    // Set player ref first
-    setPlayer(p);
-
+    // --- CHECK INITIAL STATUS (fixes race condition) ---
+    // The player might already be ready if it was preloaded or cached
     const initial = safePlayerSnapshot(p);
     if (!initial) {
       setIsReady(false);
       setIsBuffering(false);
       setIsPlaying(false);
-    } else if (initial.status === "readyToPlay") {
-      setIsReady(true);
-      setIsBuffering(false);
-      setIsPlaying(initial.playing);
-      if (isFocusedRef.current) {
-        videoManager.play(currentPostId);
-      }
-    } else if (initial.status === "loading") {
-      setIsReady(false);
-      setIsBuffering(true);
-      setIsPlaying(initial.playing);
     } else {
-      setIsReady(false);
-      setIsBuffering(false);
+      const initialStatus = initial.status;
+      console.log(`🎬 [${currentPostId}] Initial status: ${initialStatus}`);
+
+      if (initialStatus === "readyToPlay") {
+        setIsReady(true);
+        setIsBuffering(false);
+        // Auto-play if visible
+        if (isVisibleRef.current) {
+          videoManager.play(currentPostId);
+        }
+      } else if (initialStatus === "loading") {
+        setIsBuffering(true);
+        setIsReady(false);
+      } else {
+        setIsReady(false);
+        setIsBuffering(false);
+      }
+
+      // Sync initial playing state
       setIsPlaying(initial.playing);
     }
 
+    // --- ATTACH LISTENERS ---
     const statusSub = p.addListener(
       "statusChange",
       ({ status, error }: StatusChangeEventPayload) => {
+        // Use ref to get current postId (avoids stale closure)
+        const pid = postIdRef.current;
+
+        console.log(`📺 [${pid}] Status: ${status}`);
+
         switch (status) {
           case "readyToPlay":
             setIsReady(true);
             setIsBuffering(false);
-            if (isFocusedRef.current && postIdRef.current === currentPostId) {
+            // Auto-play if this post is currently visible
+            if (isVisibleRef.current && postIdRef.current === currentPostId) {
               videoManager.play(currentPostId);
             }
             break;
@@ -100,11 +117,9 @@ export function useManagedVideoPlayer(
             setIsBuffering(false);
             break;
           case "error":
-            setIsReady(false);
             setIsBuffering(false);
-            if (__DEV__) {
-              console.error(`[VideoPlayer:${currentPostId}] error:`, error);
-            }
+            setIsReady(false);
+            console.error(`❌ [${pid}] Video error:`, error);
             break;
         }
       },
@@ -117,18 +132,28 @@ export function useManagedVideoPlayer(
       },
     );
 
+    // --- CLEANUP ---
     return () => {
+      console.log(`🧹 [${currentPostId}] Cleaning up player hook`);
       statusSub.remove();
       playingSub.remove();
+
+      // Mark as unmounted - manager can now safely evict if needed
       videoManager.unmount(currentPostId);
+
+      // Pause if this player was playing
       videoManager.pause(currentPostId);
     };
-  }, [postId, url]);
+  }, [postId, url]); // Re-run if postId or url changes
 
+  // --- Sub to global mute state ---
   useEffect(() => {
-    return videoManager.subscribeToMute(setIsMuted);
+    return videoManager.subscribeToMute((muted) => {
+      setIsMuted(muted);
+    });
   }, []);
 
+  // --- Handle visibility changes ---
   useEffect(() => {
     const p = playerRef.current;
     if (!p) return;
@@ -137,23 +162,32 @@ export function useManagedVideoPlayer(
     const snap = safePlayerSnapshot(p);
     if (!snap) return;
 
-    if (isFocused) {
+    if (isVisible) {
+      // Only play if ready
       if (snap.status === "readyToPlay") {
+        console.log(`👁️ [${currentPostId}] Visible & ready, playing`);
         videoManager.play(currentPostId);
+      } else {
+        console.log(`👁️ [${currentPostId}] Visible but status: ${snap.status}`);
       }
     } else {
+      // Pause when not visible
       if (snap.playing) {
+        console.log(`👁️ [${currentPostId}] Not visible, pausing`);
         videoManager.pause(currentPostId);
       }
     }
-  }, [isFocused]);
+  }, [isVisible]);
 
+  // --- Preload next video ---
   useEffect(() => {
     if (nextPostUrl && nextPostId) {
+      console.log(`⏳ Preloading next post ${nextPostId}`);
       videoManager.preload(nextPostId, nextPostUrl);
     }
   }, [nextPostUrl, nextPostId]);
 
+  // --- Actions ---
   const togglePlayPause = useCallback(() => {
     const p = playerRef.current;
     if (!p) return;
@@ -169,7 +203,8 @@ export function useManagedVideoPlayer(
   }, []);
 
   const toggleMute = useCallback(() => {
-    videoManager.setGlobalMuted(!videoManager.getGlobalMuted());
+    const currentGlobalMuted = videoManager.getGlobalMuted();
+    videoManager.setGlobalMuted(!currentGlobalMuted);
   }, []);
 
   const pause = useCallback(() => {

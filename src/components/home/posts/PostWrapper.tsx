@@ -1,53 +1,79 @@
-// src/components/home/posts/PostWrapper.tsx
+// Android: single feed-primary post is "focused" — only that row mounts full video + playback.
 import Post from "@/src/components/home/posts/post";
 import { usePostStore } from "@/src/features/post/post.store";
-import { memo } from "react";
+import { memo, useCallback, useRef } from "react";
+import { useShallow } from "zustand/react/shallow";
+
+const PRELOAD_RADIUS = 1;
 
 type PostItemProps = {
-    id: number;
-    nextId?: number | null;
-    visiblePostId: number | null;
-    isScreenFocused: boolean;
-    openComments: (id: number) => void;
+  id: number;
+  feedIndex: number;
+  visibleFeedIndex: number;
+  nextId?: number | null;
+  visiblePostId: number | null;
+  isScreenFocused: boolean;
+  openComments: (id: number) => void;
 };
 
 const PostItem = ({
-    id,
-    nextId,
-    visiblePostId,
-    isScreenFocused,
-    openComments,
+  id,
+  feedIndex,
+  visibleFeedIndex,
+  nextId,
+  visiblePostId,
+  isScreenFocused,
+  openComments,
 }: PostItemProps) => {
-    // Always call hooks unconditionally
-    const post = usePostStore((state) => state.posts[id]);
+  const post = usePostStore(useShallow((state) => state.posts[id]));
 
-    // Fix: Always call the hook, use a selector that handles missing nextId
-    const nextPost = usePostStore((state) =>
-        nextId != null ? state.posts[nextId] : undefined
-    );
+  const nextPost = usePostStore(
+    useShallow((state) => (nextId != null ? state.posts[nextId] : undefined)),
+  );
 
-    if (!post) return null;
+  // Stabilize callback identity — `id` rarely changes for a mounted cell.
+  const idRef = useRef(id);
+  idRef.current = id;
+  const stableOpenComments = useCallback(
+    () => openComments(idRef.current),
+    [openComments],
+  );
 
-    const isVisible = visiblePostId === id && isScreenFocused;
+  if (!post) return null;
 
-    return (
-        <Post
-            {...post}
-            isVisible={isVisible}
-            onPressComments={() => openComments(id)}
-            nextPost={nextPost}
-        />
-    );
+  const isFocused = visiblePostId === id && isScreenFocused;
+  const inVideoWindow =
+    visibleFeedIndex >= 0 &&
+    Math.abs(feedIndex - visibleFeedIndex) <= PRELOAD_RADIUS;
+
+  return (
+    <Post
+      {...post}
+      isFocused={isFocused}
+      inVideoWindow={inVideoWindow}
+      onPressComments={stableOpenComments}
+      nextPost={nextPost}
+    />
+  );
 };
 
-// Memoize to prevent unnecessary re-renders when parent state changes
 export default memo(PostItem, (prevProps, nextProps) => {
-    // Only re-render if these specific props change
-    return (
-        prevProps.id === nextProps.id &&
-        prevProps.nextId === nextProps.nextId &&
-        prevProps.isScreenFocused === nextProps.isScreenFocused &&
-        // Only care about visibility changes that affect THIS post
-        (prevProps.visiblePostId === prevProps.id) === (nextProps.visiblePostId === nextProps.id)
-    );
+  const prevInWindow =
+    prevProps.visibleFeedIndex >= 0 &&
+    Math.abs(prevProps.feedIndex - prevProps.visibleFeedIndex) <=
+      PRELOAD_RADIUS;
+  const nextInWindow =
+    nextProps.visibleFeedIndex >= 0 &&
+    Math.abs(nextProps.feedIndex - nextProps.visibleFeedIndex) <=
+      PRELOAD_RADIUS;
+
+  return (
+    prevProps.id === nextProps.id &&
+    prevProps.feedIndex === nextProps.feedIndex &&
+    prevProps.nextId === nextProps.nextId &&
+    prevProps.isScreenFocused === nextProps.isScreenFocused &&
+    (prevProps.visiblePostId === prevProps.id) ===
+      (nextProps.visiblePostId === nextProps.id) &&
+    prevInWindow === nextInWindow
+  );
 });

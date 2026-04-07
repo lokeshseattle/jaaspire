@@ -1,11 +1,11 @@
 import { useCommentsSheet } from "@/hooks/use-comment-sheet";
 import { CommentsBottomSheet } from "@/src/components/comments/CommentsBottomSheet";
-import PostItem from "@/src/components/home/posts/PostWrapper.android";
+import PostItem from "@/src/components/home/posts/PostWrapper";
 import {
     useGetSinglePost,
     useTrackPostView,
 } from "@/src/features/post/post.hooks";
-import { videoManager } from "@/src/lib/video-manager";
+import { videoManager } from "@/src/lib/video-manager.old";
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
@@ -124,10 +124,7 @@ const PostScreen = () => {
   const getNextPostId = useCallback(
     (currentId: number): number | undefined => {
       const currentIndex = postIds.indexOf(currentId);
-      if (
-        currentIndex === -1 ||
-        currentIndex >= postIds.length - 1
-      ) {
+      if (currentIndex === -1 || currentIndex >= postIds.length - 1) {
         return undefined;
       }
       return postIds[currentIndex + 1];
