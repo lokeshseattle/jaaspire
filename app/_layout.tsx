@@ -14,8 +14,8 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
-import { SafeAreaProvider } from "react-native-safe-area-context";
 import "react-native-reanimated";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -33,7 +33,12 @@ function RootLayoutInner() {
 
   return (
     <>
-      <StatusBar style={isDark ? "light" : "dark"} />
+      <StatusBar
+        hidden={false}
+        translucent
+        backgroundColor="transparent"
+        style={isDark ? "light" : "dark"}
+      />
       <ActionSheetProvider>
         <ToastProvider>
           <PersistQueryClientProvider

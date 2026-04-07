@@ -425,18 +425,22 @@ export default function NotificationsScreen() {
     }
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
+  const notificationHandler = (item: TNotification) => {
+    console.log("👁️ notificationHandler: ", item);
+
+    router.push(
+      `/user/${item.from_user?.username}/posts/${item.post?.id}/?commentOpen=${item.type.startsWith("comment") ? "true" : "false"}`,
+    );
+  };
+
   const renderItem = ({ item }: { item: TNotification }) => {
     const profilePic = item.from_user.avatar;
     const isRead = item.read || optimisticReadIds.has(item.id);
 
     return (
       <Pressable
-        onPress={() =>
-          item.post?.id &&
-          router.push(
-            `/user/${item.from_user?.username}/posts/${item.post?.id}`,
-          )
-        }
+        onPress={() => notificationHandler(item)}
+        pointerEvents="box-none"
         style={[styles.notificationItem, !isRead && styles.unreadItem]}
       >
         <Pressable

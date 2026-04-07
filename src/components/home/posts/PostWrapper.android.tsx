@@ -1,7 +1,8 @@
 // Android: single feed-primary post is "focused" — only that row mounts full video + playback.
 import Post from "@/src/components/home/posts/post.android";
 import { usePostStore } from "@/src/features/post/post.store";
-import { memo } from "react";
+import { memo, useCallback, useRef } from "react";
+import { useShallow } from "zustand/react/shallow";
 
 const PRELOAD_RADIUS = 1;
 
@@ -24,10 +25,20 @@ const PostItem = ({
   isScreenFocused,
   openComments,
 }: PostItemProps) => {
-  const post = usePostStore((state) => state.posts[id]);
+  const post = usePostStore(
+    useShallow((state) => state.posts[id]),
+  );
 
-  const nextPost = usePostStore((state) =>
-    nextId != null ? state.posts[nextId] : undefined,
+  const nextPost = usePostStore(
+    useShallow((state) => (nextId != null ? state.posts[nextId] : undefined)),
+  );
+
+  // Stabilize callback identity — `id` rarely changes for a mounted cell.
+  const idRef = useRef(id);
+  idRef.current = id;
+  const stableOpenComments = useCallback(
+    () => openComments(idRef.current),
+    [openComments],
   );
 
   if (!post) return null;
@@ -42,7 +53,7 @@ const PostItem = ({
       {...post}
       isFocused={isFocused}
       inVideoWindow={inVideoWindow}
-      onPressComments={() => openComments(id)}
+      onPressComments={stableOpenComments}
       nextPost={nextPost}
     />
   );

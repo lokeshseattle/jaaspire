@@ -228,7 +228,6 @@ function ImagePaywall({
 }: ImagePaywallProps) {
   return (
     <LinearGradient
-      pointerEvents="none"
       colors={["#1a1040", "#0f0d2b"]}
       style={[styles.paidImagePlaceholder, { height: containerHeight }]}
     >
@@ -271,7 +270,6 @@ function VideoLockedPaywall({
         />
       )}
       <LinearGradient
-        pointerEvents="none"
         colors={["#1a1040", "#0f0d2b"]}
         style={styles.videoLockedFullOverlay}
       >
@@ -298,7 +296,6 @@ function VideoPreviewEndedOverlay({
 }: VideoPreviewEndedOverlayProps) {
   return (
     <LinearGradient
-      pointerEvents="none"
       colors={["rgba(15,13,43,0.85)", "rgba(26,16,64,0.95)"]}
       style={styles.videoPaywallOverlay}
     >
@@ -364,6 +361,10 @@ function PostMediaInnerMain({
 
   const parsedDuration = parseDuration(fullDuration);
 
+  // ── Preview-ended state ────────────────────────────────────────────────────
+  const [previewEnded, setPreviewEnded] = useState(false);
+  const previewEndedRef = useRef(false);
+
   const isPaidVideo =
     !canView && type === "video" && (price > 0 || isExclusive);
   const showVideoBlockPaywall = !canView && type === "video" && !isPaidVideo;
@@ -387,14 +388,10 @@ function PostMediaInnerMain({
   } = useManagedVideoPlayer(
     postId,
     videoUrlForPlayer,
-    isFocused,
+    isFocused && !previewEnded,
     nextPostUrl,
     nextPostId,
   );
-
-  // ── Preview-ended state ────────────────────────────────────────────────────
-  const [previewEnded, setPreviewEnded] = useState(false);
-  const previewEndedRef = useRef(false);
 
   // ── Poster crossfade: shared value driven by onFirstFrameRender ──────────
   const firstFrameRendered = useRef(false);
@@ -554,7 +551,6 @@ function PostMediaInnerMain({
 
           if (currentTime >= cap - 0.1) {
             pause();
-            player.currentTime = cap;
             progress.value = cap / parsedDuration;
             if (!previewEndedRef.current) {
               previewEndedRef.current = true;
@@ -651,7 +647,6 @@ function PostMediaInnerMain({
   }, [type, showMuteIcon]);
 
   const handleTap = useCallback(() => {
-    console.log("Tap72637");
     const now = Date.now();
     const timeSinceLastTap = now - lastTapRef.current;
 
@@ -700,13 +695,34 @@ function PostMediaInnerMain({
   const handleWatchAgain = useCallback(() => {
     previewEndedRef.current = false;
     setPreviewEnded(false);
+    progress.value = 0;
+
+    // Mark poster as "already rendered" so the poster-visibility effects
+    // (which check firstFrameRendered.current) don't keep it at opacity 1.
+    firstFrameRendered.current = true;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
     if (player) {
       player.currentTime = 0;
-      progress.value = 0;
+
+      // Delay so the seek settles and React state (previewEnded=false)
+      // has propagated. Then:
+      //  • Call player.play() directly — the hook's play() bails out if
+      //    the status isn't "readyToPlay" (which can happen mid-seek).
+      //  • Force the poster to hide — the isReady effect may have
+      //    reset firstFrameRendered during the seek transient.
+      setTimeout(() => {
+        firstFrameRendered.current = true; // re-set in case isReady effect cleared it
+        posterOpacity.value = withTiming(0, { duration: 150 });
+        try {
+          player.play();
+        } catch {
+          /* native object may be gone */
+        }
+      }, 150);
     }
-    if (isFocused) play?.();
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [player, play, isFocused, progress]);
+  }, [player, progress, posterOpacity]);
 
   const handleImageLoad = useCallback((e: any) => {
     if (e.source?.width && e.source?.height) {
@@ -725,171 +741,167 @@ function PostMediaInnerMain({
   // window — not just when focused.  This lets ±2 neighbors keep their
   // VideoView connected (paused) so the first frame is already decoded
   // when focus arrives.  `isFocused` only controls play/pause.
-  const showVideoView = inVideoWindow && player !== null && isReady;
+  //
+  // Use a sticky ref so that once the VideoView has mounted (isReady=true),
+  // it stays mounted even during brief "loading" hiccups caused by seeks.
+  // Un-mounting / re-mounting the VideoView on Android causes a stuck-frame.
+  const videoViewMountedRef = useRef(false);
+  if (isReady && player) videoViewMountedRef.current = true;
+  if (!player) videoViewMountedRef.current = false;
+  const showVideoView =
+    isFocused && player !== null && (isReady || videoViewMountedRef.current);
   const showLoadingOverlay =
     type === "video" && isFocused && (isBuffering || !isReady);
   const showPremiumBadge = price > 0 || isExclusive;
 
-  const calculatedHeight = aspectRatio
-    ? SCREEN_WIDTH / aspectRatio
-    : SCREEN_WIDTH;
-  const containerHeight = Math.max(
-    MIN_MEDIA_HEIGHT,
-    Math.min(calculatedHeight, MAX_MEDIA_HEIGHT),
-  );
+  const containerHeight = useMemo(() => {
+    const calculatedHeight = aspectRatio
+      ? SCREEN_WIDTH / aspectRatio
+      : SCREEN_WIDTH;
+    return Math.max(
+      MIN_MEDIA_HEIGHT,
+      Math.min(calculatedHeight, MAX_MEDIA_HEIGHT),
+    );
+  }, [aspectRatio]);
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
     <View style={styles.container}>
-      {type === "image" ? (
-        viewerSeesImagePaywall ? (
-          <ImagePaywall
-            price={price}
-            isExclusive={isExclusive}
-            containerHeight={containerHeight}
-            onPay={handlePayPress}
-          />
-        ) : (
-          <Pressable onPress={handleTap}>
-            <Image
-              source={{ uri: media }}
-              style={styles.imageMedia} // ← new style, see below
-              contentFit="contain"
-              cachePolicy="memory-disk" // ← memory cache prevents re-decode on scroll
-              transition={0} // ← no transition = no black frame during fade
-              recyclingKey={media} // ← tells expo-image this is a distinct image
+      <Pressable
+        onPress={handleTap}
+        onLongPress={handleLongPressIn}
+        onPressOut={handleLongPressOut}
+        delayLongPress={200}
+      >
+        <View style={[styles.media, { height: containerHeight }]}>
+          {showVideoBlockPaywall ? (
+            <VideoLockedPaywall
+              price={price}
+              isExclusive={isExclusive}
+              thumbnail={thumbnail}
+              onPay={handlePayPress}
+              onImageLoad={handleImageLoad}
             />
-          </Pressable>
-        )
-      ) : (
-        /* Video */
-        <Pressable
-          onPress={handleTap}
-          onLongPress={handleLongPressIn}
-          onPressOut={handleLongPressOut}
-          delayLongPress={200}
-        >
-          <View style={[styles.media, { height: containerHeight }]}>
-            {showVideoBlockPaywall ? (
-              <VideoLockedPaywall
-                price={price}
-                isExclusive={isExclusive}
-                thumbnail={thumbnail}
-                onPay={handlePayPress}
-                onImageLoad={handleImageLoad}
-              />
-            ) : (
-              <>
-                {/* ✅ FIX: VideoView mounts for ALL posts in ±2 window (not just focused).
+          ) : (
+            <>
+              {/* ✅ FIX: VideoView mounts for ALL posts in ±2 window (not just focused).
                     This keeps the decoder connected so the first frame is already rendered
                     when the post becomes focused — eliminating the black flash.
 
                     surfaceType="textureView" prevents the SurfaceView z-ordering black flash.
                     useExoShutter={false} prevents ExoPlayer's default black shutter layer.
                     onFirstFrameRender replaces the timer-based poster hide. */}
-                {showVideoView && player && (
-                  <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                    <VideoView
-                      style={StyleSheet.absoluteFill}
-                      player={player}
-                      contentFit="contain"
-                      nativeControls={false}
-                      allowsPictureInPicture={false}
-                      allowsFullscreen={false}
-                      surfaceType="textureView"
-                      useExoShutter={false}
-                      onFirstFrameRender={handleFirstFrameRender}
-                    />
-                  </View>
-                )}
-
-                {thumbnail ? (
-                  <Animated.View
-                    style={[StyleSheet.absoluteFill, posterAnimatedStyle]}
-                    pointerEvents="none"
-                  >
-                    <Image
-                      source={{ uri: thumbnail }}
-                      style={StyleSheet.absoluteFill}
-                      contentFit="contain"
-                      cachePolicy="disk"
-                      transition={0}
-                      onLoad={handleImageLoad}
-                    />
-                  </Animated.View>
-                ) : (
-                  <Animated.View
-                    style={[
-                      StyleSheet.absoluteFill,
-                      styles.videoPosterFallback,
-                      posterAnimatedStyle,
-                    ]}
-                    pointerEvents="none"
+              {showVideoView && player && (
+                <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                  <VideoView
+                    style={StyleSheet.absoluteFill}
+                    player={player}
+                    contentFit="contain"
+                    nativeControls={false}
+                    allowsPictureInPicture={false}
+                    // allowsFullscreen={false}
+                    fullscreenOptions={{
+                      enable: false,
+                    }}
+                    // surfaceType="textureView"
+                    useExoShutter={false}
+                    onFirstFrameRender={handleFirstFrameRender}
                   />
-                )}
+                </View>
+              )}
 
-                {showLoadingOverlay && (
-                  <View style={styles.loadingOverlay}>
-                    <ActivityIndicator color="white" size="large" />
-                  </View>
-                )}
+              {thumbnail ? (
+                <Animated.View
+                  style={[StyleSheet.absoluteFill, posterAnimatedStyle]}
+                  pointerEvents="none"
+                >
+                  <Image
+                    source={{ uri: thumbnail }}
+                    style={StyleSheet.absoluteFill}
+                    contentFit="contain"
+                    cachePolicy="disk"
+                    transition={0}
+                    onLoad={handleImageLoad}
+                  />
+                </Animated.View>
+              ) : (
+                <Animated.View
+                  style={[
+                    StyleSheet.absoluteFill,
+                    styles.videoPosterFallback,
+                    posterAnimatedStyle,
+                  ]}
+                  pointerEvents="none"
+                />
+              )}
 
-                {/* Progress bar + controls only for focused post */}
-                {showVideoView && player && isFocused && (
-                  <GestureDetector gesture={barGesture}>
+              {showLoadingOverlay && (
+                <View style={styles.loadingOverlay}>
+                  <ActivityIndicator color="white" size="large" />
+                </View>
+              )}
+
+              {/* Progress bar + controls only for focused post */}
+              {showVideoView && player && isFocused && (
+                <GestureDetector gesture={barGesture}>
+                  <Animated.View
+                    style={[styles.progressContainer, progressBarAnimatedStyle]}
+                    hitSlop={{ top: 10, bottom: 10 }}
+                    onLayout={(e) => {
+                      progressBarWidth.value = e.nativeEvent.layout.width;
+                    }}
+                  >
                     <Animated.View
-                      style={[
-                        styles.progressContainer,
-                        progressBarAnimatedStyle,
-                      ]}
-                      hitSlop={{ top: 10, bottom: 10 }}
-                      onLayout={(e) => {
-                        progressBarWidth.value = e.nativeEvent.layout.width;
-                      }}
-                    >
-                      <Animated.View
-                        style={[styles.progressFill, progressStyle]}
-                      />
-                      <Animated.View
-                        style={[
-                          styles.progressLockedSegment,
-                          lockedSegmentStyle,
-                        ]}
-                      />
-                      <Animated.View
-                        style={[styles.thumb, thumbAnimatedStyle]}
-                      />
-                    </Animated.View>
-                  </GestureDetector>
-                )}
-
-                {previewEnded && isPaidVideo && isFocused && (
-                  <VideoPreviewEndedOverlay
-                    price={price}
-                    isExclusive={isExclusive}
-                    onPay={handlePayPress}
-                    onWatchAgain={handleWatchAgain}
-                  />
-                )}
-
-                {isFocused && (
-                  <AnimatedPressable
-                    onPress={handleMutePress}
-                    style={[styles.muteButton, animatedMuteStyle]}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  >
-                    <Ionicons
-                      name={isMuted ? "volume-mute" : "volume-high"}
-                      size={18}
-                      color="white"
+                      style={[styles.progressFill, progressStyle]}
                     />
-                  </AnimatedPressable>
-                )}
-              </>
-            )}
-          </View>
-        </Pressable>
+                    <Animated.View
+                      style={[styles.progressLockedSegment, lockedSegmentStyle]}
+                    />
+                    <Animated.View style={[styles.thumb, thumbAnimatedStyle]} />
+                  </Animated.View>
+                </GestureDetector>
+              )}
+
+
+
+              {isFocused && (
+                <AnimatedPressable
+                  onPress={handleMutePress}
+                  style={[styles.muteButton, animatedMuteStyle]}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons
+                    name={isMuted ? "volume-mute" : "volume-high"}
+                    size={18}
+                    color="white"
+                  />
+                </AnimatedPressable>
+              )}
+            </>
+          )}
+        </View>
+      </Pressable>
+
+      {/* Preview-ended paywall — rendered OUTSIDE the Pressable so its
+          Pressable buttons (Watch Again / Unlock Now) are directly tappable
+          instead of being swallowed by the parent Pressable's onPress. */}
+      {previewEnded && isPaidVideo && isFocused && (
+        <View
+          style={[
+            StyleSheet.absoluteFill,
+            { height: containerHeight, zIndex: 20 },
+          ]}
+          // Don't set pointerEvents="box-none" here — we WANT the overlay
+          // backdrop to block taps from reaching the video Pressable beneath.
+        >
+          <VideoPreviewEndedOverlay
+            price={price}
+            isExclusive={isExclusive}
+            onPay={handlePayPress}
+            onWatchAgain={handleWatchAgain}
+          />
+        </View>
       )}
 
       {/* Heart animation overlay */}
@@ -926,15 +938,111 @@ function PostMediaInnerMain({
   );
 }
 
+const PostMediaInnerMainMemo = memo(PostMediaInnerMain);
+
 // ─── Public export (wrapped in error boundary) ────────────────────────────────
+
+const PostMediaImage = memo(function PostMediaImage({
+  media,
+  price = 0,
+  viewer,
+  isExclusive = false,
+  onLike,
+  isLiked,
+}: Props) {
+  const lastTapRef = useRef(0);
+  const singleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const canView = useMemo(
+    () => viewerCanViewPostMedia(viewer, price, isExclusive),
+    [viewer, price, isExclusive],
+  );
+
+  const viewerSeesImagePaywall = !canView;
+
+  const heartScale = useSharedValue(0);
+  const heartOpacity = useSharedValue(0);
+
+  const heartAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: heartScale.value }],
+    opacity: heartOpacity.value,
+  }));
+
+  const triggerHeartAnimation = useCallback(() => {
+    heartScale.value = 0.6;
+    heartOpacity.value = 1;
+    heartScale.value = withSpring(1.2);
+    heartOpacity.value = withTiming(0, { duration: 600 });
+  }, []);
+
+  const handleDoubleTap = useCallback(() => {
+    triggerHeartAnimation();
+    if (!isLiked) onLike();
+  }, [isLiked, onLike]);
+
+  const handleTap = useCallback(() => {
+    const now = Date.now();
+    const diff = now - lastTapRef.current;
+
+    if (singleTapTimerRef.current) {
+      clearTimeout(singleTapTimerRef.current);
+    }
+
+    if (diff < DOUBLE_TAP_DELAY) {
+      lastTapRef.current = 0;
+      handleDoubleTap();
+    } else {
+      lastTapRef.current = now;
+      singleTapTimerRef.current = setTimeout(() => {}, DOUBLE_TAP_DELAY);
+    }
+  }, [handleDoubleTap]);
+
+  if (!media && !viewerSeesImagePaywall) return null;
+
+  return (
+    <View style={styles.container}>
+      {viewerSeesImagePaywall ? (
+        <ImagePaywall
+          price={price}
+          isExclusive={isExclusive}
+          containerHeight={MIN_MEDIA_HEIGHT}
+          onPay={() => {}}
+        />
+      ) : (
+        <Pressable onPress={handleTap}>
+          <Image
+            source={{ uri: media }}
+            style={styles.imageMedia}
+            contentFit="contain"
+            cachePolicy="memory-disk"
+            transition={0}
+          />
+        </Pressable>
+      )}
+
+      <Animated.View
+        style={[styles.heartContainer, heartAnimatedStyle]}
+        pointerEvents="none"
+      >
+        <Ionicons name="heart" size={120} color="#ff3040" />
+      </Animated.View>
+    </View>
+  );
+});
 
 function PostMedia(props: Props) {
   return (
     <PostMediaErrorBoundary>
-      <PostMediaInnerMain {...props} />
+      {props.type === "image" ? (
+        <PostMediaImage {...props} />
+      ) : (
+        <PostMediaInnerMainMemo {...props} />
+      )}
     </PostMediaErrorBoundary>
   );
 }
+
+export default memo(PostMedia);
 
 const styles = StyleSheet.create({
   container: {
@@ -950,11 +1058,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.5)",
     borderWidth: 1,
     borderColor: "rgba(245, 197, 66, 0.55)",
-    shadowColor: "#f5c542",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.45,
-    shadowRadius: 6,
-    elevation: 6,
+    // elevation removed — creates expensive bitmap layer on Android during scroll
   },
   errorFallback: {
     width: "100%",
@@ -1093,11 +1197,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 4,
-    shadowColor: Colors.gradient[0],
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.6,
-    shadowRadius: 16,
-    elevation: 10,
+    elevation: 2,
   },
   paywallTitle: {
     fontSize: 20,
@@ -1133,11 +1233,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: "hidden",
     marginTop: 6,
-    shadowColor: Colors.gradient[1],
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 8,
+    elevation: 2,
   },
   payButtonPressed: {
     opacity: 0.85,
@@ -1192,5 +1288,3 @@ const styles = StyleSheet.create({
     backgroundColor: "#111", // dark but not pure black so it's clearly a placeholder
   },
 });
-
-export default memo(PostMedia);

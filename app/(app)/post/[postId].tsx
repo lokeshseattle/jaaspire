@@ -4,20 +4,20 @@ import { useCommentsSheet } from "@/hooks/use-comment-sheet";
 import { CommentsBottomSheet } from "@/src/components/comments/CommentsBottomSheet";
 import PostItem from "@/src/components/home/posts/PostWrapper";
 import {
-    useGetSinglePost,
-    useTrackPostView,
+  useGetSinglePost,
+  useTrackPostView,
 } from "@/src/features/post/post.hooks";
 import { videoManager } from "@/src/lib/video-manager";
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    FlatList,
-    StyleSheet,
-    Text,
-    View,
-    ViewabilityConfig,
-    ViewToken,
+  ActivityIndicator,
+  FlatList,
+  StyleSheet,
+  Text,
+  View,
+  ViewabilityConfig,
+  ViewToken,
 } from "react-native";
 
 // Define viewability config outside component to prevent recreation
@@ -27,8 +27,10 @@ const VIEWABILITY_CONFIG: ViewabilityConfig = {
 };
 
 const PostScreen = () => {
-  const { postId } = useLocalSearchParams<{ postId: string }>();
-
+  const { postId } = useLocalSearchParams<{
+    postId: string;
+  }>();
+  // const isCommentOpen = commentOpen === "true";
   const [visiblePostId, setVisiblePostId] = useState<number | null>(null);
   const [isScreenFocused, setIsScreenFocused] = useState(true);
   const trackPostView = useTrackPostView();

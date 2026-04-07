@@ -6,20 +6,6 @@ import type {
 } from "expo-video";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-type VideoHookState = {
-  player: VideoPlayer | null;
-  isReady: boolean;
-  isBuffering: boolean;
-  isPlaying: boolean;
-};
-
-const EMPTY_STATE: VideoHookState = {
-  player: null,
-  isReady: false,
-  isBuffering: false,
-  isPlaying: false,
-};
-
 function safePlayerSnapshot(p: VideoPlayer): {
   status: VideoPlayer["status"];
   playing: boolean;
@@ -38,7 +24,13 @@ export function useManagedVideoPlayer(
   nextPostUrl?: string,
   nextPostId?: number,
 ) {
-  const [state, setState] = useState<VideoHookState>(EMPTY_STATE);
+  // Individual state atoms — React can bail out when the primitive value
+  // hasn't changed, unlike a single object where spread always creates
+  // a new reference.
+  const [player, setPlayer] = useState<VideoPlayer | null>(null);
+  const [isReady, setIsReady] = useState(false);
+  const [isBuffering, setIsBuffering] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(videoManager.getGlobalMuted());
 
   const isFocusedRef = useRef(isFocused);
@@ -50,7 +42,10 @@ export function useManagedVideoPlayer(
 
   useEffect(() => {
     if (!url) {
-      setState(EMPTY_STATE);
+      setPlayer(null);
+      setIsReady(false);
+      setIsBuffering(false);
+      setIsPlaying(false);
       playerRef.current = null;
       return;
     }
@@ -61,38 +56,29 @@ export function useManagedVideoPlayer(
     playerRef.current = p;
     videoManager.mount(currentPostId);
 
+    // Set player ref first
+    setPlayer(p);
+
     const initial = safePlayerSnapshot(p);
     if (!initial) {
-      setState({
-        player: p,
-        isReady: false,
-        isBuffering: false,
-        isPlaying: false,
-      });
+      setIsReady(false);
+      setIsBuffering(false);
+      setIsPlaying(false);
     } else if (initial.status === "readyToPlay") {
-      setState({
-        player: p,
-        isReady: true,
-        isBuffering: false,
-        isPlaying: initial.playing,
-      });
+      setIsReady(true);
+      setIsBuffering(false);
+      setIsPlaying(initial.playing);
       if (isFocusedRef.current) {
         videoManager.play(currentPostId);
       }
     } else if (initial.status === "loading") {
-      setState({
-        player: p,
-        isReady: false,
-        isBuffering: true,
-        isPlaying: initial.playing,
-      });
+      setIsReady(false);
+      setIsBuffering(true);
+      setIsPlaying(initial.playing);
     } else {
-      setState({
-        player: p,
-        isReady: false,
-        isBuffering: false,
-        isPlaying: initial.playing,
-      });
+      setIsReady(false);
+      setIsBuffering(false);
+      setIsPlaying(initial.playing);
     }
 
     const statusSub = p.addListener(
@@ -100,31 +86,22 @@ export function useManagedVideoPlayer(
       ({ status, error }: StatusChangeEventPayload) => {
         switch (status) {
           case "readyToPlay":
-            setState((prev) => ({
-              ...prev,
-              isReady: true,
-              isBuffering: false,
-            }));
+            setIsReady(true);
+            setIsBuffering(false);
             if (isFocusedRef.current && postIdRef.current === currentPostId) {
               videoManager.play(currentPostId);
             }
             break;
           case "loading":
-            setState((prev) => ({ ...prev, isBuffering: true }));
+            setIsBuffering(true);
             break;
           case "idle":
-            setState((prev) => ({
-              ...prev,
-              isReady: false,
-              isBuffering: false,
-            }));
+            setIsReady(false);
+            setIsBuffering(false);
             break;
           case "error":
-            setState((prev) => ({
-              ...prev,
-              isReady: false,
-              isBuffering: false,
-            }));
+            setIsReady(false);
+            setIsBuffering(false);
             if (__DEV__) {
               console.error(`[VideoPlayer:${currentPostId}] error:`, error);
             }
@@ -136,7 +113,7 @@ export function useManagedVideoPlayer(
     const playingSub = p.addListener(
       "playingChange",
       ({ isPlaying: playing }: PlayingChangeEventPayload) => {
-        setState((prev) => ({ ...prev, isPlaying: playing }));
+        setIsPlaying(playing);
       },
     );
 
@@ -210,10 +187,10 @@ export function useManagedVideoPlayer(
   }, []);
 
   return {
-    player: state.player,
-    isReady: state.isReady,
-    isBuffering: state.isBuffering,
-    isPlaying: state.isPlaying,
+    player,
+    isReady,
+    isBuffering,
+    isPlaying,
     isMuted,
     togglePlayPause,
     toggleMute,

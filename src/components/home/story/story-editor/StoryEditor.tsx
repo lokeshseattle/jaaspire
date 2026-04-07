@@ -153,11 +153,16 @@ export default function StoryEditor({ imageUri }: Props) {
         quality: 1,
       });
 
+      __DEV__ && console.log("👁️ uri: ", uri);
+
       uploadStoryImage.mutate(
         { uri },
         {
           onSuccess: () => {
             router.replace("/(app)/(tabs)");
+          },
+          onError: (e) => {
+            console.log("👁️ error: ", e);
           },
         },
       );

@@ -77,9 +77,13 @@ export const usePostStoryImage = (): UseMutationResult<
       formData.append("file", {
         uri: image.uri,
         name: "photo.png",
-        type: "image/jpeg",
+        type: "image/png",
       } as any);
-      const { data } = await apiClient.post("/stories", formData);
+      const { data } = await apiClient.post("/stories", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
       return data;
     },
   });

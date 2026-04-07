@@ -16,7 +16,7 @@ class VideoPlayerManager {
    * when connected to a VideoView, BUT expo-video may also hold a codec
    * during buffering.  Keep the pool small to avoid codec exhaustion.
    */
-  private maxPlayers = 4;
+  private maxPlayers = 3;
   private currentlyPlaying: number | null = null;
   private globalMuted: boolean = true;
   private muteSubscribers = new Set<(muted: boolean) => void>();

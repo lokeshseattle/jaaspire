@@ -4,7 +4,7 @@ import { useTheme } from "@/src/theme/ThemeProvider";
 import { FontAwesome } from "@expo/vector-icons";
 import Feather from "@expo/vector-icons/Feather";
 import Octicons from "@expo/vector-icons/Octicons";
-import React, { useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   Animated,
   Pressable,
@@ -16,9 +16,9 @@ import RichText from "../../ui/rich-text";
 
 const LIKED_COLOR = "#ff3040";
 
-const PostFooter = () => {
+const PostFooter = React.memo(() => {
   const { theme } = useTheme();
-  const styles = createStyles(theme);
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   return (
     <View style={styles.container}>
@@ -26,7 +26,7 @@ const PostFooter = () => {
       <PostCaptions theme={theme} styles={styles} />
     </View>
   );
-};
+});
 
 export default PostFooter;
 

@@ -98,7 +98,6 @@ function Stories() {
   const { theme } = useTheme();
   const isLoading = useIsStoryUploading();
 
-  console.log("isLoading", isLoading)
 
   const storiesQuery = useGetAllStories();
 

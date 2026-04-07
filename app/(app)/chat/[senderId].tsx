@@ -866,7 +866,7 @@ export default function MessengerChatScreen() {
    * Offset for keyboard-controller KAV (screen-top → view). Using header + full
    * safe-top often over-pads; header-only keeps the composer tight to the keyboard.
    */
-  const keyboardVerticalOffset = useMemo(() => headerHeight, [headerHeight]);
+  const keyboardVerticalOffset = useMemo(() => Platform.OS === "ios" ? headerHeight : 0, [headerHeight]);
 
   if (!Number.isFinite(peerId) || peerId <= 0) {
     return (
@@ -914,6 +914,7 @@ export default function MessengerChatScreen() {
         isInverted
         keyboardAvoidingViewProps={{
           keyboardVerticalOffset,
+          enabled: Platform.OS === "ios",
         }}
         loadEarlierMessagesProps={{
           isAvailable: Boolean(hasNextPage),

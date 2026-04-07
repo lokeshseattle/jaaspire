@@ -18,7 +18,6 @@ import { router, useFocusEffect, useNavigation } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Animated,
   FlatList,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -29,6 +28,10 @@ import {
   ViewabilityConfig,
   ViewToken,
 } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+} from "react-native-reanimated";
 
 const HEADER_HEIGHT = 56;
 
@@ -40,7 +43,7 @@ const VIEWABILITY_CONFIG: ViewabilityConfig = {
 
 export default function Home() {
   const { theme } = useTheme();
-  const styles = createStyles(theme);
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   const [visiblePostId, setVisiblePostId] = useState<number | null>(null);
   const [isScreenFocused, setIsScreenFocused] = useState(true);
@@ -51,7 +54,10 @@ export default function Home() {
   const visiblePostIdRef = useRef<number | null>(null);
   const visibleFeedIndexRef = useRef<number>(-1);
   const isScreenFocusedRef = useRef(true);
-  const headerTranslateY = useRef(new Animated.Value(0)).current;
+
+  // ✅ Use Reanimated shared value — all header animation math runs on the UI
+  // thread via worklets, eliminating JS bridge calls every scroll frame.
+  const headerTranslateY = useSharedValue(0);
   const currentHeaderTranslate = useRef(0);
   const navigation = useNavigation();
 
@@ -64,20 +70,25 @@ export default function Home() {
 
       if (offsetY <= 0) {
         currentHeaderTranslate.current = 0;
-        headerTranslateY.setValue(0);
+        headerTranslateY.value = 0;
       } else if (delta > 0) {
         currentHeaderTranslate.current = Math.max(
           -HEADER_HEIGHT,
           currentHeaderTranslate.current - delta,
         );
-        headerTranslateY.setValue(currentHeaderTranslate.current);
+        headerTranslateY.value = currentHeaderTranslate.current;
       } else if (delta < 0) {
         currentHeaderTranslate.current = 0;
-        headerTranslateY.setValue(0);
+        headerTranslateY.value = 0;
       }
     },
     [headerTranslateY],
   );
+
+  // ✅ Animated style driven by shared value — runs on the UI thread.
+  const headerAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: headerTranslateY.value }],
+  }));
 
   const trackPostView = useTrackPostView();
   const trackPostViewRef = useRef(trackPostView);
@@ -121,9 +132,9 @@ export default function Home() {
     }, []),
   );
 
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     await Promise.all([refetch(), storyRefetch()]);
-  };
+  }, [refetch, storyRefetch]);
 
   useUnreadMessengerBadgeRealtime();
   const unreadMessageCount = useUnreadMessengerCount();
@@ -159,11 +170,6 @@ export default function Home() {
 
       setVisiblePostId((prevId) => {
         if (prevId === newVisibleId) return prevId;
-        if (__DEV__) {
-          console.log(
-            `[Feed/Android] Primary post: ${prevId} → ${newVisibleId}`,
-          );
-        }
         trackPostViewRef.current.mutate(newVisibleId);
         return newVisibleId;
       });
@@ -258,14 +264,7 @@ export default function Home() {
 
   return (
     <View style={styles.container}>
-      <Animated.View
-        style={[
-          styles.header,
-          {
-            transform: [{ translateY: headerTranslateY }],
-          },
-        ]}
-      >
+      <Animated.View style={[styles.header, headerAnimatedStyle]}>
         <View style={styles.headerSpacer} />
         <Text style={styles.headerTitle}>Jaaspire</Text>
         {HeaderRight}
@@ -273,7 +272,7 @@ export default function Home() {
       <FlatList
         ref={flatListRef}
         onScroll={handleScroll}
-        scrollEventThrottle={16}
+        scrollEventThrottle={32}
         contentContainerStyle={styles.listContent}
         data={postIds}
         keyExtractor={keyExtractor}
@@ -285,14 +284,14 @@ export default function Home() {
         onEndReachedThreshold={0.5}
         onRefresh={handleRefresh}
         refreshing={isRefetching}
+        removeClippedSubviews={true}
         windowSize={5}
-        maxToRenderPerBatch={3}
-        initialNumToRender={3}
-        updateCellsBatchingPeriod={50}
+        maxToRenderPerBatch={2}
+        initialNumToRender={2}
+        updateCellsBatchingPeriod={100}
         maintainVisibleContentPosition={{
           minIndexForVisible: 0,
         }}
-        extraData={`${visiblePostId}-${visibleFeedIndex}-${isScreenFocused}`}
       />
 
       <CommentsBottomSheet

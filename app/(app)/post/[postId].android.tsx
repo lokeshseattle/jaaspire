@@ -1,51 +1,44 @@
 import { useCommentsSheet } from "@/hooks/use-comment-sheet";
 import { CommentsBottomSheet } from "@/src/components/comments/CommentsBottomSheet";
-import PostItem from "@/src/components/home/posts/PostWrapper";
+import PostItem from "@/src/components/home/posts/PostWrapper.android";
 import {
-  useGetSinglePost,
-  useTrackPostView,
+    useGetSinglePost,
+    useTrackPostView,
 } from "@/src/features/post/post.hooks";
 import { videoManager } from "@/src/lib/video-manager";
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  FlatList,
-  StyleSheet,
-  Text,
-  View,
-  ViewabilityConfig,
-  ViewToken,
+    ActivityIndicator,
+    FlatList,
+    StyleSheet,
+    Text,
+    View,
+    ViewabilityConfig,
+    ViewToken,
 } from "react-native";
 
 const VIEWABILITY_CONFIG: ViewabilityConfig = {
   itemVisiblePercentThreshold: 50,
-  minimumViewTime: 100,
+  minimumViewTime: 160,
 };
 
-const UserPostScreen = () => {
-  const { postId, commentOpen } = useLocalSearchParams<{
-    postId: string;
-    username: string;
-    commentOpen: "true" | "false";
-  }>();
+const PostScreen = () => {
+  const { postId } = useLocalSearchParams<{ postId: string }>();
 
   const [visiblePostId, setVisiblePostId] = useState<number | null>(null);
   const [isScreenFocused, setIsScreenFocused] = useState(true);
+
+  const visiblePostIdRef = useRef<number | null>(null);
+  const visibleFeedIndexRef = useRef<number>(-1);
+  const isScreenFocusedRef = useRef(true);
+
   const trackPostView = useTrackPostView();
+  const trackPostViewRef = useRef(trackPostView);
+  trackPostViewRef.current = trackPostView;
 
   const { bottomSheetRef, selectedPostId, openComments, onDismiss } =
     useCommentsSheet();
-
-  // useFocusEffect(
-  useEffect(() => {
-    console.log("👁️ commentOpen: ", commentOpen);
-    console.log("👁️ postId: ", postId);
-    if (commentOpen === "true" && postId) {
-      setTimeout(() => openComments(Number(postId)), 1000);
-    }
-  }, [commentOpen, postId, openComments]);
-  // );
 
   const {
     data,
@@ -54,14 +47,29 @@ const UserPostScreen = () => {
     hasNextPage,
     isFetchingNextPage,
     fetchNextPage,
-  } = useGetSinglePost(postId, "user");
+  } = useGetSinglePost(postId);
 
   const mainPostId = data?.mainPostId;
-
   const recommendedPostIds = useMemo(
     () => data?.recommendedIds ?? [],
     [data?.recommendedIds],
   );
+
+  const postIds = useMemo(() => {
+    const list = [];
+    if (mainPostId != null) list.push(mainPostId);
+    list.push(...recommendedPostIds);
+    return list;
+  }, [mainPostId, recommendedPostIds]);
+
+  const visibleFeedIndex = useMemo(() => {
+    if (visiblePostId == null) return -1;
+    return postIds.indexOf(visiblePostId);
+  }, [visiblePostId, postIds]);
+
+  visiblePostIdRef.current = visiblePostId;
+  visibleFeedIndexRef.current = visibleFeedIndex;
+  isScreenFocusedRef.current = isScreenFocused;
 
   useFocusEffect(
     useCallback(() => {
@@ -73,7 +81,7 @@ const UserPostScreen = () => {
         setIsScreenFocused(false);
         videoManager.pauseAll();
       };
-    }, [mainPostId]),
+    }, [mainPostId, visiblePostId]),
   );
 
   const onViewableItemsChanged = useCallback(
@@ -86,7 +94,6 @@ const UserPostScreen = () => {
       }
 
       let mostVisibleItem = viewableItems[0];
-
       for (const item of viewableItems) {
         if (item.isViewable) {
           mostVisibleItem = item;
@@ -98,12 +105,13 @@ const UserPostScreen = () => {
 
       setVisiblePostId((prevId) => {
         if (prevId !== newVisibleId) {
-          trackPostView.mutate(newVisibleId);
+          console.log(`👁️ Visible post changed: ${prevId} → ${newVisibleId}`);
+          trackPostViewRef.current.mutate(newVisibleId);
         }
         return newVisibleId;
       });
     },
-    [mainPostId, trackPostView],
+    [mainPostId],
   );
 
   const viewabilityConfigCallbackPairs = useRef([
@@ -115,37 +123,36 @@ const UserPostScreen = () => {
 
   const getNextPostId = useCallback(
     (currentId: number): number | undefined => {
-      if (currentId === mainPostId) {
-        return recommendedPostIds[0];
-      }
-
-      const currentIndex = recommendedPostIds.indexOf(currentId);
+      const currentIndex = postIds.indexOf(currentId);
       if (
         currentIndex === -1 ||
-        currentIndex >= recommendedPostIds.length - 1
+        currentIndex >= postIds.length - 1
       ) {
         return undefined;
       }
-      return recommendedPostIds[currentIndex + 1];
+      return postIds[currentIndex + 1];
     },
-    [mainPostId, recommendedPostIds],
+    [postIds],
   );
 
   const renderItem = useCallback(
     ({ item: id }: { item: number }) => {
       const nextId = getNextPostId(id);
+      const feedIndex = postIds.indexOf(id);
 
       return (
         <PostItem
           id={id}
+          feedIndex={feedIndex}
+          visibleFeedIndex={visibleFeedIndexRef.current}
           nextId={nextId}
-          visiblePostId={visiblePostId}
-          isScreenFocused={isScreenFocused}
+          visiblePostId={visiblePostIdRef.current}
+          isScreenFocused={isScreenFocusedRef.current}
           openComments={openComments}
         />
       );
     },
-    [visiblePostId, isScreenFocused, openComments, getNextPostId],
+    [openComments, getNextPostId, postIds],
   );
 
   const keyExtractor = useCallback((item: number) => item.toString(), []);
@@ -166,10 +173,13 @@ const UserPostScreen = () => {
     if (!mainPostId) return null;
 
     const nextId = recommendedPostIds[0];
+    const feedIndex = postIds.indexOf(mainPostId);
 
     return (
       <PostItem
         id={mainPostId}
+        feedIndex={feedIndex}
+        visibleFeedIndex={visibleFeedIndex}
         nextId={nextId}
         visiblePostId={visiblePostId}
         isScreenFocused={isScreenFocused}
@@ -181,7 +191,9 @@ const UserPostScreen = () => {
     recommendedPostIds,
     visiblePostId,
     isScreenFocused,
+    visibleFeedIndex,
     openComments,
+    postIds,
   ]);
 
   if (isLoading) {
@@ -213,9 +225,9 @@ const UserPostScreen = () => {
         onEndReachedThreshold={0.5}
         removeClippedSubviews={true}
         windowSize={5}
-        maxToRenderPerBatch={3}
-        initialNumToRender={3}
-        updateCellsBatchingPeriod={50}
+        maxToRenderPerBatch={2}
+        initialNumToRender={2}
+        updateCellsBatchingPeriod={100}
         maintainVisibleContentPosition={{
           minIndexForVisible: 0,
         }}
@@ -232,7 +244,9 @@ const UserPostScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {},
+  container: {
+    // flex: 1,
+  },
   centerContainer: {
     flex: 1,
     justifyContent: "center",
@@ -243,4 +257,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default UserPostScreen;
+export default PostScreen;

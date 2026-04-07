@@ -7,7 +7,7 @@ import { timeAgo } from "@/src/utils/helpers";
 import { Ionicons } from "@expo/vector-icons";
 import Feather from "@expo/vector-icons/Feather";
 import { router } from "expo-router";
-import React, { useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   Dimensions,
   Modal,
@@ -24,9 +24,9 @@ import ReportModal from "./ReportModal";
 
 const MENU_WIDTH = 180;
 
-const PostHeader: React.FC = () => {
+const PostHeader: React.FC = React.memo(() => {
   const { theme } = useTheme();
-  const styles = createStyles(theme);
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   const { post } = usePost();
   const { data: profileData } = useGetProfile();
@@ -175,7 +175,7 @@ const PostHeader: React.FC = () => {
       />
     </>
   );
-};
+});
 
 export default PostHeader;
 

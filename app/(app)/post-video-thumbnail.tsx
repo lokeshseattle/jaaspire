@@ -2,8 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { VideoView, useVideoPlayer } from "expo-video";
 import * as VideoThumbnails from "expo-video-thumbnails";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -12,6 +11,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   runOnJS,
   useAnimatedStyle,
@@ -56,9 +56,12 @@ export default function PostVideoThumbnailScreen() {
 
   useEffect(() => {
     if (!player) return;
-    const sub = player.addListener("playingChange", ({ isPlaying: playing }) => {
-      setIsPlaying(playing);
-    });
+    const sub = player.addListener(
+      "playingChange",
+      ({ isPlaying: playing }) => {
+        setIsPlaying(playing);
+      },
+    );
     return () => sub.remove();
   }, [player]);
 
@@ -90,7 +93,7 @@ export default function PostVideoThumbnailScreen() {
       } catch {
         // ignore and keep polling a bit
       }
-    }, 100);
+    }, 10000);
 
     const timeout = setTimeout(() => {
       clearInterval(interval);
@@ -181,10 +184,7 @@ export default function PostVideoThumbnailScreen() {
         <Pressable
           onPress={() => router.back()}
           disabled={!canDone}
-          style={[
-            styles.doneButton,
-            !canDone && styles.doneButtonDisabled,
-          ]}
+          style={[styles.doneButton, !canDone && styles.doneButtonDisabled]}
         >
           <Text style={styles.doneButtonText}>Done</Text>
         </Pressable>
@@ -193,7 +193,10 @@ export default function PostVideoThumbnailScreen() {
       <View style={styles.preview}>
         {player ? (
           <>
-            <Pressable style={StyleSheet.absoluteFill} onPress={togglePlayPause}>
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={togglePlayPause}
+            >
               <VideoView
                 player={player}
                 style={StyleSheet.absoluteFill}
@@ -220,7 +223,12 @@ export default function PostVideoThumbnailScreen() {
         )}
       </View>
 
-      <View style={[styles.panel, { paddingBottom: insets.bottom + theme.spacing.lg }]}>
+      <View
+        style={[
+          styles.panel,
+          { paddingBottom: insets.bottom + theme.spacing.lg },
+        ]}
+      >
         <Text style={styles.sectionTitle}>Pick from video</Text>
 
         {isLoadingDuration || !durationMs ? (
@@ -246,7 +254,8 @@ export default function PostVideoThumbnailScreen() {
             disabled={isGenerating || isLoadingDuration}
             style={[
               styles.primaryButton,
-              (isGenerating || isLoadingDuration) && styles.primaryButtonDisabled,
+              (isGenerating || isLoadingDuration) &&
+                styles.primaryButtonDisabled,
             ]}
           >
             {isGenerating ? (
@@ -258,14 +267,21 @@ export default function PostVideoThumbnailScreen() {
             )}
           </Pressable>
 
-          <Pressable onPress={handlePickCustomThumbnail} style={styles.secondaryButton}>
+          <Pressable
+            onPress={handlePickCustomThumbnail}
+            style={styles.secondaryButton}
+          >
             <Text style={styles.secondaryButtonText}>Choose from gallery</Text>
           </Pressable>
         </View>
 
         {thumbnail && (
           <View style={styles.chosenRow}>
-            <Ionicons name="checkmark-circle" size={18} color={theme.colors.primary} />
+            <Ionicons
+              name="checkmark-circle"
+              size={18}
+              color={theme.colors.primary}
+            />
             <Text style={styles.chosenText}>Thumbnail selected</Text>
           </View>
         )}
@@ -290,7 +306,7 @@ function TimeScrubber({
   const styles = createStyles(theme);
   const clamp = useCallback(
     (v: number, min: number, max: number) => Math.max(min, Math.min(max, v)),
-    []
+    [],
   );
 
   const trackWidth = useSharedValue(1);
@@ -307,7 +323,7 @@ function TimeScrubber({
       const clamped = clamp(p, 0, 1);
       onChangeMs(Math.round(clamped * maxMs));
     },
-    [clamp, maxMs, onChangeMs]
+    [clamp, maxMs, onChangeMs],
   );
 
   const pan = useMemo(() => {
@@ -540,4 +556,3 @@ const createStyles = (theme: AppTheme) =>
       borderColor: theme.colors.primary,
     },
   });
-
