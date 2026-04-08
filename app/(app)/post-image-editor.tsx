@@ -19,7 +19,6 @@ import Animated, {
     withSpring,
 } from 'react-native-reanimated';
 
-import { FilterSlider } from '@/src/components/ui/filter-slider';
 import { PickedFile, useImageEditStore } from '@/src/features/post-editor/store/useImageEditorStore';
 import { AdjustmentState, DEFAULT_ADJUSTMENTS, FILTERS, getCSSFilterString } from '@/src/lib/image-filters';
 import { AppTheme } from '@/src/theme';
@@ -28,8 +27,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-type EditorTab = 'filters' | 'adjust';
-
 export default function PostImageEditorScreen() {
   // const { uri } = useLocalSearchParams<{ uri: string }>();
   const router = useRouter();
@@ -37,10 +34,8 @@ export default function PostImageEditorScreen() {
   const styles = createStyles(theme);
   const insets = useSafeAreaInsets();
   const { originalImage, setEditedImage } = useImageEditStore();
-  // State
   const [selectedFilterId, setSelectedFilterId] = useState('none');
   const [filterIntensity, setFilterIntensity] = useState(100);
-  const [activeTab, setActiveTab] = useState<EditorTab>('filters');
   const [isProcessing, setIsProcessing] = useState(false);
   const [adjustments, setAdjustments] = useState<AdjustmentState>(DEFAULT_ADJUSTMENTS);
 
@@ -231,136 +226,41 @@ export default function PostImageEditorScreen() {
 
       {/* Bottom Controls */}
       <View style={[styles.bottomControls, { paddingBottom: insets.bottom }]}>
-        {/* Tab Switcher */}
-        <View style={styles.tabContainer}>
-          <Pressable
-            style={[styles.tab, activeTab === 'filters' && styles.tabActive]}
-            onPress={() => setActiveTab('filters')}
-          >
-            <Text style={[styles.tabText, activeTab === 'filters' && styles.tabTextActive]}>
-              Filters
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[styles.tab, activeTab === 'adjust' && styles.tabActive]}
-            onPress={() => setActiveTab('adjust')}
-          >
-            <Text style={[styles.tabText, activeTab === 'adjust' && styles.tabTextActive]}>
-              Adjust
-            </Text>
-          </Pressable>
-        </View>
-
         {/* Filter Carousel */}
-        {activeTab === 'filters' && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterCarousel}
-          >
-            {FILTERS.map((filter) => (
-              <Pressable
-                key={filter.id}
-                style={[
-                  styles.filterItem,
-                  selectedFilterId === filter.id && styles.filterItemSelected,
-                ]}
-                onPress={() => setSelectedFilterId(filter.id)}
-              >
-                <View style={[styles.filterThumbnail, { filter: filter.cssFilter }]}>
-                  <Image source={{ uri: originalImage?.uri }} style={styles.filterThumbnailImage} />
-                </View>
-                <Text style={[
-                  styles.filterName,
-                  selectedFilterId === filter.id && styles.filterNameSelected,
-                ]}>
-                  {filter.name}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        )}
-
-        {/* Adjustment Sliders */}
-        {activeTab === 'adjust' && (
-          <View style={styles.adjustmentContainer}>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <FilterSlider
-                label="Brightness"
-                value={adjustments.brightness}
-                min={-100}
-                max={100}
-                onChange={(v) => handleAdjustmentChange('brightness', v)}
-                format={(v) => (v > 0 ? `+${v}` : v.toString())}
-              />
-              <FilterSlider
-                label="Contrast"
-                value={adjustments.contrast}
-                min={-100}
-                max={100}
-                onChange={(v) => handleAdjustmentChange('contrast', v)}
-                format={(v) => (v > 0 ? `+${v}` : v.toString())}
-              />
-              <FilterSlider
-                label="Saturation"
-                value={adjustments.saturation}
-                min={-100}
-                max={100}
-                onChange={(v) => handleAdjustmentChange('saturation', v)}
-                format={(v) => (v > 0 ? `+${v}` : v.toString())}
-              />
-              <FilterSlider
-                label="Warmth"
-                value={adjustments.warmth}
-                min={-100}
-                max={100}
-                onChange={(v) => handleAdjustmentChange('warmth', v)}
-                format={(v) => (v > 0 ? `+${v}` : v.toString())}
-              />
-              <FilterSlider
-                label="Exposure"
-                value={adjustments.exposure}
-                min={-100}
-                max={100}
-                onChange={(v) => handleAdjustmentChange('exposure', v)}
-                format={(v) => (v > 0 ? `+${v}` : v.toString())}
-              />
-              <FilterSlider
-                label="Highlights"
-                value={adjustments.highlights}
-                min={-100}
-                max={100}
-                onChange={(v) => handleAdjustmentChange('highlights', v)}
-                format={(v) => (v > 0 ? `+${v}` : v.toString())}
-              />
-              <FilterSlider
-                label="Shadows"
-                value={adjustments.shadows}
-                min={-100}
-                max={100}
-                onChange={(v) => handleAdjustmentChange('shadows', v)}
-                format={(v) => (v > 0 ? `+${v}` : v.toString())}
-              />
-              <FilterSlider
-                label="Vignette"
-                value={adjustments.vignette}
-                min={0}
-                max={100}
-                onChange={(v) => handleAdjustmentChange('vignette', v)}
-              />
-            </ScrollView>
-
-            <Pressable style={styles.resetButton} onPress={handleResetAdjustments}>
-              <Text style={styles.resetButtonText}>Reset All</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterCarousel}
+        >
+          {FILTERS.map((filter) => (
+            <Pressable
+              key={filter.id}
+              style={[
+                styles.filterItem,
+                selectedFilterId === filter.id && styles.filterItemSelected,
+              ]}
+              onPress={() => setSelectedFilterId(filter.id)}
+            >
+              <View style={[styles.filterThumbnail, { filter: filter.cssFilter }]}>
+                <Image source={{ uri: originalImage?.uri }} style={styles.filterThumbnailImage} />
+              </View>
+              <Text style={[
+                styles.filterName,
+                selectedFilterId === filter.id && styles.filterNameSelected,
+              ]}>
+                {filter.name}
+              </Text>
             </Pressable>
-          </View>
-        )}
+          ))}
+        </ScrollView>
       </View>
+
+
 
       {/* Processing Overlay */}
       {isProcessing && (
         <View style={styles.processingOverlay}>
-          <ActivityIndicator size="large" color="#FFFFFF" />
+          <ActivityIndicator size="large" color={theme.colors.primary} />
           <Text style={styles.processingText}>Applying edits...</Text>
         </View>
       )}
@@ -372,7 +272,7 @@ const createStyles = (theme: AppTheme) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: '#000000',
+      backgroundColor: theme.colors.background,
     },
     centerContent: {
       justifyContent: 'center',
@@ -399,7 +299,7 @@ const createStyles = (theme: AppTheme) =>
       justifyContent: 'space-between',
       alignItems: 'center',
       paddingHorizontal: theme.spacing.md,
-      backgroundColor: 'rgba(0, 0, 0, 0.8)',
+      backgroundColor: theme.colors.surface,
       zIndex: 10,
     },
     iconButton: {
@@ -410,7 +310,7 @@ const createStyles = (theme: AppTheme) =>
       alignItems: 'center',
     },
     intensityButton: {
-      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+      backgroundColor: theme.colors.surface,
       paddingHorizontal: theme.spacing.md,
       paddingVertical: theme.spacing.xs,
       borderRadius: theme.radius.pill,
@@ -456,31 +356,9 @@ const createStyles = (theme: AppTheme) =>
       pointerEvents: 'none',
     },
     bottomControls: {
-      backgroundColor: 'rgba(20, 20, 20, 0.95)',
+      backgroundColor: theme.colors.surface,
       borderTopWidth: 1,
       borderTopColor: theme.colors.border,
-    },
-    tabContainer: {
-      flexDirection: 'row',
-      borderBottomWidth: 1,
-      borderBottomColor: theme.colors.border,
-    },
-    tab: {
-      flex: 1,
-      paddingVertical: theme.spacing.md,
-      alignItems: 'center',
-    },
-    tabActive: {
-      borderBottomWidth: 2,
-      borderBottomColor: theme.colors.primary,
-    },
-    tabText: {
-      fontSize: 15,
-      fontWeight: '600',
-      color: theme.colors.textSecondary,
-    },
-    tabTextActive: {
-      color: theme.colors.textPrimary,
     },
     filterCarousel: {
       paddingVertical: theme.spacing.md,
@@ -515,30 +393,15 @@ const createStyles = (theme: AppTheme) =>
       color: theme.colors.textPrimary,
       fontWeight: '700',
     },
-    adjustmentContainer: {
-      padding: theme.spacing.lg,
-      maxHeight: SCREEN_HEIGHT * 0.4,
-    },
-    resetButton: {
-      backgroundColor: theme.colors.border,
-      paddingVertical: theme.spacing.md,
-      borderRadius: theme.radius.md,
-      alignItems: 'center',
-      marginTop: theme.spacing.md,
-    },
-    resetButtonText: {
-      color: theme.colors.textPrimary,
-      fontWeight: '600',
-      fontSize: 14,
-    },
     processingOverlay: {
       ...StyleSheet.absoluteFillObject,
-      backgroundColor: 'rgba(0, 0, 0, 0.8)',
+      backgroundColor: theme.colors.background,
+      opacity: 0.8,
       justifyContent: 'center',
       alignItems: 'center',
     },
     processingText: {
-      color: '#FFFFFF',
+      color: theme.colors.textPrimary,
       fontSize: 16,
       marginTop: theme.spacing.md,
       fontWeight: '600',
@@ -552,8 +415,8 @@ const createStyles = (theme: AppTheme) =>
       zIndex: 5,
     },
     filterIndicatorText: {
-      backgroundColor: 'rgba(0, 0, 0, 0.7)',
-      color: '#FFFFFF',
+      backgroundColor: theme.colors.surface,
+      color: theme.colors.textPrimary,
       paddingHorizontal: 16,
       paddingVertical: 8,
       borderRadius: 999,

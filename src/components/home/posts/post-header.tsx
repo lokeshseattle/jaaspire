@@ -1,5 +1,8 @@
 import { usePost } from "@/src/context/post-context";
-import { useBookmarkPostMutation } from "@/src/features/post/post.hooks";
+import {
+  useBookmarkPostMutation,
+  usePinPostMutation,
+} from "@/src/features/post/post.hooks";
 import { useGetProfile } from "@/src/features/profile/profile.hooks";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
@@ -38,6 +41,7 @@ const PostHeader: React.FC = React.memo(() => {
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
 
   const savePost = useBookmarkPostMutation();
+  const pinPost = usePinPostMutation();
 
   const user = post.user;
   if (!user) {
@@ -73,14 +77,26 @@ const PostHeader: React.FC = React.memo(() => {
     });
   };
 
-  const handleAction = (action: string) => {
-    if (action === "save") {
-      savePost.mutate({
-        action: !post.is_bookmarked ? "add" : "remove",
-        postId: post.id,
-      });
-    } else if (action === "report") {
-      setReportModalVisible(true);
+  const handleAction = (action: "save" | "report" | "pin") => {
+    //convert to switch case
+    switch (action) {
+      case "save":
+        savePost.mutate({
+          action: !post.is_bookmarked ? "add" : "remove",
+          postId: post.id,
+        });
+        break;
+      case "report":
+        setReportModalVisible(true);
+        break;
+      case "pin":
+        pinPost.mutate({
+          action: !post.is_pinned ? "add" : "remove",
+          postId: post.id,
+        });
+        break;
+      default:
+        break;
     }
     closeMenu();
   };
@@ -163,6 +179,14 @@ const PostHeader: React.FC = React.memo(() => {
               onPress={() => handleAction("report")}
               theme={theme}
             />
+            {me?.username === user.username && (
+              <MenuItem
+                icon={post.is_pinned ? "pin" : "pin-outline"}
+                label={post.is_pinned ? "Unpin" : "Pin"}
+                onPress={() => handleAction("pin")}
+                theme={theme}
+              />
+            )}
           </View>
         </Pressable>
       </Modal>

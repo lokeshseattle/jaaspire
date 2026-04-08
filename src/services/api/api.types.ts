@@ -674,6 +674,15 @@ export type BookmarkPostResponse = {
   };
 };
 
+export type PinPostResponse = {
+  success: boolean;
+  message: string;
+  data: {
+    is_pinned: boolean;
+    post_id: number;
+  };
+};
+
 export type BookmarksResponse = {
   success: boolean;
   message: string;

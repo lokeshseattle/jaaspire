@@ -5,6 +5,7 @@ import {
   BookmarksResponse,
   CreateReportPayload,
   FeedResponse,
+  PinPostResponse,
   PossibleErrorResponse,
   ReportTypesData,
   ReportTypesResponse,
@@ -371,6 +372,59 @@ export const useBookmarkPostMutation = (): UseMutationResult<
 
       // Rollback
       usePostStore.getState().upsertPosts([context.previousPost]);
+    },
+  });
+};
+
+export const usePinPostMutation = (): UseMutationResult<
+  PinPostResponse,
+  PossibleErrorResponse,
+  { postId: number; action: "add" | "remove" }
+> => {
+  return useMutation({
+    mutationFn: ({
+      postId,
+      action,
+    }: {
+      postId: number;
+      action: "add" | "remove";
+    }) =>
+      apiClient
+        .post<PinPostResponse>(`/posts/${postId}/pin`, { action })
+        .then((d) => d.data),
+    onMutate: async ({ postId, action }) => {
+      await queryClient.cancelQueries({ queryKey: ["feed"] });
+      const { posts, updatePost } = usePostStore.getState();
+      const previousPost = posts[postId];
+
+      if (!previousPost) return;
+
+      updatePost(postId, (post) => {
+        if (action === "add") {
+          return {
+            ...post,
+            is_pinned: true,
+          };
+        }
+
+        return {
+          ...post,
+          is_pinned: false,
+        };
+      });
+
+      return { previousPost };
+    },
+    onError: (_err, { postId }, context) => {
+      if (!context?.previousPost) return;
+
+      // Rollback
+      usePostStore.getState().upsertPosts([context.previousPost]);
+    },
+    onSettled: () => {
+      // queryClient.invalidateQueries({ queryKey: ["feed"] });
+      queryClient.invalidateQueries({ queryKey: ["user_feed"] });
+      queryClient.invalidateQueries({ queryKey: ["single-post"] });
     },
   });
 };

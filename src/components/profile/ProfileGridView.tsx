@@ -8,13 +8,13 @@ import { Image } from "expo-image";
 import { router } from "expo-router";
 import { useCallback, useMemo } from "react";
 import {
-    ActivityIndicator,
-    Dimensions,
-    FlatList,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  Dimensions,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 
 const { width } = Dimensions.get("window");
@@ -160,7 +160,7 @@ const createStyles = (theme: AppTheme) =>
   StyleSheet.create({
     gridItemContainer: {
       width: ITEM_SIZE,
-      height: ITEM_SIZE,
+      height: ITEM_SIZE * 1.2,
       padding: 1,
     },
     gridImage: {
