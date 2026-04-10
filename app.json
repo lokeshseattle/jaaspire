@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.flickios.jaaspire",
+      "bundleIdentifier": "com.convoia.jaaspire",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryUsageDescription": "This app needs access to your photos so you can upload images.",
@@ -20,7 +20,7 @@
       "appleTeamId": "T6Y9862AD6"
     },
     "android": {
-      "package": "com.flickios.jaaspire",
+      "package": "com.convoia.jaaspire",
       "icon": "./assets/images/icon.png",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
