@@ -10,7 +10,7 @@ import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { Image } from "expo-image";
 import { router, Stack, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -19,19 +19,10 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
 } from "react-native";
-import Animated, {
-  useAnimatedScrollHandler,
-  useAnimatedStyle,
-  useSharedValue,
-} from "react-native-reanimated";
 
 const TAB_LABELS = ["Latest", "People", "Photos", "Videos"] as const;
-const PAGER_INDICES = [0, 1, 2, 3] as const;
-
-const AnimatedFlatList = Animated.createAnimatedComponent(FlatList<number>);
 
 function useNormalizedQueryParam(): string {
   const { q } = useLocalSearchParams<{ q?: string | string[] }>();
@@ -42,51 +33,38 @@ function useNormalizedQueryParam(): string {
   }, [q]);
 }
 
-function flattenPostIds(
-  data: ReturnType<typeof useGlobalSearchPostsQuery>["data"] | undefined,
-): number[] {
+function flattenPostIds(data: any): number[] {
   if (!data?.pages) return [];
-  return data.pages.flatMap((page) =>
-    page.data.filter === "people" ? [] : (page.data.posts as number[]),
+  return data.pages.flatMap((page: any) =>
+    page.data.filter === "people" ? [] : page.data.posts,
   );
 }
 
-function flattenPeople(
-  data: ReturnType<typeof useGlobalSearchQuery>["data"] | undefined,
-): SearchResultUser[] {
+function flattenPeople(data: any): SearchResultUser[] {
   if (!data?.pages) return [];
-  return data.pages.flatMap((page) =>
+  return data.pages.flatMap((page: any) =>
     page.data.filter === "people" ? page.data.users : [],
   );
 }
 
-function SearchPostsTab({
-  postIds,
-  refetch,
-  isRefetching,
-  fetchNextPage,
-  hasNextPage,
-  isFetchingNextPage,
-  isTabActive,
-  isLoading,
-  isEmpty,
-}: {
-  postIds: number[];
-  refetch: () => Promise<unknown>;
-  isRefetching: boolean;
-  fetchNextPage: () => void;
-  hasNextPage: boolean;
-  isFetchingNextPage: boolean;
-  isTabActive: boolean;
-  isLoading: boolean;
-  isEmpty: boolean;
-}) {
+function SearchPostsTab(props: any) {
+  const {
+    postIds,
+    refetch,
+    isRefetching,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    isEmpty,
+  } = props;
+
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const onEndReached = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) fetchNextPage();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [hasNextPage, isFetchingNextPage]);
 
   if (isLoading && postIds.length === 0) {
     return (
@@ -108,13 +86,11 @@ function SearchPostsTab({
     <ProfileFeedView
       postIds={postIds}
       ListHeaderComponent={<View style={{ height: 0 }} />}
-      onRefresh={async () => {
-        await refetch();
-      }}
+      onRefresh={refetch}
       isRefreshing={isRefetching}
       onEndReached={onEndReached}
       isFetchingNextPage={isFetchingNextPage}
-      isTabActive={isTabActive}
+      isTabActive={true}
     />
   );
 }
@@ -125,13 +101,7 @@ function PeopleSearchTab({
   isFetchingNextPage,
   hasNextPage,
   fetchNextPage,
-}: {
-  users: SearchResultUser[];
-  isLoading: boolean;
-  isFetchingNextPage: boolean;
-  hasNextPage: boolean;
-  fetchNextPage: () => void;
-}) {
+}: any) {
   const { theme } = useTheme();
   const { data: profileData } = useGetProfile();
   const me = profileData?.data;
@@ -139,7 +109,7 @@ function PeopleSearchTab({
 
   const onEndReached = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) fetchNextPage();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [hasNextPage, isFetchingNextPage]);
 
   const renderUser = useCallback(
     ({ item }: ListRenderItemInfo<SearchResultUser>) => (
@@ -157,9 +127,7 @@ function PeopleSearchTab({
           style={styles.viewProfileBtn}
           onPress={() => {
             if (item.id === me?.id) {
-              router.push({
-                pathname: "/(app)/(tabs)/profile",
-              });
+              router.push("/(app)/(tabs)/profile");
               return;
             }
             router.push({
@@ -172,7 +140,7 @@ function PeopleSearchTab({
         </Pressable>
       </View>
     ),
-    [styles],
+    [me, styles],
   );
 
   if (isLoading && users.length === 0) {
@@ -198,7 +166,11 @@ function PeopleSearchTab({
       renderItem={renderUser}
       onEndReached={onEndReached}
       onEndReachedThreshold={0.5}
-      keyboardShouldPersistTaps="handled"
+      removeClippedSubviews
+      windowSize={5}
+      maxToRenderPerBatch={5}
+      initialNumToRender={5}
+      updateCellsBatchingPeriod={100}
       ListFooterComponent={
         isFetchingNextPage ? (
           <ActivityIndicator style={{ padding: 16 }} />
@@ -210,216 +182,82 @@ function PeopleSearchTab({
 
 export default function GlobalSearchScreen() {
   const q = useNormalizedQueryParam();
-  const { width: windowWidth } = useWindowDimensions();
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const [searchDraft, setSearchDraft] = useState(q);
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [pagerIndex, setPagerIndex] = useState(0);
-  const pagerRef = useRef<FlatList<number> | null>(null);
-  const scrollX = useSharedValue(0);
+
+  useEffect(() => setSearchDraft(q), [q]);
 
   useEffect(() => {
-    setSearchDraft(q);
+    if (!q) router.back();
   }, [q]);
-
-  useEffect(() => {
-    if (q.length === 0) {
-      router.back();
-    }
-  }, [q]);
-
-  const handleBarFocus = useCallback(() => setIsSearchFocused(true), []);
-  const handleBarBlur = useCallback(() => {
-    setIsSearchFocused(false);
-    Keyboard.dismiss();
-  }, []);
-  const handleBarClear = useCallback(() => setSearchDraft(""), []);
 
   const handleSubmitSearch = useCallback(() => {
     const trimmed = searchDraft.trim();
     Keyboard.dismiss();
-    setIsSearchFocused(false);
-    if (trimmed.length === 0) {
-      router.back();
-      return;
-    }
+    if (!trimmed) return router.back();
     router.setParams({ q: trimmed });
   }, [searchDraft]);
 
+  // ✅ Lazy queries
   const latestQ = useGlobalSearchPostsQuery(q, "latest");
+
   const peopleQ = useGlobalSearchQuery(q, "people");
+
   const photosQ = useGlobalSearchPostsQuery(q, "photos");
+
   const videosQ = useGlobalSearchPostsQuery(q, "videos");
 
-  const latestIds = useMemo(() => flattenPostIds(latestQ.data), [latestQ.data]);
-  const photosIds = useMemo(() => flattenPostIds(photosQ.data), [photosQ.data]);
-  const videosIds = useMemo(() => flattenPostIds(videosQ.data), [videosQ.data]);
-  const peopleList = useMemo(() => flattenPeople(peopleQ.data), [peopleQ.data]);
-
-  const scrollHandler = useAnimatedScrollHandler({
-    onScroll: (event) => {
-      scrollX.value = event.contentOffset.x;
-    },
-  });
-
-  const underlineStyle = useAnimatedStyle(() => ({
-    width: windowWidth / 4,
-    transform: [{ translateX: scrollX.value / 4 }],
-  }));
-
-  const onMomentumScrollEnd = useCallback(
-    (e: { nativeEvent: { contentOffset: { x: number } } }) => {
-      const x = e.nativeEvent.contentOffset.x;
-      const idx = Math.round(x / windowWidth);
-      setPagerIndex(Math.min(Math.max(idx, 0), 3));
-    },
-    [windowWidth],
+  // ✅ Only compute active tab
+  const latestIds = useMemo(
+    () => (pagerIndex === 0 ? flattenPostIds(latestQ.data) : []),
+    [latestQ.data, pagerIndex],
   );
 
-  const goToPage = useCallback(
-    (index: number) => {
-      setPagerIndex(index);
-      pagerRef.current?.scrollToOffset({
-        offset: index * windowWidth,
-        animated: true,
-      });
-    },
-    [windowWidth],
+  const peopleList = useMemo(
+    () => (pagerIndex === 1 ? flattenPeople(peopleQ.data) : []),
+    [peopleQ.data, pagerIndex],
   );
 
-  const renderPagerPage = useCallback(
-    ({ item: index }: ListRenderItemInfo<number>) => {
-      const isTabActive = pagerIndex === index;
-
-      if (index === 0) {
-        return (
-          <View style={{ width: windowWidth, flex: 1 }}>
-            <SearchPostsTab
-              postIds={latestIds}
-              refetch={latestQ.refetch}
-              isRefetching={latestQ.isRefetching}
-              fetchNextPage={latestQ.fetchNextPage}
-              hasNextPage={latestQ.hasNextPage ?? false}
-              isFetchingNextPage={latestQ.isFetchingNextPage}
-              isTabActive={isTabActive}
-              isLoading={latestQ.isLoading}
-              isEmpty={!latestQ.isLoading && latestIds.length === 0}
-            />
-          </View>
-        );
-      }
-
-      if (index === 1) {
-        return (
-          <View style={{ width: windowWidth, flex: 1 }}>
-            <PeopleSearchTab
-              users={peopleList}
-              isLoading={peopleQ.isLoading}
-              isFetchingNextPage={peopleQ.isFetchingNextPage}
-              hasNextPage={peopleQ.hasNextPage ?? false}
-              fetchNextPage={peopleQ.fetchNextPage}
-            />
-          </View>
-        );
-      }
-
-      if (index === 2) {
-        return (
-          <View style={{ width: windowWidth, flex: 1 }}>
-            <SearchPostsTab
-              postIds={photosIds}
-              refetch={photosQ.refetch}
-              isRefetching={photosQ.isRefetching}
-              fetchNextPage={photosQ.fetchNextPage}
-              hasNextPage={photosQ.hasNextPage ?? false}
-              isFetchingNextPage={photosQ.isFetchingNextPage}
-              isTabActive={isTabActive}
-              isLoading={photosQ.isLoading}
-              isEmpty={!photosQ.isLoading && photosIds.length === 0}
-            />
-          </View>
-        );
-      }
-
-      return (
-        <View style={{ width: windowWidth, flex: 1 }}>
-          <SearchPostsTab
-            postIds={videosIds}
-            refetch={videosQ.refetch}
-            isRefetching={videosQ.isRefetching}
-            fetchNextPage={videosQ.fetchNextPage}
-            hasNextPage={videosQ.hasNextPage ?? false}
-            isFetchingNextPage={videosQ.isFetchingNextPage}
-            isTabActive={isTabActive}
-            isLoading={videosQ.isLoading}
-            isEmpty={!videosQ.isLoading && videosIds.length === 0}
-          />
-        </View>
-      );
-    },
-    [
-      windowWidth,
-      pagerIndex,
-      latestIds,
-      latestQ.refetch,
-      latestQ.isRefetching,
-      latestQ.fetchNextPage,
-      latestQ.hasNextPage,
-      latestQ.isFetchingNextPage,
-      latestQ.isLoading,
-      peopleList,
-      peopleQ.isLoading,
-      peopleQ.isFetchingNextPage,
-      peopleQ.hasNextPage,
-      peopleQ.fetchNextPage,
-      photosIds,
-      photosQ.refetch,
-      photosQ.isRefetching,
-      photosQ.fetchNextPage,
-      photosQ.hasNextPage,
-      photosQ.isFetchingNextPage,
-      photosQ.isLoading,
-      videosIds,
-      videosQ.refetch,
-      videosQ.isRefetching,
-      videosQ.fetchNextPage,
-      videosQ.hasNextPage,
-      videosQ.isFetchingNextPage,
-      videosQ.isLoading,
-    ],
+  const photosIds = useMemo(
+    () => (pagerIndex === 2 ? flattenPostIds(photosQ.data) : []),
+    [photosQ.data, pagerIndex],
   );
 
-  if (q.length === 0) {
-    return null;
-  }
+  const videosIds = useMemo(
+    () => (pagerIndex === 3 ? flattenPostIds(videosQ.data) : []),
+    [videosQ.data, pagerIndex],
+  );
+
+  if (!q) return null;
 
   return (
     <>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          title: "Search",
-          headerBackButtonDisplayMode: "minimal",
-        }}
-      />
+      <Stack.Screen options={{ title: "Search" }} />
+
       <View style={styles.root}>
         <ExploreSearchBar
           value={searchDraft}
           onChangeText={setSearchDraft}
-          onFocus={handleBarFocus}
-          onBlur={handleBarBlur}
-          onClear={handleBarClear}
-          isFocused={isSearchFocused}
+          isFocused={false}
           onSubmitSearch={handleSubmitSearch}
+          onFocus={() => {}}
+          onBlur={() => {}}
+          onClear={() => {
+            setSearchDraft("");
+          }}
+          // onClear={() => {}}
         />
+
+        {/* Tabs */}
         <View style={styles.tabBar}>
           {TAB_LABELS.map((label, i) => (
             <Pressable
               key={label}
               style={styles.tabPressable}
-              onPress={() => goToPage(i)}
+              onPress={() => setPagerIndex(i)}
             >
               <Text
                 style={[
@@ -432,28 +270,50 @@ export default function GlobalSearchScreen() {
             </Pressable>
           ))}
         </View>
+
+        {/* Underline */}
         <View style={styles.tabUnderlineTrack}>
-          <Animated.View style={[styles.tabUnderline, underlineStyle]} />
+          <View
+            style={[
+              styles.tabUnderline,
+              {
+                width: `${100 / TAB_LABELS.length}%`,
+                left: `${(100 / TAB_LABELS.length) * pagerIndex}%`,
+              },
+            ]}
+          />
         </View>
 
-        <AnimatedFlatList
-          ref={pagerRef}
-          data={[...PAGER_INDICES]}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          keyExtractor={(item) => String(item)}
-          renderItem={renderPagerPage}
-          getItemLayout={(_, index) => ({
-            length: windowWidth,
-            offset: windowWidth * index,
-            index,
-          })}
-          onScroll={scrollHandler}
-          scrollEventThrottle={16}
-          onMomentumScrollEnd={onMomentumScrollEnd}
-          style={styles.pager}
-        />
+        {/* Active Tab */}
+        <View style={{ flex: 1 }}>
+          {pagerIndex === 0 && (
+            <SearchPostsTab
+              postIds={latestIds}
+              {...latestQ}
+              isEmpty={!latestQ.isLoading && latestIds.length === 0}
+            />
+          )}
+
+          {pagerIndex === 1 && (
+            <PeopleSearchTab users={peopleList} {...peopleQ} />
+          )}
+
+          {pagerIndex === 2 && (
+            <SearchPostsTab
+              postIds={photosIds}
+              {...photosQ}
+              isEmpty={!photosQ.isLoading && photosIds.length === 0}
+            />
+          )}
+
+          {pagerIndex === 3 && (
+            <SearchPostsTab
+              postIds={videosIds}
+              {...videosQ}
+              isEmpty={!videosQ.isLoading && videosIds.length === 0}
+            />
+          )}
+        </View>
       </View>
     </>
   );

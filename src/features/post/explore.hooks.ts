@@ -1,11 +1,11 @@
 import { apiClient } from "@/src/services/api/api.client";
 import {
-    ExplorePost,
-    ExploreResponse,
-    GlobalSearchPostsFilter,
-    GridItem,
-    Post,
-    SearchResponse,
+  ExplorePost,
+  ExploreResponse,
+  GlobalSearchPostsFilter,
+  GridItem,
+  Post,
+  SearchResponse,
 } from "@/src/services/api/api.types";
 import { isLargeItem } from "@/src/utils/helpers";
 import { useInfiniteQuery } from "@tanstack/react-query";

@@ -283,6 +283,7 @@ function CreateContent() {
                 resetMentionSession();
                 resetVideoDraft();
                 trigger("Post created successfully", "success");
+                router.push({ pathname: "/(app)/(tabs)/profile" });
                 queryClient.invalidateQueries({
                   queryKey: ["user_feed", username],
                 });
@@ -317,6 +318,8 @@ function CreateContent() {
                 resetMentionSession();
                 setSelectedImage(null);
                 reset();
+                router.push({ pathname: "/(app)/(tabs)/profile" });
+
                 trigger("Post created successfully", "success");
                 queryClient.invalidateQueries({
                   queryKey: ["user_feed", username],

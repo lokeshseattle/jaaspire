@@ -93,15 +93,15 @@ export default function PostVideoThumbnailScreen() {
       } catch {
         // ignore and keep polling a bit
       }
-    }, 10000);
+    }, 300);
 
     const timeout = setTimeout(() => {
       clearInterval(interval);
       setIsLoadingDuration(false);
-      if (!durationMs) {
-        Alert.alert("Error", "Failed to load video duration.");
-      }
-    }, 8000);
+      // if (!durationMs) {
+      //   Alert.alert("Error", "Failed to load video duration.");
+      // }
+    }, 5000);
 
     return () => {
       clearInterval(interval);
@@ -129,30 +129,46 @@ export default function PostVideoThumbnailScreen() {
 
   const handleUseThisFrame = useCallback(async () => {
     if (!videoUri) return;
+
     setIsGenerating(true);
+
     try {
-      const { uri } = await VideoThumbnails.getThumbnailAsync(videoUri, {
+      // ✅ Pause first
+      if (player?.playing) player.pause();
+
+      // ✅ Small delay (VERY important)
+      await new Promise((res) => setTimeout(res, 120));
+
+      const result = await VideoThumbnails.getThumbnailAsync(videoUri, {
         time: timeMs,
         quality: 0.8,
       });
 
+      if (!result?.uri) throw new Error("No thumbnail uri");
+
       const generated: PickedFile = {
-        uri,
+        uri: result.uri,
         name: `video_thumbnail_${Date.now()}.jpg`,
         type: "image/jpeg",
       };
+
       setThumbnail(generated);
       setThumbnailTimeMs(timeMs);
     } catch (e) {
-      console.warn("Failed to generate thumbnail:", e);
-      Alert.alert(
-        "Thumbnail failed",
-        "Couldn’t generate a thumbnail from this video. Please choose a custom thumbnail from your gallery.",
-      );
+      console.warn("Thumbnail extraction error:", e);
+
+      // ❗ DO NOT show error blindly
+      // Only show if we truly have no thumbnail
+      if (!thumbnail) {
+        Alert.alert(
+          "Thumbnail failed",
+          "Couldn’t generate a thumbnail. Try another frame.",
+        );
+      }
     } finally {
       setIsGenerating(false);
     }
-  }, [setThumbnail, setThumbnailTimeMs, timeMs, videoUri]);
+  }, [player, thumbnail, setThumbnail, setThumbnailTimeMs, timeMs, videoUri]);
 
   const canDone = !!video && !!thumbnail;
 
