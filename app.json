@@ -17,7 +17,8 @@
         "NSCameraUsageDescription": "This app needs access to your camera to take photos.",
         "NSPhotoLibraryAddUsageDescription": "This app needs permission to save photos to your library."
       },
-      "appleTeamId": "T6Y9862AD6"
+      "appleTeamId": "T6Y9862AD6",
+      "associatedDomains": ["applinks:jaaspire.com"]
     },
     "android": {
       "package": "com.convoia.jaaspire",
@@ -31,6 +32,19 @@
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.RECORD_AUDIO"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "https",
+              "host": "jaaspire.com",
+              "pathPrefix": "/"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
       ]
     },
     "web": {
@@ -72,7 +86,8 @@
           "cameraPermission": "The app accesses your camera."
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-iap"
     ],
     "experiments": {
       "typedRoutes": true,
