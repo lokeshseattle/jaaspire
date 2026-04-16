@@ -6,6 +6,9 @@ import type {
 } from "expo-video";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+/** If the focused item never reaches readyToPlay (native stall), recover in-place instead of forcing the user to scroll away until pool eviction. */
+const STUCK_LOADING_REPLACE_MS = 5000;
+
 function safePlayerSnapshot(p: VideoPlayer): {
   status: VideoPlayer["status"];
   playing: boolean;
@@ -36,6 +39,7 @@ export function useManagedVideoPlayer(
   const isFocusedRef = useRef(isFocused);
   const postIdRef = useRef(postId);
   const playerRef = useRef<VideoPlayer | null>(null);
+  const stuckReplaceAttemptedRef = useRef(false);
 
   isFocusedRef.current = isFocused;
   postIdRef.current = postId;
@@ -147,6 +151,37 @@ export function useManagedVideoPlayer(
       }
     }
   }, [isFocused]);
+
+  useEffect(() => {
+    if (!url || !isFocused) {
+      stuckReplaceAttemptedRef.current = false;
+      return;
+    }
+    if (isReady) {
+      stuckReplaceAttemptedRef.current = false;
+      return;
+    }
+    if (stuckReplaceAttemptedRef.current) return;
+
+    const timer = setTimeout(() => {
+      const p = playerRef.current;
+      if (!p || postIdRef.current !== postId || !url) return;
+      if (!isFocusedRef.current) return;
+      const snap = safePlayerSnapshot(p);
+      if (snap?.status === "readyToPlay") return;
+      if (stuckReplaceAttemptedRef.current) return;
+      stuckReplaceAttemptedRef.current = true;
+      try {
+        p.replace(url);
+      } catch (e) {
+        if (__DEV__) {
+          console.warn(`[VideoPlayer:${postId}] stuck-loading replace failed:`, e);
+        }
+      }
+    }, STUCK_LOADING_REPLACE_MS);
+
+    return () => clearTimeout(timer);
+  }, [isFocused, isReady, url, postId]);
 
   useEffect(() => {
     if (nextPostUrl && nextPostId) {

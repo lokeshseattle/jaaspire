@@ -114,7 +114,7 @@ export default function MessagesScreen() {
     );
   }
 
-  if (isError) {
+  if (contacts.length === 0 && isError) {
     const message =
       error instanceof Error ? error.message : "Could not load messages";
     return (

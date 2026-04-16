@@ -6,6 +6,7 @@ import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client
 import NetworkListener from "@/src/components/toast/NetworkListener";
 import { ToastProvider } from "@/src/components/toast/ToastProvider";
 import { queryClient } from "@/src/lib/query-client";
+import { startSystemVolumeUnmuteSync } from "@/src/lib/system-volume-unmute-sync";
 import { ActionSheetProvider } from "@expo/react-native-action-sheet";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { Stack } from "expo-router";
@@ -30,6 +31,10 @@ function RootLayoutInner() {
   useEffect(() => {
     restoreSession();
   }, [restoreSession]);
+
+  useEffect(() => {
+    return startSystemVolumeUnmuteSync();
+  }, []);
 
   // Hide splash for every entry route (including cold-start universal links that skip app/index.tsx).
   useEffect(() => {

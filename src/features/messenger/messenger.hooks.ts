@@ -12,7 +12,7 @@ import {
   SendAiChatMessageRequest,
   SendAiChatMessageResponse,
   SendMessengerMessageRequest,
-  SendMessengerMessageResponse
+  SendMessengerMessageResponse,
 } from "@/src/services/api/api.types";
 import {
   InfiniteData,
@@ -42,6 +42,9 @@ export const useGetMessengerContacts = (): UseQueryResult<
         .then((r) => r.data),
     staleTime: 1000 * 45,
     placeholderData: keepPreviousData,
+    meta: {
+      persist: true,
+    },
   });
 };
 
@@ -83,7 +86,10 @@ function normalizeMessengerAttachment(
     preview_url?: string | null;
   };
   const preview =
-    firstNonEmptyString(a.previewurl ?? undefined, raw.preview_url ?? undefined) ??
+    firstNonEmptyString(
+      a.previewurl ?? undefined,
+      raw.preview_url ?? undefined,
+    ) ??
     a.previewurl ??
     null;
   return {

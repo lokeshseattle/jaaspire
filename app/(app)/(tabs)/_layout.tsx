@@ -51,6 +51,21 @@ export default function TabsLayout() {
         />
 
         <Tabs.Screen
+          name="reels"
+          options={{
+            headerShown: false,
+            title: "Reels",
+            tabBarIcon: ({ color, size, focused }) => (
+              <Ionicons
+                name={focused ? "play-circle" : "play-circle-outline"}
+                size={size}
+                color={color}
+              />
+            ),
+          }}
+        />
+
+        <Tabs.Screen
           name="search"
           options={{
             title: "Search",
