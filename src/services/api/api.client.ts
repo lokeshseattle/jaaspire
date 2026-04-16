@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "@/src/constants/app-env";
 import { useAuthStore } from "@/src/features/auth/auth.store";
 import { forceLogout } from "@/src/features/auth/auth.utils";
 import axios, {
@@ -7,7 +8,7 @@ import axios, {
 } from "axios";
 import { normalizeApiError } from "./api.error";
 
-const baseURL = "https://stgx.jaaspire.com/api/v1";
+const baseURL = API_BASE_URL;
 
 /** Set to true to test with local mock upload API (run: npm run mock:upload-api) */
 // const USE_MOCK_UPLOAD_API = __DEV__ && false;
@@ -19,7 +20,7 @@ const baseURL = "https://stgx.jaaspire.com/api/v1";
 // Logger helper
 
 const LOG_REQUEST = true;
-const LOG_RESPONSE = true;
+const LOG_RESPONSE = false;
 const LOG_ERROR = false;
 
 const buildFullUrl = (config: InternalAxiosRequestConfig) => {

@@ -12,12 +12,14 @@ import { getMediaType } from "@/src/utils/helpers";
 interface Props extends PostItem {
   isVisible: boolean;
   onPressComments: () => void;
+  onPressShare: () => void;
   nextPost?: PostItem; // Add nextPost prop
 }
 
 export default function Post({
   isVisible,
   onPressComments,
+  onPressShare,
   nextPost,
   ...post
 }: Props) {
@@ -57,8 +59,9 @@ export default function Post({
       isLiked,
       toggleLike: handleToggleLike,
       onPressComments,
+      onPressShare,
     }),
-    [post, isLiked, handleToggleLike, onPressComments],
+    [post, isLiked, handleToggleLike, onPressComments, onPressShare],
   );
 
   return (

@@ -35,7 +35,7 @@ function getDynamicChunkSize(totalSize: number): number {
 export const VIDEO_UPLOAD_KEY = ["video-upload"];
 export const STORY_UPLOAD_KEY = ["story-upload"];
 export const POST_UPLOAD_KEY = ["post-upload"];
-// const API_BASE_URL = "https://stgx.jaaspire.com/api/v1";
+// const API_BASE_URL = ... // use API_BASE_URL from @/src/constants/app-env
 // const MAX_RETRIES = 3;
 export interface MergeChunksResponse {
   success: boolean;

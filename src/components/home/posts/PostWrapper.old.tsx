@@ -1,7 +1,7 @@
 // src/components/home/posts/PostWrapper.tsx
 import Post from "@/src/components/home/posts/post.old";
 import { usePostStore } from "@/src/features/post/post.store";
-import { memo } from "react";
+import { memo, useCallback, useRef } from "react";
 
 type PostItemProps = {
   id: number;
@@ -9,6 +9,7 @@ type PostItemProps = {
   visiblePostId: number | null;
   isScreenFocused: boolean;
   openComments: (id: number) => void;
+  openShare: (id: number) => void;
 };
 
 const PostItem = ({
@@ -17,6 +18,7 @@ const PostItem = ({
   visiblePostId,
   isScreenFocused,
   openComments,
+  openShare,
 }: PostItemProps) => {
   // Always call hooks unconditionally
   const post = usePostStore((state) => state.posts[id]);
@@ -24,6 +26,17 @@ const PostItem = ({
   // Fix: Always call the hook, use a selector that handles missing nextId
   const nextPost = usePostStore((state) =>
     nextId != null ? state.posts[nextId] : undefined,
+  );
+
+  const idRef = useRef(id);
+  idRef.current = id;
+  const stableOpenComments = useCallback(
+    () => openComments(idRef.current),
+    [openComments],
+  );
+  const stableOpenShare = useCallback(
+    () => openShare(idRef.current),
+    [openShare],
   );
 
   if (!post) return null;
@@ -34,7 +47,8 @@ const PostItem = ({
     <Post
       {...post}
       isVisible={isVisible}
-      onPressComments={() => openComments(id)}
+      onPressComments={stableOpenComments}
+      onPressShare={stableOpenShare}
       nextPost={nextPost}
     />
   );

@@ -14,6 +14,7 @@ type PostItemProps = {
   visiblePostId: number | null;
   isScreenFocused: boolean;
   openComments: (id: number) => void;
+  openShare: (id: number) => void;
 };
 
 const PostItem = ({
@@ -24,6 +25,7 @@ const PostItem = ({
   visiblePostId,
   isScreenFocused,
   openComments,
+  openShare,
 }: PostItemProps) => {
   const post = usePostStore(useShallow((state) => state.posts[id]));
 
@@ -37,6 +39,10 @@ const PostItem = ({
   const stableOpenComments = useCallback(
     () => openComments(idRef.current),
     [openComments],
+  );
+  const stableOpenShare = useCallback(
+    () => openShare(idRef.current),
+    [openShare],
   );
 
   if (!post) return null;
@@ -52,6 +58,7 @@ const PostItem = ({
       isFocused={isFocused}
       inVideoWindow={inVideoWindow}
       onPressComments={stableOpenComments}
+      onPressShare={stableOpenShare}
       nextPost={nextPost}
     />
   );

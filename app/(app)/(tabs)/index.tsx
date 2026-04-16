@@ -1,6 +1,8 @@
 // Android home feed: viewability picks a single primary post; FlatList tuned for smooth scroll.
 import { useCommentsSheet } from "@/hooks/use-comment-sheet";
+import { useShareSheet } from "@/hooks/use-share-sheet";
 import { CommentsBottomSheet } from "@/src/components/comments/CommentsBottomSheet";
+import { SharePostBottomSheet } from "@/src/components/share/SharePostBottomSheet";
 import PostItem from "@/src/components/home/posts/PostWrapper";
 import Stories from "@/src/components/home/story";
 import {
@@ -96,6 +98,12 @@ export default function Home() {
 
   const { bottomSheetRef, selectedPostId, openComments, onDismiss } =
     useCommentsSheet();
+  const {
+    bottomSheetRef: shareBottomSheetRef,
+    selectedPostId: selectedSharePostId,
+    openShare,
+    onDismiss: onShareDismiss,
+  } = useShareSheet();
 
   const {
     data,
@@ -208,10 +216,11 @@ export default function Home() {
           visiblePostId={visiblePostIdRef.current}
           isScreenFocused={isScreenFocusedRef.current}
           openComments={openComments}
+          openShare={openShare}
         />
       );
     },
-    [openComments, getNextPostId],
+    [openComments, openShare, getNextPostId],
   );
 
   const keyExtractor = useCallback((item: number) => item.toString(), []);
@@ -298,6 +307,11 @@ export default function Home() {
         bottomSheetRef={bottomSheetRef}
         postId={selectedPostId}
         onDismiss={onDismiss}
+      />
+      <SharePostBottomSheet
+        bottomSheetRef={shareBottomSheetRef}
+        postId={selectedSharePostId}
+        onDismiss={onShareDismiss}
       />
     </View>
   );

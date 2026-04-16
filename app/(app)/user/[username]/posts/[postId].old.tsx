@@ -1,5 +1,7 @@
 import { useCommentsSheet } from "@/hooks/use-comment-sheet";
+import { useShareSheet } from "@/hooks/use-share-sheet";
 import { CommentsBottomSheet } from "@/src/components/comments/CommentsBottomSheet";
+import { SharePostBottomSheet } from "@/src/components/share/SharePostBottomSheet";
 import PostItem from "@/src/components/home/posts/PostWrapper.old";
 import {
     useGetSinglePost,
@@ -36,6 +38,12 @@ const UserPostScreen = () => {
 
   const { bottomSheetRef, selectedPostId, openComments, onDismiss } =
     useCommentsSheet();
+  const {
+    bottomSheetRef: shareBottomSheetRef,
+    selectedPostId: selectedSharePostId,
+    openShare,
+    onDismiss: onShareDismiss,
+  } = useShareSheet();
 
   // useFocusEffect(
   useEffect(() => {
@@ -142,10 +150,11 @@ const UserPostScreen = () => {
           visiblePostId={visiblePostId}
           isScreenFocused={isScreenFocused}
           openComments={openComments}
+          openShare={openShare}
         />
       );
     },
-    [visiblePostId, isScreenFocused, openComments, getNextPostId],
+    [visiblePostId, isScreenFocused, openComments, openShare, getNextPostId],
   );
 
   const keyExtractor = useCallback((item: number) => item.toString(), []);
@@ -174,6 +183,7 @@ const UserPostScreen = () => {
         visiblePostId={visiblePostId}
         isScreenFocused={isScreenFocused}
         openComments={openComments}
+        openShare={openShare}
       />
     );
   }, [
@@ -182,6 +192,7 @@ const UserPostScreen = () => {
     visiblePostId,
     isScreenFocused,
     openComments,
+    openShare,
   ]);
 
   if (isLoading) {
@@ -226,6 +237,11 @@ const UserPostScreen = () => {
         bottomSheetRef={bottomSheetRef}
         postId={selectedPostId}
         onDismiss={onDismiss}
+      />
+      <SharePostBottomSheet
+        bottomSheetRef={shareBottomSheetRef}
+        postId={selectedSharePostId}
+        onDismiss={onShareDismiss}
       />
     </View>
   );

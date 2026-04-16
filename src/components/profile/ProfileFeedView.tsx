@@ -1,7 +1,9 @@
 // src/components/profile/ProfileFeedView.tsx
 // Feed list behavior aligned with app/(app)/(tabs)/index.tsx (home).
 import { useCommentsSheet } from "@/hooks/use-comment-sheet";
+import { useShareSheet } from "@/hooks/use-share-sheet";
 import { CommentsBottomSheet } from "@/src/components/comments/CommentsBottomSheet";
+import { SharePostBottomSheet } from "@/src/components/share/SharePostBottomSheet";
 import PostItem from "@/src/components/home/posts/PostWrapper.old";
 import { useTrackPostView } from "@/src/features/post/post.hooks";
 import { videoManager } from "@/src/lib/video-manager.old";
@@ -57,6 +59,12 @@ export function ProfileFeedView({
 
   const { bottomSheetRef, selectedPostId, openComments, onDismiss } =
     useCommentsSheet();
+  const {
+    bottomSheetRef: shareBottomSheetRef,
+    selectedPostId: selectedSharePostId,
+    openShare,
+    onDismiss: onShareDismiss,
+  } = useShareSheet();
 
   useFocusEffect(
     useCallback(() => {
@@ -144,6 +152,7 @@ export function ProfileFeedView({
           visiblePostId={effectiveVisiblePostId}
           isScreenFocused={effectiveScreenFocused}
           openComments={openComments}
+          openShare={openShare}
         />
       );
     },
@@ -151,6 +160,7 @@ export function ProfileFeedView({
       effectiveVisiblePostId,
       effectiveScreenFocused,
       openComments,
+      openShare,
       getNextPostId,
     ],
   );
@@ -199,6 +209,11 @@ export function ProfileFeedView({
         bottomSheetRef={bottomSheetRef}
         postId={selectedPostId}
         onDismiss={onDismiss}
+      />
+      <SharePostBottomSheet
+        bottomSheetRef={shareBottomSheetRef}
+        postId={selectedSharePostId}
+        onDismiss={onShareDismiss}
       />
     </View>
   );

@@ -21,7 +21,7 @@ SplashScreen.preventAutoHideAsync();
 
 // Inner layout that can use theme hooks
 function RootLayoutInner() {
-  const { restoreSession } = useAuth();
+  const { restoreSession, isLoading: authLoading } = useAuth();
   const { theme } = useTheme();
 
   // Determine if dark mode
@@ -30,6 +30,16 @@ function RootLayoutInner() {
   useEffect(() => {
     restoreSession();
   }, [restoreSession]);
+
+  // Hide splash for every entry route (including cold-start universal links that skip app/index.tsx).
+  useEffect(() => {
+    if (authLoading) return;
+    SplashScreen.setOptions({
+      duration: 1000,
+      fade: true,
+    });
+    void SplashScreen.hideAsync();
+  }, [authLoading]);
 
   return (
     <>

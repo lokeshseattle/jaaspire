@@ -14,6 +14,7 @@ interface Props extends PostItem {
   /** True when this row is within ±2 of the primary post — keep a native player mounted for preload. */
   inVideoWindow: boolean;
   onPressComments: () => void;
+  onPressShare: () => void;
   nextPost?: PostItem;
 }
 
@@ -21,6 +22,7 @@ function Post({
   isFocused,
   inVideoWindow,
   onPressComments,
+  onPressShare,
   nextPost,
   ...post
 }: Props) {
@@ -61,6 +63,7 @@ function Post({
       isLiked,
       toggleLike: handleToggleLike,
       onPressComments,
+      onPressShare,
     }),
     // Fine-grained deps: only the fields PostHeader/PostFooter actually read.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -79,6 +82,7 @@ function Post({
       isLiked,
       handleToggleLike,
       onPressComments,
+      onPressShare,
     ],
   );
 

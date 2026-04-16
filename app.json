@@ -17,8 +17,7 @@
         "NSCameraUsageDescription": "This app needs access to your camera to take photos.",
         "NSPhotoLibraryAddUsageDescription": "This app needs permission to save photos to your library."
       },
-      "appleTeamId": "T6Y9862AD6",
-      "associatedDomains": ["applinks:jaaspire.com"]
+      "appleTeamId": "T6Y9862AD6"
     },
     "android": {
       "package": "com.convoia.jaaspire",
@@ -31,20 +30,8 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.RECORD_AUDIO",
-        "android.permission.RECORD_AUDIO"
-      ],
-      "intentFilters": [
-        {
-          "action": "VIEW",
-          "data": [
-            {
-              "scheme": "https",
-              "host": "jaaspire.com",
-              "pathPrefix": "/"
-            }
-          ],
-          "category": ["BROWSABLE", "DEFAULT"]
-        }
+        "android.permission.RECORD_AUDIO",
+        "com.android.vending.BILLING"
       ]
     },
     "web": {
@@ -94,7 +81,6 @@
       "reactCompiler": true
     },
     "extra": {
-      "router": {},
       "eas": {
         "projectId": "239223f2-2e9c-40db-992f-eb46109b3696"
       }

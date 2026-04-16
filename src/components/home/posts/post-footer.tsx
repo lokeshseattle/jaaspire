@@ -16,7 +16,7 @@ import RichText from "../../ui/rich-text";
 
 const LIKED_COLOR = "#ff3040";
 
-const PostFooter = React.memo(() => {
+function PostFooterInner() {
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
@@ -26,7 +26,9 @@ const PostFooter = React.memo(() => {
       <PostCaptions theme={theme} styles={styles} />
     </View>
   );
-});
+}
+
+const PostFooter = React.memo(PostFooterInner);
 
 export default PostFooter;
 
@@ -60,7 +62,7 @@ const PostActions = ({ theme, styles }: ActionProps) => {
           )}
         </View>
         <Tip theme={theme} />
-        <Share theme={theme} />
+        <ShareButton theme={theme} />
       </View>
 
       <Views viewCount={post.views_count} theme={theme} styles={styles} />
@@ -103,8 +105,13 @@ const Tip = ({ theme }: { theme: AppTheme }) => {
   return <Octicons name="gift" size={24} color={theme.colors.icon} />;
 };
 
-const Share = ({ theme }: { theme: AppTheme }) => {
-  return <Feather name="send" size={24} color={theme.colors.icon} />;
+const ShareButton = ({ theme }: { theme: AppTheme }) => {
+  const { onPressShare } = usePost();
+  return (
+    <Pressable onPress={onPressShare}>
+      <Feather name="send" size={24} color={theme.colors.icon} />
+    </Pressable>
+  );
 };
 
 interface ViewsProps {

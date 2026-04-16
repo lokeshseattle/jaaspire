@@ -6,17 +6,29 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_WEB_ORIGIN": "https://stgx.jaaspire.com",
+        "EXPO_PUBLIC_API_BASE_URL": "https://stgx.jaaspire.com/api/v1"
+      }
     },
     "preview": {
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_WEB_ORIGIN": "https://stgx.jaaspire.com",
+        "EXPO_PUBLIC_API_BASE_URL": "https://stgx.jaaspire.com/api/v1"
       }
     },
     "production": {
       "autoIncrement": true,
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_WEB_ORIGIN": "https://stgx.jaaspire.com",
+        "EXPO_PUBLIC_API_BASE_URL": "https://stgx.jaaspire.com/api/v1"
       }
     }
   },

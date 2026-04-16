@@ -1,7 +1,9 @@
 // app/(app)/explore/[postId].tsx
 
 import { useCommentsSheet } from "@/hooks/use-comment-sheet";
+import { useShareSheet } from "@/hooks/use-share-sheet";
 import { CommentsBottomSheet } from "@/src/components/comments/CommentsBottomSheet";
+import { SharePostBottomSheet } from "@/src/components/share/SharePostBottomSheet";
 import PostItem from "@/src/components/home/posts/PostWrapper.old";
 import {
   useGetSinglePost,
@@ -38,6 +40,12 @@ const PostScreen = () => {
   // Comments hook
   const { bottomSheetRef, selectedPostId, openComments, onDismiss } =
     useCommentsSheet();
+  const {
+    bottomSheetRef: shareBottomSheetRef,
+    selectedPostId: selectedSharePostId,
+    openShare,
+    onDismiss: onShareDismiss,
+  } = useShareSheet();
 
   const {
     data,
@@ -159,10 +167,11 @@ const PostScreen = () => {
           visiblePostId={visiblePostId}
           isScreenFocused={isScreenFocused}
           openComments={openComments}
+          openShare={openShare}
         />
       );
     },
-    [visiblePostId, isScreenFocused, openComments, getNextPostId],
+    [visiblePostId, isScreenFocused, openComments, openShare, getNextPostId],
   );
 
   const keyExtractor = useCallback((item: number) => item.toString(), []);
@@ -192,6 +201,7 @@ const PostScreen = () => {
         visiblePostId={visiblePostId}
         isScreenFocused={isScreenFocused}
         openComments={openComments}
+        openShare={openShare}
       />
     );
   }, [
@@ -200,6 +210,7 @@ const PostScreen = () => {
     visiblePostId,
     isScreenFocused,
     openComments,
+    openShare,
   ]);
 
   // Loading state
@@ -251,6 +262,11 @@ const PostScreen = () => {
         bottomSheetRef={bottomSheetRef}
         postId={selectedPostId}
         onDismiss={onDismiss}
+      />
+      <SharePostBottomSheet
+        bottomSheetRef={shareBottomSheetRef}
+        postId={selectedSharePostId}
+        onDismiss={onShareDismiss}
       />
     </View>
   );

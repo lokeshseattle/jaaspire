@@ -10,6 +10,11 @@ import { Redirect, Stack } from "expo-router";
 import { useEffect } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
+/** Deep links into this stack keep “(tabs)” as the root so Back can return home. */
+export const unstable_settings = {
+  initialRouteName: "(tabs)",
+};
+
 function UserPostDetailHeaderTitle({ username }: { username?: string }) {
   const { theme } = useTheme();
   const handle = username?.replace(/^@/, "") ?? "";
