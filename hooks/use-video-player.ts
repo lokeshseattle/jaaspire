@@ -7,7 +7,7 @@ import type {
 import { useCallback, useEffect, useRef, useState } from "react";
 
 /** If the focused item never reaches readyToPlay (native stall), recover in-place instead of forcing the user to scroll away until pool eviction. */
-const STUCK_LOADING_REPLACE_MS = 5000;
+const STUCK_LOADING_REPLACE_MS = 3000;
 
 function safePlayerSnapshot(p: VideoPlayer): {
   status: VideoPlayer["status"];
@@ -175,7 +175,10 @@ export function useManagedVideoPlayer(
         p.replace(url);
       } catch (e) {
         if (__DEV__) {
-          console.warn(`[VideoPlayer:${postId}] stuck-loading replace failed:`, e);
+          console.warn(
+            `[VideoPlayer:${postId}] stuck-loading replace failed:`,
+            e,
+          );
         }
       }
     }, STUCK_LOADING_REPLACE_MS);

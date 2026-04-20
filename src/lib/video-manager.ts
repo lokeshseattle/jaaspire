@@ -150,6 +150,17 @@ class VideoPlayerManager {
     return undefined;
   }
 
+  /** Seek existing player to start (e.g. when returning to reels tab). */
+  seekToStart(postId: number): void {
+    const entry = this.players.get(postId);
+    if (!entry || entry.isCleared) return;
+    try {
+      entry.player.currentTime = 0;
+    } catch (e) {
+      console.warn(`[VM] Failed seekToStart ${postId}:`, e);
+    }
+  }
+
   setGlobalMuted(muted: boolean): void {
     this.globalMuted = muted;
     this.players.forEach(({ player, isCleared }, postId) => {

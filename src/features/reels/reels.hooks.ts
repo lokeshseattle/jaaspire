@@ -3,13 +3,21 @@ import { apiClient } from "@/src/services/api/api.client";
 import type { FeedResponse } from "@/src/services/api/api.types";
 import { useInfiniteQuery } from "@tanstack/react-query";
 
+export type ReelsFeed = "following" | "explore";
+
+function reelsPath(feed: ReelsFeed): string {
+  return feed === "following" ? "/reels" : "/reels/explore";
+}
+
 /** Reels feed — same response shape as home feed; backend returns video-only posts. */
-export const useGetReelsQuery = () => {
+export const useGetReelsQuery = (feed: ReelsFeed = "explore") => {
+  const path = reelsPath(feed);
+
   return useInfiniteQuery({
-    queryKey: ["reels"],
+    queryKey: ["reels", feed],
     queryFn: ({ pageParam }) =>
       apiClient
-        .get<FeedResponse>("/users/Yojo306/posts?type=video", {
+        .get<FeedResponse>(path, {
           params: { page: pageParam },
         })
         .then((d) => d.data),

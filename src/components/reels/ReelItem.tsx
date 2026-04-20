@@ -4,8 +4,6 @@ import RichText from "@/src/components/ui/rich-text";
 import { useToggleLikeMutation } from "@/src/features/post/post.hooks";
 import { useGetProfile } from "@/src/features/profile/profile.hooks";
 import type { Post } from "@/src/services/api/api.types";
-import type { AppTheme } from "@/src/theme";
-import { useTheme } from "@/src/theme/ThemeProvider";
 import { getMediaType } from "@/src/utils/helpers";
 import { FontAwesome, Ionicons } from "@expo/vector-icons";
 import Feather from "@expo/vector-icons/Feather";
@@ -13,7 +11,7 @@ import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import { VideoView } from "expo-video";
+import { VideoView, type VideoContentFit } from "expo-video";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -30,8 +28,59 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const DOUBLE_TAP_DELAY = 300;
+/** Play / mute HUD visibility after single tap (ms). */
+const REEL_TOOLS_HIDE_MS = 1000;
+
+/** Edge-to-edge reel surface — always black so letterboxing matches TikTok/IG (not theme.background). */
+const REELS_CANVAS = "#000";
+
+/** Overlay chrome on video: fixed light palette (avoid theme textPrimary = black on dark reels). */
+const REEL_TEXT = "#FFFFFF";
+const REEL_TEXT_MUTED = "rgba(255,255,255,0.72)";
+const REEL_ACCENT = "#FF4D67";
+const REEL_PAYWALL_GRADIENT_DIM: [string, string] = [
+  "rgba(24, 18, 38, 0.94)",
+  "rgba(0, 0, 0, 0.92)",
+];
+const REEL_PAYWALL_BADGE_GRADIENT: [string, string, string] = [
+  "#4A3A6B",
+  "#2A1F40",
+  "#151018",
+];
+const REEL_UI_SPACING = { sm: 8, md: 16, lg: 20, xl: 24 } as const;
+const REEL_UI_RADIUS = { pill: 999 } as const;
+
+/**
+ * Landscape videos: use cover only if center-crop still shows at least this fraction
+ * of the source frame on the worst axis (otherwise contain + letterboxing).
+ */
+const FIT_COVER_THRESHOLD = 0.78;
+
+/** Under object-fit:cover with scale s = max(W/vw,H/vh), visible fraction on each axis. */
+function coverVisibleMinFrac(
+  W: number,
+  H: number,
+  vw: number,
+  vh: number,
+): number {
+  const s = Math.max(W / vw, H / vh);
+  return Math.min(W / (vw * s), H / (vh * s));
+}
+
+function chooseContentFit(
+  W: number,
+  H: number,
+  vw?: number | null,
+  vh?: number | null,
+): VideoContentFit {
+  if (!vw || !vh || vw <= 0 || vh <= 0 || W <= 0 || H <= 0) return "cover";
+  if (vw <= vh) return "cover";
+  const visibleMin = coverVisibleMinFrac(W, H, vw, vh);
+  return visibleMin >= FIT_COVER_THRESHOLD ? "cover" : "contain";
+}
 
 type PostMediaViewer = Post["viewer"];
 
@@ -58,7 +107,12 @@ function parseDuration(value: unknown): number | null {
 
 export type ReelItemProps = {
   post: Post;
+  /** Visible viewport height (full window minus tab bar, including under status bar). */
   itemHeight: number;
+  /** Visible viewport width (full window width). */
+  itemWidth: number;
+  /** Top safe inset — overlays only; video uses full item size. */
+  safeTopInset: number;
   isFocused: boolean;
   isScreenFocused: boolean;
   inReelWindow: boolean;
@@ -70,6 +124,8 @@ export type ReelItemProps = {
 function ReelItemInner({
   post,
   itemHeight,
+  itemWidth,
+  safeTopInset,
   isFocused,
   isScreenFocused,
   inReelWindow,
@@ -77,10 +133,15 @@ function ReelItemInner({
   onOpenComments,
   onOpenShare,
 }: ReelItemProps) {
-  const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const styles = useMemo(
-    () => createStyles(theme, itemHeight),
-    [theme, itemHeight],
+    () => createStyles(itemHeight, safeTopInset, insets.bottom),
+    [itemHeight, safeTopInset, insets.bottom],
+  );
+
+  const videoFrameSize = useMemo(
+    () => ({ width: itemWidth, height: itemHeight }),
+    [itemWidth, itemHeight],
   );
   const { data: profileData } = useGetProfile();
   const me = profileData?.data;
@@ -141,8 +202,130 @@ function ReelItemInner({
     nextVideoInfo?.postId,
   );
 
+  /**
+   * Persistent pause HUD is only shown after the user explicitly taps to pause.
+   * Loop boundaries (loop=true → brief playing:false→true) and seekToStart on focus
+   * would otherwise flicker the HUD into view, which we don't want.
+   */
+  const [userPaused, setUserPaused] = useState(false);
+  useEffect(() => {
+    setUserPaused(false);
+  }, [post.id]);
+  useEffect(() => {
+    if (isPlaying && userPaused) setUserPaused(false);
+  }, [isPlaying, userPaused]);
+  useEffect(() => {
+    if (!isFocused) setUserPaused(false);
+  }, [isFocused]);
+
+  const [videoSourceSize, setVideoSourceSize] = useState<{
+    w: number;
+    h: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!player) {
+      setVideoSourceSize(null);
+      return;
+    }
+    const sync = () => {
+      try {
+        const t = player.videoTrack;
+        const w = t?.size?.width ?? 0;
+        const h = t?.size?.height ?? 0;
+        if (w > 0 && h > 0) {
+          setVideoSourceSize((prev) =>
+            prev?.w === w && prev?.h === h ? prev : { w, h },
+          );
+        }
+      } catch {
+        /* native player */
+      }
+    };
+    sync();
+    const sub = player.addListener("statusChange" as any, sync);
+    return () => sub.remove();
+  }, [player]);
+
+  useEffect(() => {
+    if (!player || !isReady) return;
+    try {
+      const t = player.videoTrack;
+      const w = t?.size?.width ?? 0;
+      const h = t?.size?.height ?? 0;
+      if (w > 0 && h > 0) {
+        setVideoSourceSize((prev) =>
+          prev?.w === w && prev?.h === h ? prev : { w, h },
+        );
+      }
+    } catch {
+      /* native player */
+    }
+  }, [player, isReady]);
+
+  const videoContentFit = useMemo(
+    () =>
+      chooseContentFit(
+        itemWidth,
+        itemHeight,
+        videoSourceSize?.w,
+        videoSourceSize?.h,
+      ),
+    [itemWidth, itemHeight, videoSourceSize?.w, videoSourceSize?.h],
+  );
+
   const isLiked = post.user_reaction === "love";
   const { mutate: toggleLike } = useToggleLikeMutation();
+
+  /** While playing: brief flash after resume/mute. While user-paused: persistent HUD (see `playbackEverStarted` + isReady/!isBuffering). */
+  const [playingHudFlash, setPlayingHudFlash] = useState(false);
+  const playingHudFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+
+  const clearPlayingHudFlashTimer = useCallback(() => {
+    if (playingHudFlashTimerRef.current != null) {
+      clearTimeout(playingHudFlashTimerRef.current);
+      playingHudFlashTimerRef.current = null;
+    }
+  }, []);
+
+  /** During playback only: show HUD briefly then hide (after resume or while interacting with mute). */
+  const schedulePlayingHudHide = useCallback(() => {
+    clearPlayingHudFlashTimer();
+    setPlayingHudFlash(true);
+    playingHudFlashTimerRef.current = setTimeout(() => {
+      setPlayingHudFlash(false);
+      playingHudFlashTimerRef.current = null;
+    }, REEL_TOOLS_HIDE_MS);
+  }, [clearPlayingHudFlashTimer]);
+
+  useEffect(
+    () => () => clearPlayingHudFlashTimer(),
+    [clearPlayingHudFlashTimer],
+  );
+
+  useEffect(() => {
+    if (!isFocused) {
+      clearPlayingHudFlashTimer();
+      setPlayingHudFlash(false);
+    }
+  }, [isFocused, clearPlayingHudFlashTimer]);
+
+  useEffect(() => {
+    if (!isPlaying) {
+      clearPlayingHudFlashTimer();
+      setPlayingHudFlash(false);
+    }
+  }, [isPlaying, clearPlayingHudFlashTimer]);
+
+  const handleMuteFromHud = useCallback(() => {
+    toggleMute();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (isPlaying) {
+      schedulePlayingHudHide();
+    }
+  }, [toggleMute, isPlaying, schedulePlayingHudHide]);
 
   const heartScale = useSharedValue(0);
   const heartOpacity = useSharedValue(0);
@@ -269,9 +452,15 @@ function ReelItemInner({
   }, [isLiked, post.id, toggleLike, triggerHeartAnimation]);
 
   const handleSingleTap = useCallback(() => {
+    const wasPaused = !isPlaying;
     togglePlayPause();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [togglePlayPause]);
+    if (wasPaused) {
+      schedulePlayingHudHide();
+    } else {
+      setUserPaused(true);
+    }
+  }, [togglePlayPause, isPlaying, schedulePlayingHudHide]);
 
   const handleTap = useCallback(() => {
     const now = Date.now();
@@ -352,7 +541,7 @@ function ReelItemInner({
   const user = post.user;
   if (!user) {
     return (
-      <View style={[styles.root, { height: itemHeight }]}>
+      <View style={[styles.root, { width: itemWidth, height: itemHeight }]}>
         <Text style={styles.fallbackText}>Post unavailable</Text>
       </View>
     );
@@ -360,7 +549,7 @@ function ReelItemInner({
 
   if (type !== "video") {
     return (
-      <View style={[styles.root, { height: itemHeight }]}>
+      <View style={[styles.root, { width: itemWidth, height: itemHeight }]}>
         <Text style={styles.fallbackText}>Not a video</Text>
       </View>
     );
@@ -368,25 +557,36 @@ function ReelItemInner({
 
   const captionSource = post.text ?? "";
 
+  const frameW = videoFrameSize.width > 0 ? videoFrameSize.width : itemWidth;
+  const frameH = videoFrameSize.height > 0 ? videoFrameSize.height : itemHeight;
+
+  const showReelHud =
+    !showVideoBlockPaywall &&
+    videoUrlForPlayer &&
+    !previewEnded &&
+    isFocused &&
+    (playingHudFlash || (userPaused && !isPlaying));
+
   return (
-    <View style={[styles.root, { height: itemHeight }]}>
-      <View style={StyleSheet.absoluteFill}>
-        {showVideoBlockPaywall ? (
+    <View style={[styles.root, { width: itemWidth, height: itemHeight }]}>
+      {showVideoBlockPaywall ? (
+        <View style={StyleSheet.absoluteFill}>
           <ReelLockedPaywall
-            theme={theme}
             thumbnail={thumbnail}
             price={price}
             isExclusive={isExclusive}
             onPay={handlePayPress}
           />
-        ) : (
-          <>
+        </View>
+      ) : (
+        <View style={styles.mediaStage}>
+          <View style={[styles.videoFrame, { width: frameW, height: frameH }]}>
             {showVideoView && player && (
               <View style={StyleSheet.absoluteFill} pointerEvents="none">
                 <VideoView
                   style={StyleSheet.absoluteFill}
                   player={player}
-                  contentFit="contain"
+                  contentFit={videoContentFit}
                   nativeControls={false}
                   allowsPictureInPicture={false}
                   fullscreenOptions={{ enable: false }}
@@ -404,7 +604,7 @@ function ReelItemInner({
                 <Image
                   source={{ uri: thumbnail }}
                   style={StyleSheet.absoluteFill}
-                  contentFit="contain"
+                  contentFit={videoContentFit}
                   cachePolicy="disk"
                   transition={0}
                 />
@@ -424,17 +624,14 @@ function ReelItemInner({
               (isBuffering || !isReady) &&
               !showVideoBlockPaywall && (
                 <View style={styles.loadingOverlay} pointerEvents="none">
-                  <ActivityIndicator
-                    size="large"
-                    color={theme.colors.primary}
-                  />
+                  <ActivityIndicator size="large" color={REEL_TEXT} />
                 </View>
               )}
-          </>
-        )}
-      </View>
+          </View>
+        </View>
+      )}
 
-      {/* Tap zone — center area; side UI sits above with higher z-index */}
+      {/* Tap zone — fullscreen; overlays use higher z-index */}
       {!showVideoBlockPaywall && videoUrlForPlayer && (
         <Pressable
           style={styles.tapZone}
@@ -445,19 +642,61 @@ function ReelItemInner({
         />
       )}
 
+      {showReelHud && (
+        <View style={styles.reelToolsOverlay} pointerEvents="box-none">
+          <Pressable
+            style={styles.reelToolsCenterHit}
+            onPress={() => {
+              const wasPaused = !isPlaying;
+              togglePlayPause();
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              if (wasPaused) {
+                schedulePlayingHudHide();
+              } else {
+                setUserPaused(true);
+              }
+            }}
+            hitSlop={32}
+          >
+            <View style={styles.reelToolsPlayGlass}>
+              <Ionicons
+                name={isPlaying ? "pause" : "play"}
+                size={48}
+                color="#fff"
+                style={styles.reelToolsPlayIcon}
+              />
+            </View>
+          </Pressable>
+          <Pressable
+            accessibilityLabel={isMuted ? "Unmute" : "Mute"}
+            style={[styles.reelToolsMuteBtn, { bottom: 10, right: 10 }]}
+            onPress={handleMuteFromHud}
+            hitSlop={12}
+          >
+            <View style={styles.reelToolsVolumeGlass}>
+              <Ionicons
+                name={isMuted ? "volume-mute" : "volume-high"}
+                size={26}
+                color="#fff"
+                style={styles.reelToolsHudIconShadow}
+              />
+            </View>
+          </Pressable>
+        </View>
+      )}
+
       {previewEnded && isPaidVideo && isFocused && (
         <View
           style={[StyleSheet.absoluteFill, styles.previewEndWrap]}
           pointerEvents="box-none"
         >
           <LinearGradient
-            colors={[theme.colors.gradient[0], theme.colors.gradient[2]]}
+            colors={REEL_PAYWALL_GRADIENT_DIM}
             start={{ x: 0, y: 0 }}
             end={{ x: 0, y: 1 }}
             style={[StyleSheet.absoluteFill, styles.previewEndGradient]}
           >
             <ReelPaywallContent
-              theme={theme}
               price={price}
               isExclusive={isExclusive}
               onPay={handlePayPress}
@@ -471,28 +710,8 @@ function ReelItemInner({
         style={[styles.heartBurst, heartAnimatedStyle]}
         pointerEvents="none"
       >
-        <Ionicons name="heart" size={120} color={theme.colors.primary} />
+        <Ionicons name="heart" size={120} color={REEL_ACCENT} />
       </Animated.View>
-
-      {/* Top profile */}
-      <View style={styles.topBar} pointerEvents="box-none">
-        <Pressable onPress={navigateToUser} style={styles.profileRow}>
-          <StoryAvatar
-            username={user.username}
-            hasStory={user.story_status?.has_stories ?? false}
-            seen={user.story_status?.all_viewed ?? true}
-            uri={user.avatar}
-          />
-          <View style={styles.profileText}>
-            <Text style={styles.displayName} numberOfLines={1}>
-              {user.name}
-            </Text>
-            <Text style={styles.handle} numberOfLines={1}>
-              @{user.username}
-            </Text>
-          </View>
-        </Pressable>
-      </View>
 
       {/* Right actions */}
       <View style={styles.rightActions} pointerEvents="box-none">
@@ -507,7 +726,7 @@ function ReelItemInner({
           <FontAwesome
             name={isLiked ? "heart" : "heart-o"}
             size={28}
-            color={isLiked ? theme.colors.primary : theme.colors.textPrimary}
+            color={isLiked ? REEL_ACCENT : REEL_TEXT}
           />
           {loveCount > 0 && <Text style={styles.actionCount}>{loveCount}</Text>}
         </Pressable>
@@ -520,11 +739,7 @@ function ReelItemInner({
           }}
           hitSlop={8}
         >
-          <Feather
-            name="message-circle"
-            size={28}
-            color={theme.colors.textPrimary}
-          />
+          <Feather name="message-circle" size={28} color={REEL_TEXT} />
           {post.comments_count > 0 && (
             <Text style={styles.actionCount}>{post.comments_count}</Text>
           )}
@@ -538,32 +753,42 @@ function ReelItemInner({
           }}
           hitSlop={8}
         >
-          <Feather name="send" size={26} color={theme.colors.textPrimary} />
-        </Pressable>
-
-        <Pressable
-          style={styles.actionButton}
-          onPress={() => {
-            toggleMute();
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          }}
-          hitSlop={8}
-        >
-          <Ionicons
-            name={isMuted ? "volume-mute" : "volume-high"}
-            size={26}
-            color={theme.colors.textPrimary}
-          />
+          <Feather name="send" size={26} color={REEL_TEXT} />
         </Pressable>
       </View>
 
-      {/* Bottom caption */}
+      {/* Bottom profile + caption */}
       <View style={styles.bottomCaption} pointerEvents="box-none">
+        <Pressable
+          onPress={navigateToUser}
+          style={styles.bottomProfileRow}
+          accessibilityRole="button"
+          accessibilityLabel={`${user.name}, @${user.username}`}
+        >
+          <View style={styles.avatarCompactWrap}>
+            <StoryAvatar
+              username={user.username}
+              hasStory={user.story_status?.has_stories ?? false}
+              seen={user.story_status?.all_viewed ?? true}
+              uri={user.avatar}
+            />
+          </View>
+          <View style={styles.profileText}>
+            <Text style={styles.displayNameBottom} numberOfLines={1}>
+              {user.name} {__DEV__ ? `POST_ID: ${post.id}` : ""}
+            </Text>
+            <Text style={styles.handleBottom} numberOfLines={1}>
+              @{user.username}
+            </Text>
+          </View>
+        </Pressable>
+
         {captionExpanded ? (
           <ScrollView
             style={{ maxHeight: captionMaxExpanded }}
             nestedScrollEnabled
-            showsVerticalScrollIndicator
+            showsVerticalScrollIndicator={false}
+            // showsVerticalScrollIndicator
           >
             <RichText style={styles.captionText}>{captionSource}</RichText>
             <Pressable onPress={() => setCaptionExpanded(false)}>
@@ -588,48 +813,39 @@ function ReelItemInner({
 }
 
 function ReelLockedPaywall({
-  theme,
   thumbnail,
   price,
   isExclusive,
   onPay,
 }: {
-  theme: AppTheme;
   thumbnail?: string;
   price: number;
   isExclusive: boolean;
   onPay: () => void;
 }) {
-  const locked = useMemo(() => createLockedPaywallStyles(theme), [theme]);
+  const locked = useMemo(() => createLockedPaywallStyles(), []);
   return (
     <View style={StyleSheet.absoluteFill}>
       {thumbnail ? (
         <Image
           source={{ uri: thumbnail }}
           style={StyleSheet.absoluteFill}
-          contentFit="contain"
+          contentFit="cover"
           cachePolicy="disk"
         />
       ) : (
         <View
-          style={[
-            StyleSheet.absoluteFill,
-            { backgroundColor: theme.colors.background },
-          ]}
+          style={[StyleSheet.absoluteFill, { backgroundColor: REELS_CANVAS }]}
         />
       )}
       <LinearGradient
-        colors={[theme.colors.gradient[0], theme.colors.gradient[2]]}
+        colors={REEL_PAYWALL_GRADIENT_DIM}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={[StyleSheet.absoluteFill, locked.gradientDim]}
       >
         <View style={locked.center}>
-          <Ionicons
-            name="lock-closed"
-            size={48}
-            color={theme.colors.textPrimary}
-          />
+          <Ionicons name="lock-closed" size={48} color={REEL_TEXT} />
           <Text style={locked.title}>Exclusive content</Text>
           <Pressable onPress={onPay} style={locked.unlockBtn}>
             <Text style={locked.unlockText}>Unlock</Text>
@@ -645,36 +861,26 @@ function ReelLockedPaywall({
 }
 
 function ReelPaywallContent({
-  theme,
   price,
   isExclusive,
   onPay,
   onWatchAgain,
 }: {
-  theme: AppTheme;
   price: number;
   isExclusive: boolean;
   onPay: () => void;
   onWatchAgain: () => void;
 }) {
-  const locked = useMemo(() => createLockedPaywallStyles(theme), [theme]);
+  const locked = useMemo(() => createLockedPaywallStyles(), []);
   return (
     <View style={locked.previewContent}>
       <LinearGradient
-        colors={[
-          theme.colors.gradient[0],
-          theme.colors.gradient[1],
-          theme.colors.gradient[2],
-        ]}
+        colors={REEL_PAYWALL_BADGE_GRADIENT}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={locked.lockBadge}
       >
-        <Ionicons
-          name="lock-closed"
-          size={28}
-          color={theme.colors.textPrimary}
-        />
+        <Ionicons name="lock-closed" size={28} color={REEL_TEXT} />
       </LinearGradient>
       <Text style={locked.previewTitle}>Preview ended</Text>
       <Text style={locked.previewSub}>
@@ -685,7 +891,7 @@ function ReelPaywallContent({
         <Text style={locked.unlockText}>Unlock now</Text>
       </Pressable>
       <Pressable onPress={onWatchAgain} style={locked.watchAgain}>
-        <Ionicons name="refresh" size={18} color={theme.colors.textPrimary} />
+        <Ionicons name="refresh" size={18} color={REEL_TEXT} />
         <Text style={locked.watchAgainText}>Watch again</Text>
       </Pressable>
       {isExclusive && (
@@ -695,7 +901,7 @@ function ReelPaywallContent({
   );
 }
 
-function createLockedPaywallStyles(theme: AppTheme) {
+function createLockedPaywallStyles() {
   return StyleSheet.create({
     gradientDim: {
       opacity: 0.92,
@@ -704,37 +910,37 @@ function createLockedPaywallStyles(theme: AppTheme) {
       flex: 1,
       alignItems: "center",
       justifyContent: "center",
-      padding: theme.spacing.xl,
+      padding: REEL_UI_SPACING.xl,
     },
     title: {
-      color: theme.colors.textPrimary,
+      color: REEL_TEXT,
       fontSize: 18,
       fontWeight: "700",
-      marginTop: theme.spacing.md,
+      marginTop: REEL_UI_SPACING.md,
       textAlign: "center",
     },
     price: {
-      color: theme.colors.textPrimary,
+      color: REEL_TEXT,
       fontSize: 16,
-      marginTop: theme.spacing.sm,
+      marginTop: REEL_UI_SPACING.sm,
       opacity: 0.95,
     },
     hint: {
-      color: theme.colors.textSecondary,
+      color: REEL_TEXT_MUTED,
       fontSize: 13,
-      marginTop: theme.spacing.sm,
+      marginTop: REEL_UI_SPACING.sm,
     },
     unlockBtn: {
-      marginTop: theme.spacing.lg,
-      paddingHorizontal: theme.spacing.xl,
-      paddingVertical: theme.spacing.md,
-      backgroundColor: theme.colors.surface,
-      borderRadius: theme.radius.pill,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
+      marginTop: REEL_UI_SPACING.lg,
+      paddingHorizontal: REEL_UI_SPACING.xl,
+      paddingVertical: REEL_UI_SPACING.md,
+      backgroundColor: "rgba(255,255,255,0.14)",
+      borderRadius: REEL_UI_RADIUS.pill,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: "rgba(255,255,255,0.35)",
     },
     unlockText: {
-      color: theme.colors.textPrimary,
+      color: REEL_TEXT,
       fontWeight: "700",
       fontSize: 16,
     },
@@ -742,7 +948,7 @@ function createLockedPaywallStyles(theme: AppTheme) {
       flex: 1,
       alignItems: "center",
       justifyContent: "center",
-      padding: theme.spacing.xl,
+      padding: REEL_UI_SPACING.xl,
     },
     lockBadge: {
       width: 56,
@@ -750,27 +956,27 @@ function createLockedPaywallStyles(theme: AppTheme) {
       borderRadius: 28,
       alignItems: "center",
       justifyContent: "center",
-      marginBottom: theme.spacing.md,
+      marginBottom: REEL_UI_SPACING.md,
     },
     previewTitle: {
-      color: theme.colors.textPrimary,
+      color: REEL_TEXT,
       fontSize: 20,
       fontWeight: "700",
     },
     previewSub: {
-      color: theme.colors.textSecondary,
+      color: REEL_TEXT_MUTED,
       fontSize: 14,
       textAlign: "center",
-      marginTop: theme.spacing.sm,
+      marginTop: REEL_UI_SPACING.sm,
     },
     watchAgain: {
       flexDirection: "row",
       alignItems: "center",
       gap: 8,
-      marginTop: theme.spacing.md,
+      marginTop: REEL_UI_SPACING.md,
     },
     watchAgainText: {
-      color: theme.colors.textPrimary,
+      color: REEL_TEXT,
       fontSize: 15,
       fontWeight: "600",
     },
@@ -779,36 +985,92 @@ function createLockedPaywallStyles(theme: AppTheme) {
 
 /** Dark halo for text/icons on top of video (same in light/dark for legibility). */
 const VIDEO_OVERLAY_HALO = "rgba(0,0,0,0.55)";
+/** HUD play / mute circular glass pills */
+const HUD_GLASS_FILL = "rgba(0,0,0,0.48)";
+const HUD_GLASS_BORDER = "rgba(255,255,255,0.14)";
 
-function createStyles(theme: AppTheme, itemHeight: number) {
+function createStyles(
+  itemHeight: number,
+  safeTopInset: number,
+  bottomInset: number,
+) {
   return StyleSheet.create({
     root: {
-      width: "100%",
-      backgroundColor: theme.colors.background,
       position: "relative",
+      backgroundColor: REELS_CANVAS,
+    },
+    mediaStage: {
+      ...StyleSheet.absoluteFillObject,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: REELS_CANVAS,
+    },
+    videoFrame: {
+      overflow: "hidden",
+      backgroundColor: REELS_CANVAS,
     },
     fallbackText: {
-      color: theme.colors.textSecondary,
+      color: REEL_TEXT_MUTED,
       textAlign: "center",
       marginTop: itemHeight / 2 - 20,
     },
     posterFallback: {
-      backgroundColor: theme.colors.surface,
+      backgroundColor: REELS_CANVAS,
     },
     loadingOverlay: {
       ...StyleSheet.absoluteFillObject,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: theme.colors.background,
+      backgroundColor: REELS_CANVAS,
       opacity: 0.35,
     },
     tapZone: {
+      ...StyleSheet.absoluteFillObject,
+      zIndex: 4,
+    },
+    reelToolsOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      zIndex: 11,
+    },
+    reelToolsCenterHit: {
+      ...StyleSheet.absoluteFillObject,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    reelToolsPlayGlass: {
+      width: 88,
+      height: 88,
+      borderRadius: 44,
+      backgroundColor: HUD_GLASS_FILL,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: HUD_GLASS_BORDER,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    reelToolsVolumeGlass: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      backgroundColor: HUD_GLASS_FILL,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: HUD_GLASS_BORDER,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    reelToolsPlayIcon: {
+      textShadowColor: VIDEO_OVERLAY_HALO,
+      textShadowOffset: { width: 0, height: 2 },
+      textShadowRadius: 8,
+    },
+    reelToolsMuteBtn: {
       position: "absolute",
-      left: 0,
-      right: 56,
-      top: 100,
-      bottom: 200,
-      zIndex: 1,
+      right: 14,
+      zIndex: 12,
+    },
+    reelToolsHudIconShadow: {
+      textShadowColor: VIDEO_OVERLAY_HALO,
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 6,
     },
     previewEndWrap: {
       zIndex: 15,
@@ -822,35 +1084,38 @@ function createStyles(theme: AppTheme, itemHeight: number) {
       right: 0,
       top: itemHeight * 0.38,
       alignItems: "center",
-      zIndex: 12,
+      zIndex: 14,
     },
-    topBar: {
-      position: "absolute",
-      top: 8,
-      left: 0,
-      right: 56,
-      zIndex: 10,
-      paddingHorizontal: theme.spacing.md,
-    },
-    profileRow: {
+    bottomProfileRow: {
       flexDirection: "row",
       alignItems: "center",
       gap: 10,
+      marginBottom: REEL_UI_SPACING.sm,
+      maxWidth: "100%",
+    },
+    avatarCompactWrap: {
+      transform: [{ scale: 0.88 }],
+      width: 48,
+      height: 48,
+      alignItems: "center",
+      justifyContent: "center",
     },
     profileText: {
       flex: 1,
+      minWidth: 0,
     },
-    displayName: {
-      color: theme.colors.textPrimary,
+    displayNameBottom: {
+      color: REEL_TEXT,
       fontWeight: "700",
-      fontSize: 15,
+      fontSize: 14,
       textShadowColor: VIDEO_OVERLAY_HALO,
       textShadowOffset: { width: 0, height: 1 },
       textShadowRadius: 3,
     },
-    handle: {
-      color: theme.colors.textSecondary,
-      fontSize: 13,
+    handleBottom: {
+      color: REEL_TEXT_MUTED,
+      fontSize: 12,
+      marginTop: 2,
       textShadowColor: VIDEO_OVERLAY_HALO,
       textShadowOffset: { width: 0, height: 1 },
       textShadowRadius: 3,
@@ -858,7 +1123,7 @@ function createStyles(theme: AppTheme, itemHeight: number) {
     rightActions: {
       position: "absolute",
       right: 8,
-      bottom: itemHeight * 0.22,
+      bottom: itemHeight * 0.14,
       zIndex: 20,
       alignItems: "center",
       gap: 18,
@@ -868,7 +1133,7 @@ function createStyles(theme: AppTheme, itemHeight: number) {
       gap: 4,
     },
     actionCount: {
-      color: theme.colors.textPrimary,
+      color: REEL_TEXT,
       fontSize: 12,
       fontWeight: "600",
       textShadowColor: VIDEO_OVERLAY_HALO,
@@ -879,13 +1144,13 @@ function createStyles(theme: AppTheme, itemHeight: number) {
       position: "absolute",
       left: 0,
       right: 64,
-      bottom: 24,
-      zIndex: 10,
-      paddingHorizontal: theme.spacing.md,
+      bottom: Math.max(REEL_UI_SPACING.sm, 10 + bottomInset),
+      zIndex: 12,
+      paddingHorizontal: REEL_UI_SPACING.md,
       maxWidth: "88%",
     },
     captionText: {
-      color: theme.colors.textPrimary,
+      color: REEL_TEXT,
       fontSize: 14,
       lineHeight: 20,
       textShadowColor: VIDEO_OVERLAY_HALO,
@@ -896,7 +1161,7 @@ function createStyles(theme: AppTheme, itemHeight: number) {
       marginTop: 6,
       fontSize: 14,
       fontWeight: "600",
-      color: theme.colors.textSecondary,
+      color: REEL_TEXT_MUTED,
     },
   });
 }

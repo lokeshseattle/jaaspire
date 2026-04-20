@@ -5,24 +5,42 @@ import ReelItem from "@/src/components/reels/ReelItem";
 import { SharePostBottomSheet } from "@/src/components/share/SharePostBottomSheet";
 import { useTrackPostView } from "@/src/features/post/post.hooks";
 import { usePostStore } from "@/src/features/post/post.store";
-import { useGetReelsQuery } from "@/src/features/reels/reels.hooks";
+import {
+  type ReelsFeed,
+  useGetReelsQuery,
+} from "@/src/features/reels/reels.hooks";
 import { videoManager } from "@/src/lib/video-manager";
 import type { Post } from "@/src/services/api/api.types";
-import type { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { getMediaType } from "@/src/utils/helpers";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useFocusEffect } from "expo-router";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
+  Dimensions,
   FlatList,
+  type LayoutChangeEvent,
   ListRenderItemInfo,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  PixelRatio,
+  Pressable,
   StyleSheet,
   Text,
   View,
   ViewabilityConfig,
   ViewToken,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useShallow } from "zustand/react/shallow";
 
 const VIEWABILITY_CONFIG: ViewabilityConfig = {
@@ -31,6 +49,16 @@ const VIEWABILITY_CONFIG: ViewabilityConfig = {
 };
 
 const PRELOAD_RADIUS = 1;
+
+/** Full-bleed reel canvas (not theme.background — avoids white bars in light mode). */
+const REELS_CANVAS = "#000";
+/** Reels tab is always dark chrome; muted text/icons on black (ignores light app theme). */
+const REELS_ON_DARK_MUTED = "rgba(255,255,255,0.55)";
+const REELS_ON_DARK_TEXT = "rgba(255,255,255,0.72)";
+
+/** Top row min height (label row) + `paddingBottom` on the tab bar. */
+const FEED_TABS_ROW_HEIGHT = 44;
+const FEED_TABS_CHROME_HEIGHT = FEED_TABS_ROW_HEIGHT + 10;
 
 function viewerCanViewPostMedia(
   viewer: Post["viewer"] | undefined,
@@ -61,7 +89,9 @@ function reelPreloadTarget(post: Post | undefined): {
 
 type ReelRowProps = {
   id: number;
-  listHeight: number;
+  reelHeight: number;
+  reelWidth: number;
+  safeTopInset: number;
   isFocused: boolean;
   inReelWindow: boolean;
   isScreenFocused: boolean;
@@ -72,7 +102,9 @@ type ReelRowProps = {
 
 const ReelRow = memo(function ReelRow({
   id,
-  listHeight,
+  reelHeight,
+  reelWidth,
+  safeTopInset,
   isFocused,
   inReelWindow,
   isScreenFocused,
@@ -80,8 +112,7 @@ const ReelRow = memo(function ReelRow({
   openComments,
   openShare,
 }: ReelRowProps) {
-  const { theme } = useTheme();
-  const rowStyles = useMemo(() => createReelsStyles(theme), [theme]);
+  const rowStyles = useMemo(() => createReelsStyles(), []);
 
   const post = usePostStore(useShallow((s) => s.posts[id]));
   const nextPost = usePostStore(
@@ -95,33 +126,57 @@ const ReelRow = memo(function ReelRow({
       <View
         style={[
           rowStyles.placeholder,
-          listHeight > 0 ? { height: listHeight } : undefined,
+          { height: reelHeight, width: reelWidth },
         ]}
       >
-        <ActivityIndicator color={theme.colors.textSecondary} />
+        <ActivityIndicator color={REELS_ON_DARK_MUTED} />
       </View>
     );
   }
 
   return (
-    <ReelItem
-      post={post}
-      itemHeight={listHeight > 0 ? listHeight : 400}
-      isFocused={isFocused}
-      isScreenFocused={isScreenFocused}
-      inReelWindow={inReelWindow}
-      nextPost={nextPost}
-      onOpenComments={() => openComments(id)}
-      onOpenShare={() => openShare(id)}
-    />
+    <View style={{ width: reelWidth, height: reelHeight }}>
+      <ReelItem
+        post={post}
+        itemHeight={reelHeight}
+        itemWidth={reelWidth}
+        safeTopInset={safeTopInset}
+        isFocused={isFocused}
+        isScreenFocused={isScreenFocused}
+        inReelWindow={inReelWindow}
+        nextPost={nextPost}
+        onOpenComments={() => openComments(id)}
+        onOpenShare={() => openShare(id)}
+      />
+    </View>
   );
 });
 
 export default function ReelsScreen() {
   const { theme } = useTheme();
-  const styles = useMemo(() => createReelsStyles(theme), [theme]);
+  const styles = useMemo(() => createReelsStyles(), []);
 
-  const [listHeight, setListHeight] = useState(0);
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
+
+  const [feedTab, setFeedTab] = useState<ReelsFeed>("explore");
+
+  const [viewport, setViewport] = useState({ w: 0, h: 0 });
+  const onViewportLayout = useCallback((e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    setViewport({ w: width, h: height });
+  }, []);
+
+  const screen = Dimensions.get("screen");
+  /** Full-bleed viewport width/height (feed tabs overlay video; height not reduced by tab row). */
+  const reelWidth = viewport.w > 0 ? viewport.w : screen.width;
+  const reelHeightRaw =
+    viewport.h > 0
+      ? viewport.h
+      : Math.max(1, screen.height - tabBarHeight);
+  /** Page height aligned with device pixels so snap, `getItemLayout`, and rows stay consistent. */
+  const reelHeight = PixelRatio.roundToNearestPixel(reelHeightRaw);
+
   const [focusedIndex, setFocusedIndex] = useState(0);
   const [isScreenFocused, setIsScreenFocused] = useState(true);
 
@@ -147,16 +202,53 @@ export default function ReelsScreen() {
     isFetchingNextPage,
     isLoading,
     isError,
-  } = useGetReelsQuery();
+  } = useGetReelsQuery(feedTab);
 
   const postIds = useMemo(
     () => data?.pages.flatMap((page) => page.data.posts) ?? [],
     [data?.pages],
   );
 
+  const postIdsRef = useRef(postIds);
+  postIdsRef.current = postIds;
+  const focusedIndexRef = useRef(focusedIndex);
+  focusedIndexRef.current = focusedIndex;
+
+  /** Last focused row index per feed (session memory when switching Following / Explore). */
+  const indicesRef = useRef<{ following: number; explore: number }>({
+    following: 0,
+    explore: 0,
+  });
+
+  useEffect(() => {
+    indicesRef.current[feedTab] = focusedIndex;
+  }, [focusedIndex]);
+
+  /** After a feed tab switch: release all native players, then restore scroll once `postIds` is ready. */
+  const pendingFeedRestoreRef = useRef(false);
+  const prevFeedTabRef = useRef<ReelsFeed | null>(null);
+
+  useLayoutEffect(() => {
+    if (prevFeedTabRef.current === null) {
+      prevFeedTabRef.current = feedTab;
+      return;
+    }
+    if (prevFeedTabRef.current === feedTab) return;
+
+    prevFeedTabRef.current = feedTab;
+    videoManager.releaseAll();
+    pendingFeedRestoreRef.current = true;
+  }, [feedTab]);
+
   useFocusEffect(
     useCallback(() => {
       setIsScreenFocused(true);
+      const ids = postIdsRef.current;
+      const idx = focusedIndexRef.current;
+      if (ids.length > 0) {
+        const id = ids[Math.min(Math.max(idx, 0), ids.length - 1)];
+        videoManager.seekToStart(id);
+      }
       return () => {
         setIsScreenFocused(false);
         videoManager.pauseAll();
@@ -221,7 +313,9 @@ export default function ReelsScreen() {
       return (
         <ReelRow
           id={id}
-          listHeight={listHeight}
+          reelHeight={reelHeight}
+          reelWidth={reelWidth}
+          safeTopInset={insets.top + FEED_TABS_CHROME_HEIGHT}
           isFocused={isFocused}
           inReelWindow={inWindow}
           isScreenFocused={isScreenFocused}
@@ -233,7 +327,9 @@ export default function ReelsScreen() {
     },
     [
       postIds,
-      listHeight,
+      reelHeight,
+      reelWidth,
+      insets.top,
       isScreenFocused,
       focusedIndex,
       openComments,
@@ -245,11 +341,47 @@ export default function ReelsScreen() {
 
   const getItemLayout = useCallback(
     (_: unknown, index: number) => ({
-      length: listHeight,
-      offset: listHeight * index,
+      length: reelHeight,
+      offset: reelHeight * index,
       index,
     }),
-    [listHeight],
+    [reelHeight],
+  );
+
+  const flatListRef = useRef<FlatList<number>>(null);
+
+  useLayoutEffect(() => {
+    if (postIds.length === 0 || !pendingFeedRestoreRef.current) return;
+
+    pendingFeedRestoreRef.current = false;
+
+    const saved = indicesRef.current[feedTab];
+    const safeIdx = Math.min(Math.max(saved, 0), postIds.length - 1);
+    setFocusedIndex(safeIdx);
+    indicesRef.current[feedTab] = safeIdx;
+
+    requestAnimationFrame(() => {
+      flatListRef.current?.scrollToOffset({
+        offset: safeIdx * reelHeight,
+        animated: false,
+      });
+    });
+  }, [feedTab, postIds.length, reelHeight]);
+
+  const onMomentumScrollEnd = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const y = e.nativeEvent.contentOffset.y;
+      if (reelHeight <= 0) return;
+      const nearest = Math.round(y / reelHeight);
+      const target = nearest * reelHeight;
+      if (Math.abs(y - target) > 0.5) {
+        flatListRef.current?.scrollToOffset({
+          offset: Math.max(0, target),
+          animated: false,
+        });
+      }
+    },
+    [reelHeight],
   );
 
   const onEndReached = useCallback(() => {
@@ -263,68 +395,144 @@ export default function ReelsScreen() {
       isFetchingNextPage ? (
         <ActivityIndicator
           style={styles.footerLoader}
-          color={theme.colors.textSecondary}
+          color={REELS_ON_DARK_MUTED}
         />
       ) : null,
-    [isFetchingNextPage, styles.footerLoader, theme.colors.textSecondary],
+    [isFetchingNextPage, styles.footerLoader],
   );
+
+  const feedTabsHeader = (
+    <View
+      pointerEvents="box-none"
+      style={[
+        styles.feedTabsOverlay,
+        styles.feedTabsRow,
+        {
+          paddingTop: insets.top,
+        },
+      ]}
+    >
+      <Pressable
+        accessibilityRole="button"
+        hitSlop={12}
+        onPress={() => setFeedTab("following")}
+        style={styles.feedTabHit}
+      >
+        <Text
+          style={
+            feedTab === "following"
+              ? styles.feedTabLabelActive
+              : styles.feedTabLabelInactive
+          }
+        >
+          Following
+        </Text>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        hitSlop={12}
+        onPress={() => setFeedTab("explore")}
+        style={styles.feedTabHit}
+      >
+        <Text
+          style={
+            feedTab === "explore"
+              ? styles.feedTabLabelActive
+              : styles.feedTabLabelInactive
+          }
+        >
+          Explore
+        </Text>
+      </Pressable>
+    </View>
+  );
+
+  const listEmpty =
+    !isLoading && postIds.length === 0 ? (
+      <View
+        style={[
+          styles.centered,
+          {
+            minHeight: reelHeight,
+            width: reelWidth,
+            backgroundColor: REELS_CANVAS,
+          },
+        ]}
+      >
+        <Text style={styles.errorText}>
+          {feedTab === "following"
+            ? "No reels from people you follow yet"
+            : "No reels yet"}
+        </Text>
+      </View>
+    ) : null;
 
   if (isError) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.errorText}>Couldn&apos;t load reels</Text>
+      <View style={styles.reelsOuter}>
+        <View style={[styles.centered, styles.reelsViewportFlex]}>
+          <Text style={styles.errorText}>Couldn&apos;t load reels</Text>
+        </View>
+        {feedTabsHeader}
+        <CommentsBottomSheet
+          bottomSheetRef={bottomSheetRef}
+          postId={selectedPostId}
+          onDismiss={onDismiss}
+        />
+        <SharePostBottomSheet
+          bottomSheetRef={shareBottomSheetRef}
+          postId={selectedSharePostId}
+          onDismiss={onShareDismiss}
+        />
       </View>
     );
   }
 
   return (
-    <View
-      style={styles.container}
-      onLayout={(e) => {
-        const h = e.nativeEvent.layout.height;
-        if (h > 0 && Math.abs(h - listHeight) > 1) {
-          setListHeight(h);
-        }
-      }}
-    >
-      {isLoading && postIds.length === 0 ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-        </View>
-      ) : (
-        <FlatList
-          data={postIds}
-          keyExtractor={keyExtractor}
-          renderItem={renderItem}
-          ListEmptyComponent={
-            !isLoading ? (
-              <View style={[styles.centered, { minHeight: listHeight || 400 }]}>
-                <Text style={styles.errorText}>No reels yet</Text>
-              </View>
-            ) : null
-          }
-          pagingEnabled
-          showsVerticalScrollIndicator={false}
-          decelerationRate="fast"
-          snapToAlignment="start"
-          snapToInterval={listHeight > 0 ? listHeight : undefined}
-          removeClippedSubviews
-          windowSize={3}
-          maxToRenderPerBatch={1}
-          initialNumToRender={1}
-          updateCellsBatchingPeriod={100}
-          getItemLayout={listHeight > 0 ? getItemLayout : undefined}
-          viewabilityConfigCallbackPairs={
-            viewabilityConfigCallbackPairs.current
-          }
-          onEndReached={onEndReached}
-          onEndReachedThreshold={0.55}
-          ListFooterComponent={footer}
-          contentContainerStyle={
-            listHeight > 0 ? { paddingBottom: 0 } : { flexGrow: 1 }
-          }
-        />
-      )}
+    <View style={styles.reelsOuter}>
+      <View
+        style={[styles.reelsViewportFlex, { backgroundColor: REELS_CANVAS }]}
+        onLayout={onViewportLayout}
+      >
+        {isLoading && postIds.length === 0 ? (
+          <View style={[styles.centered, { width: "100%", height: "100%" }]}>
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+          </View>
+        ) : (
+          <FlatList
+            ref={flatListRef}
+            data={postIds}
+            keyExtractor={keyExtractor}
+            renderItem={renderItem}
+            style={{
+              width: "100%",
+              height: "100%",
+              backgroundColor: REELS_CANVAS,
+            }}
+            onMomentumScrollEnd={onMomentumScrollEnd}
+            ListEmptyComponent={listEmpty}
+            showsVerticalScrollIndicator={false}
+            decelerationRate="fast"
+            disableIntervalMomentum
+            snapToAlignment="start"
+            snapToInterval={reelHeight}
+            removeClippedSubviews
+            windowSize={3}
+            maxToRenderPerBatch={1}
+            initialNumToRender={1}
+            updateCellsBatchingPeriod={100}
+            getItemLayout={getItemLayout}
+            viewabilityConfigCallbackPairs={
+              viewabilityConfigCallbackPairs.current
+            }
+            onEndReached={onEndReached}
+            onEndReachedThreshold={0.55}
+            ListFooterComponent={footer}
+            contentContainerStyle={{ paddingBottom: 0 }}
+          />
+        )}
+      </View>
+      {feedTabsHeader}
 
       <CommentsBottomSheet
         bottomSheetRef={bottomSheetRef}
@@ -340,29 +548,73 @@ export default function ReelsScreen() {
   );
 }
 
-function createReelsStyles(theme: AppTheme) {
+function createReelsStyles() {
   return StyleSheet.create({
+    reelsOuter: {
+      flex: 1,
+      backgroundColor: REELS_CANVAS,
+    },
+    feedTabsOverlay: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      zIndex: 10,
+      elevation: 10,
+      backgroundColor: "transparent",
+    },
+    feedTabsRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 16,
+      minHeight: FEED_TABS_ROW_HEIGHT,
+      paddingBottom: 10,
+      backgroundColor: "transparent",
+    },
+    feedTabHit: {
+      paddingHorizontal: 8,
+      paddingVertical: 6,
+    },
+    feedTabLabelActive: {
+      color: "#FFFFFF",
+      fontSize: 17,
+      fontWeight: "600",
+    },
+    feedTabLabelInactive: {
+      color: "rgba(255,255,255,0.58)",
+      fontSize: 17,
+      fontWeight: "500",
+    },
+    reelsViewportFlex: {
+      flex: 1,
+      overflow: "hidden",
+    },
+    reelsScreenRoot: {
+      backgroundColor: REELS_CANVAS,
+      overflow: "visible",
+    },
     container: {
       flex: 1,
-      backgroundColor: theme.colors.background,
+      backgroundColor: REELS_CANVAS,
     },
     centered: {
       flex: 1,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: theme.colors.background,
+      backgroundColor: REELS_CANVAS,
     },
     placeholder: {
       flex: 1,
-      backgroundColor: theme.colors.background,
+      backgroundColor: REELS_CANVAS,
       alignItems: "center",
       justifyContent: "center",
     },
     footerLoader: {
-      paddingVertical: theme.spacing.xl,
+      paddingVertical: 24,
     },
     errorText: {
-      color: theme.colors.textSecondary,
+      color: REELS_ON_DARK_TEXT,
       fontSize: 15,
     },
   });
