@@ -8,115 +8,114 @@ import { useNavigation } from "expo-router";
 import { useCallback, useLayoutEffect, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 
-export type BookmarkTabKey = "all" | "image" | "video";
+export type BookmarkTabKey = "all" | "photos" | "videos";
 
 export type TabConfig = {
-    label?: string;
-    icon?: keyof typeof Ionicons.glyphMap;
-    activeIcon?: keyof typeof Ionicons.glyphMap;
+  label?: string;
+  icon?: keyof typeof Ionicons.glyphMap;
+  activeIcon?: keyof typeof Ionicons.glyphMap;
 };
 
 const tabs: Record<BookmarkTabKey, TabConfig> = {
-    all: {
-        icon: "grid-outline",
-        activeIcon: "grid",
-    },
-    image: {
-        icon: "image-outline",
-        activeIcon: "image",
-    },
-    video: {
-        icon: "play-circle-outline",
-        activeIcon: "play-circle",
-    },
+  all: {
+    icon: "grid-outline",
+    activeIcon: "grid",
+  },
+  photos: {
+    icon: "image-outline",
+    activeIcon: "image",
+  },
+  videos: {
+    icon: "play-circle-outline",
+    activeIcon: "play-circle",
+  },
 };
 
 export default function BookmarksScreen() {
-    const navigation = useNavigation();
-    const { theme } = useTheme();
-    const styles = useMemo(() => createStyles(theme), [theme]);
+  const navigation = useNavigation();
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
-    const [activeTab, setActiveTab] = useState<BookmarkTabKey>("all");
+  const [activeTab, setActiveTab] = useState<BookmarkTabKey>("all");
 
-    useLayoutEffect(() => {
-        navigation.setOptions({
-            headerTitle: "Bookmarks",
-        });
-    }, [navigation]);
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerTitle: "Bookmarks",
+    });
+  }, [navigation]);
 
-    // Map the active tab to the API type parameter
-    const apiType = useMemo(() => {
-        if (activeTab === "all") return "all";
-        return activeTab as "image" | "video";
-    }, [activeTab]);
+  // Map the active tab to the API type parameter
+  const apiType = useMemo(() => {
+    if (activeTab === "all") return "all";
+    return activeTab as "image" | "video";
+  }, [activeTab]);
 
-    const {
-        data: feedData,
-        refetch: refetchFeed,
-        isRefetching: isRefetchingFeed,
-        hasNextPage,
-        fetchNextPage,
-        isFetchingNextPage,
-    } = useGetBookmarksQuery(activeTab);
+  const {
+    data: feedData,
+    refetch: refetchFeed,
+    isRefetching: isRefetchingFeed,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useGetBookmarksQuery(activeTab);
 
-    // Get post IDs from query
-    const postIds = useMemo(() => {
-        if (!feedData?.pages) return [];
-        return feedData.pages.flatMap((page) => page.data.posts);
-    }, [feedData?.pages]);
+  // Get post IDs from query
+  const postIds = useMemo(() => {
+    if (!feedData?.pages) return [];
+    return feedData.pages.flatMap((page) => page.data.posts);
+  }, [feedData?.pages]);
 
-    // Handle refresh
-    const handleRefresh = useCallback(async () => {
-        await refetchFeed();
-    }, [refetchFeed]);
+  // Handle refresh
+  const handleRefresh = useCallback(async () => {
+    await refetchFeed();
+  }, [refetchFeed]);
 
-    // Handle pagination
-    const handleEndReached = useCallback(() => {
-        if (hasNextPage && !isFetchingNextPage) {
-            fetchNextPage();
-        }
-    }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  // Handle pagination
+  const handleEndReached = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-    const handleTabChange = useCallback((key: string) => {
-        setActiveTab(key as BookmarkTabKey);
-    }, []);
+  const handleTabChange = useCallback((key: string) => {
+    setActiveTab(key as BookmarkTabKey);
+  }, []);
 
-    const ListHeader = useMemo(
-        () => (
-            <View style={styles.tabContainer}>
-                <AnimatedTabBar
-                    tabs={tabs}
-                    activeKey={activeTab}
-                    onTabChange={handleTabChange}
-                />
-            </View>
-        ),
-        [activeTab, handleTabChange, styles.tabContainer]
-    );
+  const ListHeader = useMemo(
+    () => (
+      <View style={styles.tabContainer}>
+        <AnimatedTabBar
+          tabs={tabs}
+          activeKey={activeTab}
+          onTabChange={handleTabChange}
+        />
+      </View>
+    ),
+    [activeTab, handleTabChange, styles.tabContainer],
+  );
 
-    return (
-        <View style={styles.container}>
-            <ProfileGridView
-                postIds={postIds}
-                ListHeaderComponent={ListHeader}
-                onRefresh={handleRefresh}
-                isRefreshing={isRefetchingFeed}
-                onEndReached={handleEndReached}
-                isFetchingNextPage={isFetchingNextPage}
-            />
-        </View>
-    );
+  return (
+    <View style={styles.container}>
+      <ProfileGridView
+        postIds={postIds}
+        ListHeaderComponent={ListHeader}
+        onRefresh={handleRefresh}
+        isRefreshing={isRefetchingFeed}
+        onEndReached={handleEndReached}
+        isFetchingNextPage={isFetchingNextPage}
+      />
+    </View>
+  );
 }
 
 const createStyles = (theme: AppTheme) =>
-    StyleSheet.create({
-        container: {
-            flex: 1,
-            backgroundColor: theme.colors.background,
-        },
-        tabContainer: {
-            marginTop: theme.spacing.lg,
-            marginBottom: theme.spacing.sm,
-        },
-
-    });
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    tabContainer: {
+      marginTop: theme.spacing.lg,
+      marginBottom: theme.spacing.sm,
+    },
+  });

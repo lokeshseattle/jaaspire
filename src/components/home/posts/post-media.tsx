@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
+import { router } from "expo-router";
 import { VideoView } from "expo-video";
 import {
   Component,
@@ -50,12 +51,16 @@ interface Props {
   isExclusive?: boolean;
   /** True when this post is the primary viewable item on the feed (only one plays video). */
   isFocused: boolean;
+  /** True when this post is the primary row in the feed (visible slot), independent of tab/screen focus. */
+  isPrimaryFeedPost: boolean;
   /** Within ±2 of primary post — mount player + VideoView (paused) for preload. */
   inVideoWindow: boolean;
   isLiked: boolean;
   onLike: () => void;
   nextPostId?: number;
   nextPostUrl?: string;
+  /** Opens wallet purchase confirmation (e.g. from parent `PaymentConfirmSheet`). */
+  onRequestPurchase?: () => void;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -321,11 +326,13 @@ function PostMediaInnerMain({
   viewer,
   isExclusive = false,
   isFocused,
+  isPrimaryFeedPost,
   inVideoWindow,
   isLiked,
   onLike,
   nextPostId,
   nextPostUrl,
+  onRequestPurchase,
 }: Props) {
   // ── Refs ───────────────────────────────────────────────────────────────────
   const isFocusedRef = useRef(isFocused);
@@ -404,6 +411,15 @@ function PostMediaInnerMain({
       posterOpacity.value = 1;
     }
   }, [isReady]);
+
+  useEffect(() => {
+    if (!canView) return;
+    if (!previewEndedRef.current) return;
+
+    previewEndedRef.current = false;
+    setPreviewEnded(false);
+    progress.value = 0;
+  }, [canView, progress]);
 
   useEffect(() => {
     const shouldHide = firstFrameRendered.current && isFocused;
@@ -614,13 +630,13 @@ function PostMediaInnerMain({
     }
   }, [type, inVideoWindow, isReady, player]);
 
-  // Reset preview state when post scrolls off screen
+  // Reset preview state when user scrolls to a different post — not on tab/screen blur.
   useEffect(() => {
-    if (!isFocused && previewEndedRef.current) {
+    if (!isPrimaryFeedPost && previewEndedRef.current) {
       previewEndedRef.current = false;
       setPreviewEnded(false);
     }
-  }, [isFocused]);
+  }, [isPrimaryFeedPost]);
 
   // ─── UI event handlers ─────────────────────────────────────────────────────
 
@@ -653,8 +669,13 @@ function PostMediaInnerMain({
   }, [isLiked, onLike, triggerHeartAnimation]);
 
   const handleSingleTap = useCallback(() => {
-    if (type === "video") showMuteIcon();
-  }, [type, showMuteIcon]);
+    if (type !== "video") return;
+    if (!canView) {
+      showMuteIcon();
+      return;
+    }
+    router.push(`/(app)/flick/${postId}`);
+  }, [type, postId, canView, showMuteIcon]);
 
   const handleTap = useCallback(() => {
     const now = Date.now();
@@ -702,8 +723,12 @@ function PostMediaInnerMain({
   }, [toggleMute, showMuteIcon]);
 
   const handlePayPress = useCallback(() => {
+    if (onRequestPurchase) {
+      onRequestPurchase();
+      return;
+    }
     Alert.alert("Coming Soon");
-  }, []);
+  }, [onRequestPurchase]);
 
   const handleWatchAgain = useCallback(() => {
     previewEndedRef.current = false;
@@ -748,21 +773,10 @@ function PostMediaInnerMain({
 
   const viewerSeesImagePaywall = !canView && type === "image";
 
-  if (!media && !viewerSeesImagePaywall && !isPaidVideo) return null;
-
-  // ✅ FIX: mount VideoView whenever we have a player and are in the video
-  // window — not just when focused.  This lets ±2 neighbors keep their
-  // VideoView connected (paused) so the first frame is already decoded
-  // when focus arrives.  `isFocused` only controls play/pause.
-  //
-  // Use a sticky ref so that once the VideoView has mounted (isReady=true),
-  // it stays mounted even during brief "loading" hiccups caused by seeks.
-  // Un-mounting / re-mounting the VideoView on Android causes a stuck-frame.
-  const videoViewMountedRef = useRef(false);
-  if (isReady && player) videoViewMountedRef.current = true;
-  if (!player) videoViewMountedRef.current = false;
-  const showVideoView =
-    isFocused && player !== null && (isReady || videoViewMountedRef.current);
+  // VideoView only while `isReady`: if we keep the surface mounted when the
+  // native player drops out of ready (tab/stack churn, pool eviction), the
+  // sticky layer stays opaque black on top of the poster.
+  const showVideoView = isFocused && player !== null && isReady;
   const showLoadingOverlay =
     type === "video" && isFocused && (isBuffering || !isReady);
   const showPremiumBadge = price > 0 || isExclusive;
@@ -776,6 +790,8 @@ function PostMediaInnerMain({
       Math.min(calculatedHeight, MAX_MEDIA_HEIGHT),
     );
   }, [aspectRatio]);
+
+  if (!media && !viewerSeesImagePaywall && !isPaidVideo) return null;
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -960,6 +976,7 @@ const PostMediaImage = memo(function PostMediaImage({
   isExclusive = false,
   onLike,
   isLiked,
+  onRequestPurchase,
 }: Props) {
   const lastTapRef = useRef(0);
   const singleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1008,6 +1025,14 @@ const PostMediaImage = memo(function PostMediaImage({
     }
   }, [handleDoubleTap]);
 
+  const handlePayPress = useCallback(() => {
+    if (onRequestPurchase) {
+      onRequestPurchase();
+      return;
+    }
+    Alert.alert("Coming Soon");
+  }, [onRequestPurchase]);
+
   if (!media && !viewerSeesImagePaywall) return null;
 
   return (
@@ -1017,7 +1042,7 @@ const PostMediaImage = memo(function PostMediaImage({
           price={price}
           isExclusive={isExclusive}
           containerHeight={MIN_MEDIA_HEIGHT}
-          onPay={() => {}}
+          onPay={handlePayPress}
         />
       ) : (
         <Pressable onPress={handleTap}>

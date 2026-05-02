@@ -1,20 +1,24 @@
 import { useCommentsSheet } from "@/hooks/use-comment-sheet";
 import { useShareSheet } from "@/hooks/use-share-sheet";
 import { CommentsBottomSheet } from "@/src/components/comments/CommentsBottomSheet";
-import ReelItem from "@/src/components/reels/ReelItem";
+import FlickItem from "@/src/components/flicks/FlickItem";
 import { SharePostBottomSheet } from "@/src/components/share/SharePostBottomSheet";
-import { useTrackPostView } from "@/src/features/post/post.hooks";
-import { usePostStore } from "@/src/features/post/post.store";
 import {
-  type ReelsFeed,
-  useGetReelsQuery,
-} from "@/src/features/reels/reels.hooks";
+  type FlicksFeed,
+  useGetFlicksQuery,
+} from "@/src/features/flicks/flicks.hooks";
+import {
+  useDeletePostMutation,
+  useTrackPostView,
+} from "@/src/features/post/post.hooks";
+import { usePostStore } from "@/src/features/post/post.store";
 import { videoManager } from "@/src/lib/video-manager";
-import type { Post } from "@/src/services/api/api.types";
+import type { Post, PossibleErrorResponse } from "@/src/services/api/api.types";
+import { isAxiosError } from "axios";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { getMediaType } from "@/src/utils/helpers";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useNavigation } from "expo-router";
 import {
   memo,
   useCallback,
@@ -26,6 +30,7 @@ import {
 } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   FlatList,
   type LayoutChangeEvent,
@@ -50,11 +55,11 @@ const VIEWABILITY_CONFIG: ViewabilityConfig = {
 
 const PRELOAD_RADIUS = 1;
 
-/** Full-bleed reel canvas (not theme.background — avoids white bars in light mode). */
-const REELS_CANVAS = "#000";
-/** Reels tab is always dark chrome; muted text/icons on black (ignores light app theme). */
-const REELS_ON_DARK_MUTED = "rgba(255,255,255,0.55)";
-const REELS_ON_DARK_TEXT = "rgba(255,255,255,0.72)";
+/** Full-bleed flick canvas (not theme.background — avoids white bars in light mode). */
+const FLICKS_CANVAS = "#000";
+/** Flicks tab is always dark chrome; muted text/icons on black (ignores light app theme). */
+const FLICKS_ON_DARK_MUTED = "rgba(255,255,255,0.55)";
+const FLICKS_ON_DARK_TEXT = "rgba(255,255,255,0.72)";
 
 /** Top row min height (label row) + `paddingBottom` on the tab bar. */
 const FEED_TABS_ROW_HEIGHT = 44;
@@ -72,7 +77,7 @@ function viewerCanViewPostMedia(
 }
 
 /** URL eligible for decoder preload (full access or timed preview). */
-function reelPreloadTarget(post: Post | undefined): {
+function flickPreloadTarget(post: Post | undefined): {
   postId: number;
   url: string;
 } | null {
@@ -87,32 +92,34 @@ function reelPreloadTarget(post: Post | undefined): {
   return null;
 }
 
-type ReelRowProps = {
+type FlickRowProps = {
   id: number;
-  reelHeight: number;
-  reelWidth: number;
+  flickHeight: number;
+  flickWidth: number;
   safeTopInset: number;
   isFocused: boolean;
-  inReelWindow: boolean;
+  inFlickWindow: boolean;
   isScreenFocused: boolean;
   nextPostId: number | undefined;
   openComments: (postId: number) => void;
   openShare: (postId: number) => void;
+  onDeleteFlick: (postId: number) => void;
 };
 
-const ReelRow = memo(function ReelRow({
+const FlickRow = memo(function FlickRow({
   id,
-  reelHeight,
-  reelWidth,
+  flickHeight,
+  flickWidth,
   safeTopInset,
   isFocused,
-  inReelWindow,
+  inFlickWindow,
   isScreenFocused,
   nextPostId,
   openComments,
   openShare,
-}: ReelRowProps) {
-  const rowStyles = useMemo(() => createReelsStyles(), []);
+  onDeleteFlick,
+}: FlickRowProps) {
+  const rowStyles = useMemo(() => createFlicksStyles(), []);
 
   const post = usePostStore(useShallow((s) => s.posts[id]));
   const nextPost = usePostStore(
@@ -126,40 +133,42 @@ const ReelRow = memo(function ReelRow({
       <View
         style={[
           rowStyles.placeholder,
-          { height: reelHeight, width: reelWidth },
+          { height: flickHeight, width: flickWidth },
         ]}
       >
-        <ActivityIndicator color={REELS_ON_DARK_MUTED} />
+        <ActivityIndicator color={FLICKS_ON_DARK_MUTED} />
       </View>
     );
   }
 
   return (
-    <View style={{ width: reelWidth, height: reelHeight }}>
-      <ReelItem
+    <View style={{ width: flickWidth, height: flickHeight }}>
+      <FlickItem
         post={post}
-        itemHeight={reelHeight}
-        itemWidth={reelWidth}
+        itemHeight={flickHeight}
+        itemWidth={flickWidth}
         safeTopInset={safeTopInset}
         isFocused={isFocused}
         isScreenFocused={isScreenFocused}
-        inReelWindow={inReelWindow}
+        inFlickWindow={inFlickWindow}
         nextPost={nextPost}
         onOpenComments={() => openComments(id)}
         onOpenShare={() => openShare(id)}
+        onDeleteFlick={onDeleteFlick}
       />
     </View>
   );
 });
 
-export default function ReelsScreen() {
+export default function FlicksScreen() {
+  const navigation = useNavigation();
   const { theme } = useTheme();
-  const styles = useMemo(() => createReelsStyles(), []);
+  const styles = useMemo(() => createFlicksStyles(), []);
 
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
 
-  const [feedTab, setFeedTab] = useState<ReelsFeed>("explore");
+  const [feedTab, setFeedTab] = useState<FlicksFeed>("explore");
 
   const [viewport, setViewport] = useState({ w: 0, h: 0 });
   const onViewportLayout = useCallback((e: LayoutChangeEvent) => {
@@ -169,13 +178,11 @@ export default function ReelsScreen() {
 
   const screen = Dimensions.get("screen");
   /** Full-bleed viewport width/height (feed tabs overlay video; height not reduced by tab row). */
-  const reelWidth = viewport.w > 0 ? viewport.w : screen.width;
-  const reelHeightRaw =
-    viewport.h > 0
-      ? viewport.h
-      : Math.max(1, screen.height - tabBarHeight);
+  const flickWidth = viewport.w > 0 ? viewport.w : screen.width;
+  const flickHeightRaw =
+    viewport.h > 0 ? viewport.h : Math.max(1, screen.height - tabBarHeight);
   /** Page height aligned with device pixels so snap, `getItemLayout`, and rows stay consistent. */
-  const reelHeight = PixelRatio.roundToNearestPixel(reelHeightRaw);
+  const flickHeight = PixelRatio.roundToNearestPixel(flickHeightRaw);
 
   const [focusedIndex, setFocusedIndex] = useState(0);
   const [isScreenFocused, setIsScreenFocused] = useState(true);
@@ -202,7 +209,8 @@ export default function ReelsScreen() {
     isFetchingNextPage,
     isLoading,
     isError,
-  } = useGetReelsQuery(feedTab);
+    refetch,
+  } = useGetFlicksQuery(feedTab);
 
   const postIds = useMemo(
     () => data?.pages.flatMap((page) => page.data.posts) ?? [],
@@ -213,6 +221,51 @@ export default function ReelsScreen() {
   postIdsRef.current = postIds;
   const focusedIndexRef = useRef(focusedIndex);
   focusedIndexRef.current = focusedIndex;
+
+  const deletePostMutation = useDeletePostMutation();
+  const deletePostMutationRef = useRef(deletePostMutation);
+  deletePostMutationRef.current = deletePostMutation;
+
+  /**
+   * Scroll-first-then-delete: scroll to the next reel (or previous if at the end),
+   * wait for the animation to settle, then fire the delete mutation.
+   * This avoids the visual jump that would occur if the item disappeared while still visible.
+   */
+  const handleDeleteFlick = useCallback((postId: number) => {
+    const ids = postIdsRef.current;
+    const currentIdx = focusedIndexRef.current;
+
+    const isLast = currentIdx >= ids.length - 1;
+    const targetIndex = isLast ? currentIdx - 1 : currentIdx + 1;
+
+    const doDelete = () => {
+      deletePostMutationRef.current.mutate(postId, {
+        onError: (err: unknown) => {
+          const msg =
+            isAxiosError(err) && err.response?.data
+              ? (err.response.data as PossibleErrorResponse).message
+              : "Could not delete this post.";
+          Alert.alert("Error", msg);
+        },
+      });
+    };
+
+    if (targetIndex < 0) {
+      doDelete();
+      return;
+    }
+
+    flatListRef.current?.scrollToIndex({ index: targetIndex, animated: true });
+    setTimeout(doDelete, 350);
+  }, []);
+
+  /** Clamp focusedIndex so it never exceeds the list bounds after a deletion. */
+  useEffect(() => {
+    if (postIds.length === 0) return;
+    if (focusedIndex >= postIds.length) {
+      setFocusedIndex(postIds.length - 1);
+    }
+  }, [postIds.length, focusedIndex]);
 
   /** Last focused row index per feed (session memory when switching Following / Explore). */
   const indicesRef = useRef<{ following: number; explore: number }>({
@@ -226,7 +279,7 @@ export default function ReelsScreen() {
 
   /** After a feed tab switch: release all native players, then restore scroll once `postIds` is ready. */
   const pendingFeedRestoreRef = useRef(false);
-  const prevFeedTabRef = useRef<ReelsFeed | null>(null);
+  const prevFeedTabRef = useRef<FlicksFeed | null>(null);
 
   useLayoutEffect(() => {
     if (prevFeedTabRef.current === null) {
@@ -274,8 +327,8 @@ export default function ReelsScreen() {
     const prevPost = prevId != null ? postsMap[prevId] : undefined;
     const nextPost = nextId != null ? postsMap[nextId] : undefined;
 
-    const p = reelPreloadTarget(prevPost);
-    const n = reelPreloadTarget(nextPost);
+    const p = flickPreloadTarget(prevPost);
+    const n = flickPreloadTarget(nextPost);
     if (p) videoManager.preload(p.postId, p.url);
     if (n) videoManager.preload(n.postId, n.url);
   }, [focusedIndex, postIds, postsMap]);
@@ -293,6 +346,14 @@ export default function ReelsScreen() {
       }
       const index = token.index;
       if (index == null || index < 0) return;
+      const prevIndex = focusedIndexRef.current;
+      if (index < prevIndex) {
+        const ids = postIdsRef.current;
+        const id = ids[index];
+        if (id != null) {
+          videoManager.seekToStart(id);
+        }
+      }
       setFocusedIndex(index);
     },
     [],
@@ -311,29 +372,31 @@ export default function ReelsScreen() {
       const isFocused = index === focusedIndex;
       const inWindow = Math.abs(index - focusedIndex) <= PRELOAD_RADIUS;
       return (
-        <ReelRow
+        <FlickRow
           id={id}
-          reelHeight={reelHeight}
-          reelWidth={reelWidth}
+          flickHeight={flickHeight}
+          flickWidth={flickWidth}
           safeTopInset={insets.top + FEED_TABS_CHROME_HEIGHT}
           isFocused={isFocused}
-          inReelWindow={inWindow}
+          inFlickWindow={inWindow}
           isScreenFocused={isScreenFocused}
           nextPostId={nextPostId}
           openComments={openComments}
           openShare={openShare}
+          onDeleteFlick={handleDeleteFlick}
         />
       );
     },
     [
       postIds,
-      reelHeight,
-      reelWidth,
+      flickHeight,
+      flickWidth,
       insets.top,
       isScreenFocused,
       focusedIndex,
       openComments,
       openShare,
+      handleDeleteFlick,
     ],
   );
 
@@ -341,14 +404,32 @@ export default function ReelsScreen() {
 
   const getItemLayout = useCallback(
     (_: unknown, index: number) => ({
-      length: reelHeight,
-      offset: reelHeight * index,
+      length: flickHeight,
+      offset: flickHeight * index,
       index,
     }),
-    [reelHeight],
+    [flickHeight],
   );
 
   const flatListRef = useRef<FlatList<number>>(null);
+
+  const handleTabRepressRefresh = useCallback(() => {
+    setFocusedIndex(0);
+    indicesRef.current[feedTab] = 0;
+    requestAnimationFrame(() => {
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    });
+    void refetch();
+  }, [feedTab, refetch]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("tabPress" as any, () => {
+      if (navigation.isFocused()) {
+        handleTabRepressRefresh();
+      }
+    });
+    return unsubscribe;
+  }, [navigation, handleTabRepressRefresh]);
 
   useLayoutEffect(() => {
     if (postIds.length === 0 || !pendingFeedRestoreRef.current) return;
@@ -362,18 +443,18 @@ export default function ReelsScreen() {
 
     requestAnimationFrame(() => {
       flatListRef.current?.scrollToOffset({
-        offset: safeIdx * reelHeight,
+        offset: safeIdx * flickHeight,
         animated: false,
       });
     });
-  }, [feedTab, postIds.length, reelHeight]);
+  }, [feedTab, postIds.length, flickHeight]);
 
   const onMomentumScrollEnd = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const y = e.nativeEvent.contentOffset.y;
-      if (reelHeight <= 0) return;
-      const nearest = Math.round(y / reelHeight);
-      const target = nearest * reelHeight;
+      if (flickHeight <= 0) return;
+      const nearest = Math.round(y / flickHeight);
+      const target = nearest * flickHeight;
       if (Math.abs(y - target) > 0.5) {
         flatListRef.current?.scrollToOffset({
           offset: Math.max(0, target),
@@ -381,7 +462,21 @@ export default function ReelsScreen() {
         });
       }
     },
-    [reelHeight],
+    [flickHeight],
+  );
+
+  const onScrollToIndexFailed = useCallback(
+    (info: {
+      index: number;
+      highestMeasuredFrameIndex: number;
+      averageItemLength: number;
+    }) => {
+      flatListRef.current?.scrollToOffset({
+        offset: info.index * flickHeight,
+        animated: true,
+      });
+    },
+    [flickHeight],
   );
 
   const onEndReached = useCallback(() => {
@@ -395,7 +490,7 @@ export default function ReelsScreen() {
       isFetchingNextPage ? (
         <ActivityIndicator
           style={styles.footerLoader}
-          color={REELS_ON_DARK_MUTED}
+          color={FLICKS_ON_DARK_MUTED}
         />
       ) : null,
     [isFetchingNextPage, styles.footerLoader],
@@ -453,25 +548,25 @@ export default function ReelsScreen() {
         style={[
           styles.centered,
           {
-            minHeight: reelHeight,
-            width: reelWidth,
-            backgroundColor: REELS_CANVAS,
+            minHeight: flickHeight,
+            width: flickWidth,
+            backgroundColor: FLICKS_CANVAS,
           },
         ]}
       >
         <Text style={styles.errorText}>
           {feedTab === "following"
-            ? "No reels from people you follow yet"
-            : "No reels yet"}
+            ? "No flicks from people you follow yet"
+            : "No flicks yet"}
         </Text>
       </View>
     ) : null;
 
-  if (isError) {
+  if (isError && postIds.length === 0) {
     return (
-      <View style={styles.reelsOuter}>
-        <View style={[styles.centered, styles.reelsViewportFlex]}>
-          <Text style={styles.errorText}>Couldn&apos;t load reels</Text>
+      <View style={styles.flicksOuter}>
+        <View style={[styles.centered, styles.flicksViewportFlex]}>
+          <Text style={styles.errorText}>Couldn&apos;t load flicks</Text>
         </View>
         {feedTabsHeader}
         <CommentsBottomSheet
@@ -489,9 +584,9 @@ export default function ReelsScreen() {
   }
 
   return (
-    <View style={styles.reelsOuter}>
+    <View style={styles.flicksOuter}>
       <View
-        style={[styles.reelsViewportFlex, { backgroundColor: REELS_CANVAS }]}
+        style={[styles.flicksViewportFlex, { backgroundColor: FLICKS_CANVAS }]}
         onLayout={onViewportLayout}
       >
         {isLoading && postIds.length === 0 ? (
@@ -507,16 +602,17 @@ export default function ReelsScreen() {
             style={{
               width: "100%",
               height: "100%",
-              backgroundColor: REELS_CANVAS,
+              backgroundColor: FLICKS_CANVAS,
             }}
             onMomentumScrollEnd={onMomentumScrollEnd}
+            onScrollToIndexFailed={onScrollToIndexFailed}
             ListEmptyComponent={listEmpty}
             showsVerticalScrollIndicator={false}
             decelerationRate="fast"
             disableIntervalMomentum
             snapToAlignment="start"
-            snapToInterval={reelHeight}
-            removeClippedSubviews
+            snapToInterval={flickHeight}
+            removeClippedSubviews={false}
             windowSize={3}
             maxToRenderPerBatch={1}
             initialNumToRender={1}
@@ -548,11 +644,11 @@ export default function ReelsScreen() {
   );
 }
 
-function createReelsStyles() {
+function createFlicksStyles() {
   return StyleSheet.create({
-    reelsOuter: {
+    flicksOuter: {
       flex: 1,
-      backgroundColor: REELS_CANVAS,
+      backgroundColor: FLICKS_CANVAS,
     },
     feedTabsOverlay: {
       position: "absolute",
@@ -586,27 +682,27 @@ function createReelsStyles() {
       fontSize: 17,
       fontWeight: "500",
     },
-    reelsViewportFlex: {
+    flicksViewportFlex: {
       flex: 1,
       overflow: "hidden",
     },
-    reelsScreenRoot: {
-      backgroundColor: REELS_CANVAS,
+    flicksScreenRoot: {
+      backgroundColor: FLICKS_CANVAS,
       overflow: "visible",
     },
     container: {
       flex: 1,
-      backgroundColor: REELS_CANVAS,
+      backgroundColor: FLICKS_CANVAS,
     },
     centered: {
       flex: 1,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: REELS_CANVAS,
+      backgroundColor: FLICKS_CANVAS,
     },
     placeholder: {
       flex: 1,
-      backgroundColor: REELS_CANVAS,
+      backgroundColor: FLICKS_CANVAS,
       alignItems: "center",
       justifyContent: "center",
     },
@@ -614,7 +710,7 @@ function createReelsStyles() {
       paddingVertical: 24,
     },
     errorText: {
-      color: REELS_ON_DARK_TEXT,
+      color: FLICKS_ON_DARK_TEXT,
       fontSize: 15,
     },
   });

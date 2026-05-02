@@ -1,17 +1,15 @@
-// app/(app)/explore/[postId].tsx
-
 import { useCommentsSheet } from "@/hooks/use-comment-sheet";
 import { useShareSheet } from "@/hooks/use-share-sheet";
 import { CommentsBottomSheet } from "@/src/components/comments/CommentsBottomSheet";
+import PostItem from "@/src/components/home/posts/PostWrapper";
 import { SharePostBottomSheet } from "@/src/components/share/SharePostBottomSheet";
-import PostItem from "@/src/components/home/posts/PostWrapper.old";
 import {
   useGetSinglePost,
   useTrackPostView,
 } from "@/src/features/post/post.hooks";
-import { videoManager } from "@/src/lib/video-manager.old";
+import { videoManager } from "@/src/lib/video-manager";
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -22,22 +20,27 @@ import {
   ViewToken,
 } from "react-native";
 
-// Define viewability config outside component to prevent recreation
 const VIEWABILITY_CONFIG: ViewabilityConfig = {
-  itemVisiblePercentThreshold: 50, // Instagram-style: 50% visible triggers
-  minimumViewTime: 100, // Reduced from 250ms for faster response
+  itemVisiblePercentThreshold: 50,
+  minimumViewTime: 160,
 };
 
 const PostScreen = () => {
   const { postId } = useLocalSearchParams<{
     postId: string;
   }>();
-  // const isCommentOpen = commentOpen === "true";
+
   const [visiblePostId, setVisiblePostId] = useState<number | null>(null);
   const [isScreenFocused, setIsScreenFocused] = useState(true);
-  const trackPostView = useTrackPostView();
 
-  // Comments hook
+  const visiblePostIdRef = useRef<number | null>(null);
+  const visibleFeedIndexRef = useRef<number>(-1);
+  const isScreenFocusedRef = useRef(true);
+
+  const trackPostView = useTrackPostView();
+  const trackPostViewRef = useRef(trackPostView);
+  trackPostViewRef.current = trackPostView;
+
   const { bottomSheetRef, selectedPostId, openComments, onDismiss } =
     useCommentsSheet();
   const {
@@ -57,55 +60,59 @@ const PostScreen = () => {
   } = useGetSinglePost(postId);
 
   const mainPostId = data?.mainPostId;
-
-  // Flatten all recommended post IDs from paginated data
   const recommendedPostIds = useMemo(
     () => data?.recommendedIds ?? [],
     [data?.recommendedIds],
   );
 
-  // Track screen focus for pausing videos when navigating away
+  /** Single FlatList feed: anchor post at index 0, then recommendations (deduped). */
+  const postIds = useMemo(() => {
+    if (mainPostId == null) return [];
+    const seen = new Set<number>([mainPostId]);
+    const out: number[] = [mainPostId];
+    for (const id of recommendedPostIds) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push(id);
+    }
+    return out;
+  }, [mainPostId, recommendedPostIds]);
+
+  const visibleFeedIndex = useMemo(() => {
+    if (visiblePostId == null) return -1;
+    return postIds.indexOf(visiblePostId);
+  }, [visiblePostId, postIds]);
+
+  visiblePostIdRef.current = visiblePostId;
+  visibleFeedIndexRef.current = visibleFeedIndex;
+  isScreenFocusedRef.current = isScreenFocused;
+
+  useEffect(() => {
+    setVisiblePostId(null);
+  }, [postId]);
+
   useFocusEffect(
     useCallback(() => {
       setIsScreenFocused(true);
-      // Set main post as visible on initial mount
-      if (mainPostId && visiblePostId === null) {
-        setVisiblePostId(mainPostId);
-      }
+      setVisiblePostId((v) =>
+        mainPostId != null && v == null ? mainPostId : v,
+      );
       return () => {
         setIsScreenFocused(false);
-        // Pause all videos when screen loses focus
         videoManager.pauseAll();
       };
     }, [mainPostId]),
   );
 
-  // useLayoutEffect(() => {
-  //     navigation.setOptions({
-  //         // headerTransparent: true,
-  //         headerTitle: "Go",
-  //         headerLeft: () => (
-  //             <Pressable onPress={router.back}>
-  //                 <Ionicons name="close" size={24} color="white" />
-  //             </Pressable>
-  //         ),
-  //     })
-  // }, [navigation])
-
-  // Stable callback using useCallback + ref pattern for viewability
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
       if (viewableItems.length === 0) {
-        // When no FlatList items visible, main post (header) is likely visible
-        if (mainPostId) {
-          setVisiblePostId(mainPostId);
-        }
+        const fallback = postIds[0];
+        if (fallback != null) setVisiblePostId(fallback);
         return;
       }
 
-      // Find the most visible item (highest visibility percentage)
       let mostVisibleItem = viewableItems[0];
-
       for (const item of viewableItems) {
         if (item.isViewable) {
           mostVisibleItem = item;
@@ -117,64 +124,58 @@ const PostScreen = () => {
 
       setVisiblePostId((prevId) => {
         if (prevId !== newVisibleId) {
-          console.log(`👁️ Visible post changed: ${prevId} → ${newVisibleId}`);
-          trackPostView.mutate(newVisibleId);
+          trackPostViewRef.current.mutate(newVisibleId);
         }
         return newVisibleId;
       });
     },
-    [mainPostId],
+    [postIds],
   );
 
-  // Use viewabilityConfigCallbackPairs for stable behavior
+  const onViewableItemsChangedRef = useRef(onViewableItemsChanged);
+  onViewableItemsChangedRef.current = onViewableItemsChanged;
+
   const viewabilityConfigCallbackPairs = useRef([
     {
       viewabilityConfig: VIEWABILITY_CONFIG,
-      onViewableItemsChanged,
+      onViewableItemsChanged: (info: {
+        viewableItems: ViewToken[];
+        changed: ViewToken[];
+      }) => onViewableItemsChangedRef.current(info),
     },
   ]);
 
-  // Helper to get next post ID for preloading
   const getNextPostId = useCallback(
     (currentId: number): number | undefined => {
-      // If current is main post, next is first recommended
-      if (currentId === mainPostId) {
-        return recommendedPostIds[0];
-      }
-
-      // Otherwise find in recommended list
-      const currentIndex = recommendedPostIds.indexOf(currentId);
-      if (
-        currentIndex === -1 ||
-        currentIndex >= recommendedPostIds.length - 1
-      ) {
+      const currentIndex = postIds.indexOf(currentId);
+      if (currentIndex === -1 || currentIndex >= postIds.length - 1) {
         return undefined;
       }
-      return recommendedPostIds[currentIndex + 1];
+      return postIds[currentIndex + 1];
     },
-    [mainPostId, recommendedPostIds],
+    [postIds],
   );
 
-  // Render item with nextId for preloading
   const renderItem = useCallback(
-    ({ item: id }: { item: number }) => {
+    ({ item: id, index }: { item: number; index: number }) => {
       const nextId = getNextPostId(id);
-
       return (
         <PostItem
           id={id}
+          feedIndex={index}
+          visibleFeedIndex={visibleFeedIndexRef.current}
           nextId={nextId}
-          visiblePostId={visiblePostId}
-          isScreenFocused={isScreenFocused}
+          visiblePostId={visiblePostIdRef.current}
+          isScreenFocused={isScreenFocusedRef.current}
           openComments={openComments}
           openShare={openShare}
         />
       );
     },
-    [visiblePostId, isScreenFocused, openComments, openShare, getNextPostId],
+    [openComments, openShare, getNextPostId],
   );
 
-  const keyExtractor = useCallback((item: number) => item.toString(), []);
+  const keyExtractor = useCallback((item: number) => String(item), []);
 
   const handleEndReached = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) {
@@ -188,32 +189,18 @@ const PostScreen = () => {
     [isFetchingNextPage],
   );
 
-  // Main post as header - with preloading for first recommended
-  const ListHeader = useMemo(() => {
-    if (!mainPostId) return null;
+  /**
+   * Bundle visiblePostId + isScreenFocused into extraData so FlatList re-renders
+   * cells when EITHER changes. Without isScreenFocused here, focus toggles
+   * (post → flick → post) don't propagate to PostWrapper, leaving PostMedia's
+   * `isFocused` prop stale: video can't auto-resume after pauseAll, and the
+   * VideoView stays mounted causing surface conflicts (black frame).
+   */
+  const flatListExtraData = useMemo(
+    () => ({ visiblePostId, isScreenFocused }),
+    [visiblePostId, isScreenFocused],
+  );
 
-    const nextId = recommendedPostIds[0];
-
-    return (
-      <PostItem
-        id={mainPostId}
-        nextId={nextId}
-        visiblePostId={visiblePostId}
-        isScreenFocused={isScreenFocused}
-        openComments={openComments}
-        openShare={openShare}
-      />
-    );
-  }, [
-    mainPostId,
-    recommendedPostIds,
-    visiblePostId,
-    isScreenFocused,
-    openComments,
-    openShare,
-  ]);
-
-  // Loading state
   if (isLoading) {
     return (
       <View style={styles.centerContainer}>
@@ -222,7 +209,6 @@ const PostScreen = () => {
     );
   }
 
-  // Error state
   if (!isSuccess || !mainPostId) {
     return (
       <View style={styles.centerContainer}>
@@ -234,28 +220,19 @@ const PostScreen = () => {
   return (
     <View style={styles.container}>
       <FlatList
-        data={recommendedPostIds}
+        data={postIds}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
-        ListHeaderComponent={ListHeader}
         ListFooterComponent={ListFooter}
-        // Use callback pairs instead of separate props (more stable)
         viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs.current}
-        // Pagination
         onEndReached={handleEndReached}
         onEndReachedThreshold={0.5}
-        // Performance optimizations
-        // removeClippedSubviews={true}
+        removeClippedSubviews
         windowSize={5}
         maxToRenderPerBatch={3}
         initialNumToRender={3}
-        updateCellsBatchingPeriod={50}
-        // Prevent content jumping when items load
-        maintainVisibleContentPosition={{
-          minIndexForVisible: 0,
-        }}
-        // Optimize re-renders
-        extraData={visiblePostId}
+        updateCellsBatchingPeriod={100}
+        extraData={flatListExtraData}
       />
 
       <CommentsBottomSheet
@@ -274,7 +251,7 @@ const PostScreen = () => {
 
 const styles = StyleSheet.create({
   container: {
-    // flex: 1,
+    flex: 1,
   },
   centerContainer: {
     flex: 1,

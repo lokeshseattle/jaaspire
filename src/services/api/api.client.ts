@@ -21,7 +21,7 @@ const baseURL = API_BASE_URL;
 
 const LOG_REQUEST = true;
 const LOG_RESPONSE = false;
-const LOG_ERROR = false;
+const LOG_ERROR = true;
 
 const buildFullUrl = (config: InternalAxiosRequestConfig) => {
   if (!config.params) return config.url;

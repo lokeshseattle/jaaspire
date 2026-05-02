@@ -63,24 +63,53 @@ export type PublicRouteAlias = {
  * - /p/:postId        → /post/:postId (short link)
  */
 export const PUBLIC_ROUTE_ALIASES: readonly PublicRouteAlias[] = [
-  {
-    description: "Short profile links: /@username → /user/username",
-    pattern: /^\/@([^/]+)\/?$/,
-    replacement: "/user/$1",
-  },
+  
   {
     description: "Web post URLs: /posts/id → /post/id (matches post/[postId])",
     pattern: /^\/posts\/([^/]+)\/?$/,
     replacement: "/post/$1",
   },
-  {
-    description: "Short post links: /p/id → /post/id",
-    pattern: /^\/p\/([^/]+)\/?$/,
-    replacement: "/post/$1",
-  },
+  
 ];
 
-const SAFE_FALLBACK_PATH = "/";
+/**
+ * Single-path URLs like https://origin/alice must not be mistaken for in-app
+ * routes (e.g. /wallet). Only segments not in this set rewrite to /user/:seg.
+ */
+const RESERVED_SINGLE_SEGMENT_PATHS = new Set([
+  "api",
+  "bookmarks",
+  "blocked-users",
+  "chat",
+  "create",
+  "flicks",
+  "followers-following",
+  "flick",
+  "global-search",
+  "help-support",
+  "login",
+  "messages",
+  "notifications",
+  "p",
+  "pending-requests",
+  "post",
+  "post-image-editor",
+  "post-video-thumbnail",
+  "privacy-settings",
+  "profile",
+  "posts",
+  "search",
+  "settings",
+  "signup",
+  "story",
+  "story-editor",
+  "story-viewer",
+  "user",
+  "video-editor",
+  "wallet",
+]);
+
+const SAFE_FALLBACK_PATH = "/(app)/(tabs)";
 
 function splitPathnameQueryAndHash(input: string): {
   pathname: string;
@@ -128,7 +157,7 @@ function splitPathnameQueryAndHash(input: string): {
 /**
  * Rewrites a marketing/public path segment to an Expo Router pathname.
  * Accepts a full URL or a path; preserves query + hash on output.
- * Returns pass-through pathname if no alias matches.
+ * Falls back to the home tab for unsupported public URLs.
  */
 export function rewriteMarketingPathToRouterPath(inputPath: string): string {
   try {
@@ -141,7 +170,19 @@ export function rewriteMarketingPathToRouterPath(inputPath: string): string {
       }
     }
 
-    return `${pathname}${rest}`;
+    // Web/marketing profile URLs: /username → /user/username (not /@handle)
+    const oneSeg = pathname.match(/^\/([^/]+)\/?$/);
+    if (oneSeg) {
+      const seg = decodeURIComponent(oneSeg[1]);
+      if (
+        seg.length > 0 &&
+        !RESERVED_SINGLE_SEGMENT_PATHS.has(seg.toLowerCase())
+      ) {
+        return `/user/${encodeURIComponent(seg)}${rest}`;
+      }
+    }
+
+    return SAFE_FALLBACK_PATH;
   } catch {
     return SAFE_FALLBACK_PATH;
   }

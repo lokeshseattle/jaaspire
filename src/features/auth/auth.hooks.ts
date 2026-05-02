@@ -17,7 +17,7 @@ import {
   useMutation,
   UseMutationResult,
   useQuery,
-  UseQueryResult
+  UseQueryResult,
 } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { useCallback } from "react";

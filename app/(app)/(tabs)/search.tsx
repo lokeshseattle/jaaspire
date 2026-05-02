@@ -12,11 +12,12 @@ import {
 } from "@/src/features/profile/profile.hooks";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
-import { router } from "expo-router";
-import React, { useCallback, useState } from "react";
+import { router, useNavigation } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
 import { Keyboard, StyleSheet, View } from "react-native";
 
 export default function SearchScreen() {
+  const navigation = useNavigation();
   const { theme } = useTheme();
   const styles = createStyles(theme);
   const { data: profileData } = useGetProfile();
@@ -92,6 +93,15 @@ export default function SearchScreen() {
   const handleRefresh = useCallback(() => {
     refetch();
   }, [refetch]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("tabPress" as any, () => {
+      if (navigation.isFocused()) {
+        handleRefresh();
+      }
+    });
+    return unsubscribe;
+  }, [navigation, handleRefresh]);
 
   const handleLoadMore = useCallback(() => {
     fetchNextPage();

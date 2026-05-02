@@ -1,26 +1,30 @@
 import { usePost } from "@/src/context/post-context";
 import {
-  useBookmarkPostMutation,
-  usePinPostMutation,
+    useBookmarkPostMutation,
+    useDeletePostMutation,
+    usePinPostMutation,
 } from "@/src/features/post/post.hooks";
 import { useGetProfile } from "@/src/features/profile/profile.hooks";
+import type { PossibleErrorResponse } from "@/src/services/api/api.types";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { timeAgo } from "@/src/utils/helpers";
 import { Ionicons } from "@expo/vector-icons";
 import Feather from "@expo/vector-icons/Feather";
 import { router } from "expo-router";
+import { isAxiosError } from "axios";
 import React, { useMemo, useRef, useState } from "react";
 import {
-  Dimensions,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  UIManager,
-  View,
-  findNodeHandle,
+    Alert,
+    Dimensions,
+    Modal,
+    Pressable,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    UIManager,
+    View,
+    findNodeHandle,
 } from "react-native";
 import StoryAvatar from "../story/StoryAvatar";
 import ReportModal from "./ReportModal";
@@ -42,6 +46,7 @@ const PostHeader: React.FC = React.memo(() => {
 
   const savePost = useBookmarkPostMutation();
   const pinPost = usePinPostMutation();
+  const deletePost = useDeletePostMutation();
 
   const user = post.user;
   if (!user) {
@@ -114,6 +119,36 @@ const PostHeader: React.FC = React.memo(() => {
     });
   };
 
+  const isOwnPost = me?.id === user.id;
+
+  const confirmDeletePost = () => {
+    closeMenu();
+    Alert.alert(
+      "Delete post?",
+      "This can’t be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () =>
+            deletePost.mutate(post.id, {
+              onSuccess: (data) => {
+                Alert.alert("Deleted", data.message);
+              },
+              onError: (err: unknown) => {
+                const msg =
+                  isAxiosError(err) && err.response?.data
+                    ? (err.response.data as PossibleErrorResponse).message
+                    : "Could not delete this post.";
+                Alert.alert("Error", msg);
+              },
+            }),
+        },
+      ],
+    );
+  };
+
   return (
     <>
       <View style={styles.container}>
@@ -184,6 +219,15 @@ const PostHeader: React.FC = React.memo(() => {
                 icon={post.is_pinned ? "pin" : "pin-outline"}
                 label={post.is_pinned ? "Unpin" : "Pin"}
                 onPress={() => handleAction("pin")}
+                theme={theme}
+              />
+            )}
+            {isOwnPost && (
+              <MenuItem
+                icon="trash-outline"
+                label="Delete"
+                danger
+                onPress={confirmDeletePost}
                 theme={theme}
               />
             )}

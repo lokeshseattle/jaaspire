@@ -1,4 +1,4 @@
-import { ImageManipulator } from "expo-image-manipulator";
+import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 
 export type MediaType = "image" | "video";
 
@@ -186,12 +186,12 @@ const uriToBlob = async (uri: string): Promise<Blob> => {
   return await res.blob();
 };
 export async function normalizeImage(uri: string) {
-  return await ImageManipulator.manipulateAsync(
+  return await manipulateAsync(
     uri,
     [{ resize: { width: 1280 } }],
     {
       compress: 0.8,
-      format: ImageManipulator.SaveFormat.JPEG,
+      format: SaveFormat.JPEG,
     },
   );
 }

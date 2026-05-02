@@ -12,6 +12,8 @@ import {
   PrivacyFlagRequestBody,
   PrivacyFlagResponse,
   ProfileResponse,
+  SettingsRatesRequestBody,
+  SettingsRatesResponse,
   TUserProfileResponse,
   UpdateAvatarRequest,
   UpdateProfileRequest,
@@ -129,6 +131,23 @@ export const useSetEnable2faFlagMutation = (): UseMutationResult<
   return useMutation({
     mutationFn: (value: boolean) =>
       postPrivacyFlag({ key: "enable_2fa", value }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["profile"] });
+    },
+  });
+};
+
+/** POST /settings/rates — sets `profile_access_price` (e.g. monthly access). */
+export const useSetSettingsRatesMutation = (): UseMutationResult<
+  SettingsRatesResponse,
+  PossibleErrorResponse,
+  SettingsRatesRequestBody
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (body: SettingsRatesRequestBody) =>
+      apiClient.post("/settings/rates", body).then((d) => d.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["profile"] });
     },

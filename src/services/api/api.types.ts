@@ -161,6 +161,13 @@ export type FeedResponse = {
   };
 };
 
+/** GET /reels/:id (flicks single-post API) — `data` is the post row; optional `video` duplicates media and is omitted for `Post`. */
+export type SingleFlickApiResponse = {
+  success: boolean;
+  message: string;
+  data: Post & { video?: unknown };
+};
+
 export type TUserProfile = {
   id: number;
   name: string;
@@ -287,6 +294,16 @@ export type PrivacyFlagResponse = {
     key: PrivacyFlagKey;
     value: boolean;
   };
+};
+
+/** POST /settings/rates — profile paywall / access pricing. */
+export type SettingsRatesRequestBody = {
+  profile_access_price: number;
+};
+
+export type SettingsRatesResponse = {
+  success: boolean;
+  message: string;
 };
 
 /** Optional subscription fields for PUT /profile (privacy flags use POST settings/privacy/flags). */
@@ -683,6 +700,12 @@ export type PinPostResponse = {
   };
 };
 
+export type DeletePostResponse = {
+  success: boolean;
+  message: string;
+  data: null;
+};
+
 export type BookmarksResponse = {
   success: boolean;
   message: string;
@@ -859,7 +882,7 @@ export type MessengerMediaAttachment = {
   updated_at: string; // ISO date
   payment_request_id: number | null;
   attachmentType: "image" | "video" | "audio" | "file"; // extend if needed
-  path: string;
+  path: string | null;
   previewurl: string | null;
 };
 
@@ -867,12 +890,13 @@ export type MessengerMessage = {
   id: number;
   sender_id: number;
   receiver_id: number;
-  message: string;
+  message: string | "locked";
   isSeen: boolean;
   price: number;
   is_ai_conversation: boolean;
   created_at: string;
   updated_at?: string;
+  hasUserUnlockedMessage: boolean;
   sender: MessengerUser;
   receiver: MessengerUser;
   attachments: MessengerMediaAttachment[];
@@ -962,8 +986,70 @@ export type NotificationCountsResponse = {
   };
 };
 
+/** POST /iap/apple/verify */
+export type IapAppleVerifyRequest = {
+  jws: string;
+  product_id: string;
+};
+
+/** POST /iap/google/verify */
+export type IapGoogleVerifyRequest = {
+  purchase_token: string;
+  product_id: string;
+  order_id: string;
+};
+
+/** Typical envelope for IAP verify endpoints (adjust if backend differs). */
+export type IapVerifyResponse = {
+  success: boolean;
+  message: string;
+  data?: unknown;
+};
+
+export type CreatorDashboardStartLinkResponse = {
+  success: boolean;
+  url: string;
+  expires_in: number;
+  message?: string;
+};
+
 export type UploadChunkResponse = {
   success: boolean;
   uploaded_chunk: number;
   file_id: string;
+};
+
+export type TipResponse = {
+  success: boolean;
+  transaction_id: number;
+  amount: string;
+  wallet_balance: string;
+};
+
+export type SubscribeResponse = {
+  success: boolean;
+  transaction_id: number;
+  amount: string;
+  wallet_balance: string;
+  subscription: {
+    id: number;
+    expires_at: string;
+    status: string;
+  };
+};
+
+export type UnlockPostResponse = {
+  success: boolean;
+  transaction_id: number;
+  amount: string;
+  wallet_balance: string;
+  path: string[];
+};
+
+export type UnlockMessageResponse = {
+  success: boolean;
+  transaction_id: number;
+  amount: string;
+  wallet_balance: string;
+  path: string[];
 };

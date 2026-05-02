@@ -1,16 +1,26 @@
-import { memo, useCallback, useMemo, useRef } from "react";
+import PaymentConfirmSheet from "@/src/components/payment/PaymentConfirmSheet";
+import TipBottomSheet from "@/src/components/payment/TipBottomSheet";
+import PostContext from "@/src/context/post-context";
+import { useToggleLikeMutation } from "@/src/features/post/post.hooks";
+import { useGetProfileByUsername } from "@/src/features/profile/profile.hooks";
+import {
+  useSubscribeUser,
+  useUnlockPost,
+} from "@/src/features/wallet/wallet.hooks";
+import type { Post as PostItem } from "@/src/services/api/api.types";
+import { getMediaType } from "@/src/utils/helpers";
+import { router } from "expo-router";
+import { Alert } from "react-native";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 import PostFooter from "./post-footer";
 import PostHeader from "./post-header";
 import PostMedia from "./post-media";
 
-import PostContext from "@/src/context/post-context";
-import { useToggleLikeMutation } from "@/src/features/post/post.hooks";
-import type { Post as PostItem } from "@/src/services/api/api.types";
-import { getMediaType } from "@/src/utils/helpers";
-
 interface Props extends PostItem {
   /** True when this post is the primary viewable item on the home feed (only one at a time). */
   isFocused: boolean;
+  /** True when this post is the primary row in the feed (visible slot), independent of tab/screen focus. */
+  isPrimaryFeedPost: boolean;
   /** True when this row is within ±2 of the primary post — keep a native player mounted for preload. */
   inVideoWindow: boolean;
   onPressComments: () => void;
@@ -20,6 +30,7 @@ interface Props extends PostItem {
 
 function Post({
   isFocused,
+  isPrimaryFeedPost,
   inVideoWindow,
   onPressComments,
   onPressShare,
@@ -39,6 +50,76 @@ function Post({
   const handleToggleLike = useCallback(() => {
     toggleLike(post.id);
   }, [post.id]);
+
+  const [paymentSheetOpen, setPaymentSheetOpen] = useState(false);
+  const [tipSheetOpen, setTipSheetOpen] = useState(false);
+
+  // For exclusive posts: fetch the creator's subscription price (likely cached)
+  const { data: creatorProfile } = useGetProfileByUsername(
+    post.is_exclusive ? post.user.username : "",
+  );
+  const subscriptionPrice =
+    creatorProfile?.data?.subscription?.price_1_month ?? 0;
+
+  const isExclusivePost = post.is_exclusive && !post.viewer?.has_subscription;
+
+  const { mutateAsync: unlockPost, isPending: isUnlocking } = useUnlockPost();
+  const { mutateAsync: subscribeUser, isPending: isSubscribing } =
+    useSubscribeUser();
+
+  const handleRequestPurchase = useCallback(() => {
+    setPaymentSheetOpen(true);
+  }, []);
+
+  const handleClosePaymentSheet = useCallback(() => {
+    setPaymentSheetOpen(false);
+  }, []);
+
+  const handleConfirmPurchase = useCallback(async () => {
+    if (isExclusivePost) {
+      // Subscribe flow for exclusive posts
+      try {
+        await subscribeUser({ username: post.user.username });
+        setPaymentSheetOpen(false);
+        router.push({
+          pathname: "/user/[username]",
+          params: {
+            username: post.user.username,
+            tab: "premium",
+            subscribed: String(Date.now()),
+          },
+        });
+      } catch (e) {
+        Alert.alert(
+          "Subscription failed",
+          e instanceof Error ? e.message : "Could not subscribe. Try again.",
+        );
+      }
+    } else {
+      // Unlock post flow for paid posts
+      try {
+        await unlockPost(post.id);
+        setPaymentSheetOpen(false);
+      } catch (e) {
+        Alert.alert(
+          "Unlock failed",
+          e instanceof Error ? e.message : "Could not unlock post. Try again.",
+        );
+      }
+    }
+  }, [post.id, post.user.username, isExclusivePost, unlockPost, subscribeUser]);
+
+  const handleOpenTip = useCallback(() => {
+    setTipSheetOpen(true);
+  }, []);
+
+  const handleCloseTip = useCallback(() => {
+    setTipSheetOpen(false);
+  }, []);
+
+  // Pause video when any payment sheet is open
+  const anySheetOpen = paymentSheetOpen || tipSheetOpen;
+  const effectiveIsFocused = isFocused && !anySheetOpen;
 
   const currentMedia = attachments[0];
   const mediaType = getMediaType(currentMedia?.type);
@@ -64,6 +145,7 @@ function Post({
       toggleLike: handleToggleLike,
       onPressComments,
       onPressShare,
+      onTip: handleOpenTip,
     }),
     // Fine-grained deps: only the fields PostHeader/PostFooter actually read.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -83,6 +165,7 @@ function Post({
       handleToggleLike,
       onPressComments,
       onPressShare,
+      handleOpenTip,
     ],
   );
 
@@ -98,14 +181,30 @@ function Post({
         fullDuration={currentMedia?.duration}
         viewer={post.viewer}
         isExclusive={post.is_exclusive}
-        isFocused={isFocused}
+        isFocused={effectiveIsFocused}
+        isPrimaryFeedPost={isPrimaryFeedPost}
         inVideoWindow={inVideoWindow}
         isLiked={isLiked}
         onLike={handleToggleLike}
         nextPostId={nextVideoInfo?.postId}
         nextPostUrl={nextVideoInfo?.url}
+        onRequestPurchase={handleRequestPurchase}
       />
       <PostFooter />
+      <PaymentConfirmSheet
+        visible={paymentSheetOpen}
+        onClose={handleClosePaymentSheet}
+        onConfirm={handleConfirmPurchase}
+        action={isExclusivePost ? "subscribe" : "buy_post"}
+        username={post.user.username}
+        amount={isExclusivePost ? subscriptionPrice : post.price}
+        loading={isUnlocking || isSubscribing}
+      />
+      <TipBottomSheet
+        visible={tipSheetOpen}
+        onClose={handleCloseTip}
+        username={post.user.username}
+      />
     </PostContext.Provider>
   );
 }

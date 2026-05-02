@@ -3,21 +3,21 @@
 import { useCommentsSheet } from "@/hooks/use-comment-sheet";
 import { useShareSheet } from "@/hooks/use-share-sheet";
 import { CommentsBottomSheet } from "@/src/components/comments/CommentsBottomSheet";
+import PostItem from "@/src/components/home/posts/PostWrapper";
 import { SharePostBottomSheet } from "@/src/components/share/SharePostBottomSheet";
-import PostItem from "@/src/components/home/posts/PostWrapper.old";
 import { useTrackPostView } from "@/src/features/post/post.hooks";
-import { videoManager } from "@/src/lib/video-manager.old";
+import { videoManager } from "@/src/lib/video-manager";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    FlatList,
-    StyleSheet,
-    View,
-    ViewabilityConfig,
-    ViewToken,
+  ActivityIndicator,
+  FlatList,
+  StyleSheet,
+  View,
+  ViewabilityConfig,
+  ViewToken,
 } from "react-native";
 
 // Match home feed — see app/(app)/(tabs)/index.tsx
@@ -55,7 +55,13 @@ export function ProfileFeedView({
   const [isScreenFocused, setIsScreenFocused] = useState(true);
   const flatListRef = useRef<FlatList<number>>(null);
 
+  const visiblePostIdRef = useRef<number | null>(null);
+  const visibleFeedIndexRef = useRef<number>(-1);
+  const isScreenFocusedRef = useRef(true);
+
   const trackPostView = useTrackPostView();
+  const trackPostViewRef = useRef(trackPostView);
+  trackPostViewRef.current = trackPostView;
 
   const { bottomSheetRef, selectedPostId, openComments, onDismiss } =
     useCommentsSheet();
@@ -83,6 +89,18 @@ export function ProfileFeedView({
     }
   }, [isTabActive]);
 
+  const effectiveVisiblePostId = isTabActive ? visiblePostId : null;
+  const effectiveScreenFocused = isTabActive && isScreenFocused;
+
+  const visibleFeedIndex = useMemo(() => {
+    if (effectiveVisiblePostId == null) return -1;
+    return postIds.indexOf(effectiveVisiblePostId);
+  }, [effectiveVisiblePostId, postIds]);
+
+  visiblePostIdRef.current = effectiveVisiblePostId;
+  visibleFeedIndexRef.current = visibleFeedIndex;
+  isScreenFocusedRef.current = effectiveScreenFocused;
+
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
       if (!isTabActive) {
@@ -105,14 +123,17 @@ export function ProfileFeedView({
 
       const newVisibleId = mostVisibleItem.item as number;
 
+      console.log("newVisibleId", newVisibleId);
+      console.log("[VM]", videoManager.getDebugInfo());
+
       setVisiblePostId((prevId) => {
         if (prevId !== newVisibleId) {
-          trackPostView.mutate(newVisibleId);
+          trackPostViewRef.current.mutate(newVisibleId);
         }
         return newVisibleId;
       });
     },
-    [isTabActive, trackPostView],
+    [isTabActive],
   );
 
   const onViewableItemsChangedRef = useRef(onViewableItemsChanged);
@@ -139,30 +160,23 @@ export function ProfileFeedView({
     [postIds],
   );
 
-  const effectiveVisiblePostId = isTabActive ? visiblePostId : null;
-  const effectiveScreenFocused = isTabActive && isScreenFocused;
-
   const renderItem = useCallback(
-    ({ item: id }: { item: number }) => {
+    ({ item: id, index }: { item: number; index: number }) => {
       const nextId = getNextPostId(id);
       return (
         <PostItem
           id={id}
+          feedIndex={index}
+          visibleFeedIndex={visibleFeedIndexRef.current}
           nextId={nextId}
-          visiblePostId={effectiveVisiblePostId}
-          isScreenFocused={effectiveScreenFocused}
+          visiblePostId={visiblePostIdRef.current}
+          isScreenFocused={isScreenFocusedRef.current}
           openComments={openComments}
           openShare={openShare}
         />
       );
     },
-    [
-      effectiveVisiblePostId,
-      effectiveScreenFocused,
-      openComments,
-      openShare,
-      getNextPostId,
-    ],
+    [openComments, openShare, getNextPostId],
   );
 
   const keyExtractor = useCallback((item: number) => item.toString(), []);

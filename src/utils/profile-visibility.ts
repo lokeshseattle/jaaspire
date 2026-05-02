@@ -45,7 +45,7 @@ export function canViewerSeeAnotherUsersPosts(args: {
   viewer: ProfileViewerFlags;
 }): boolean {
   const { profile, viewer } = args;
-  if (viewer.is_blocked === true) return false;
+  if (viewer?.is_blocked === true) return false;
   if (isProfilePublicInAppSense(profile)) return true;
   return viewerIsAcceptedFollower(viewer);
 }

@@ -1,4 +1,4 @@
-// Android: single feed-primary post is "focused" — only that row mounts full video + playback.
+// One feed index is "primary" (viewable) for video focus; neighbors within `PRELOAD_RADIUS` pre-buffer.
 import Post from "@/src/components/home/posts/post";
 import { usePostStore } from "@/src/features/post/post.store";
 import { memo, useCallback, useRef } from "react";
@@ -47,7 +47,8 @@ const PostItem = ({
 
   if (!post) return null;
 
-  const isFocused = visiblePostId === id && isScreenFocused;
+  const isPrimaryFeedPost = visiblePostId === id;
+  const isFocused = isPrimaryFeedPost && isScreenFocused;
   const inVideoWindow =
     visibleFeedIndex >= 0 &&
     Math.abs(feedIndex - visibleFeedIndex) <= PRELOAD_RADIUS;
@@ -56,6 +57,7 @@ const PostItem = ({
     <Post
       {...post}
       isFocused={isFocused}
+      isPrimaryFeedPost={isPrimaryFeedPost}
       inVideoWindow={inVideoWindow}
       onPressComments={stableOpenComments}
       onPressShare={stableOpenShare}

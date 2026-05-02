@@ -67,8 +67,7 @@ export function ProfileGridView({
 }: ProfileGridViewProps) {
   const { theme, mode } = useTheme();
   const systemScheme = useColorScheme();
-  const resolvedMode =
-    mode === "system" ? (systemScheme ?? "light") : mode;
+  const resolvedMode = mode === "system" ? (systemScheme ?? "light") : mode;
 
   const styles = useMemo(
     () => createStyles(theme, resolvedMode),
@@ -139,14 +138,27 @@ export function ProfileGridView({
   }, [postIds, posts]);
 
   const handleItemPress = useCallback(
-    (postId: number) => {
+    (item: GridItem) => {
+      const { postId, type, isLocked } = item;
+
+      // For video items, check if we can route to flick screen with userId
+      if (type === "video" && !isLocked) {
+        const post = posts[postId];
+        const userId = post?.user?.id;
+        if (userId != null) {
+          router.push(`/flick/${postId}?userId=${userId}`);
+          return;
+        }
+      }
+
+      // Fall back to existing routes for non-video or when userId is missing
       if (postRouteUsername) {
         router.push(`/user/${postRouteUsername}/posts/${postId}`);
       } else {
         router.push(`/post/${postId}`);
       }
     },
-    [postRouteUsername],
+    [postRouteUsername, posts],
   );
 
   function viewerCanViewPostMedia(
@@ -165,10 +177,7 @@ export function ProfileGridView({
       const isPending = item.status === "pending";
 
       return (
-        <Pressable
-          disabled={isPending}
-          onPress={() => handleItemPress(item.postId)}
-        >
+        <Pressable disabled={isPending} onPress={() => handleItemPress(item)}>
           <View style={styles.gridItemContainer}>
             <Image
               source={{ uri: item.image }}
@@ -222,7 +231,13 @@ export function ProfileGridView({
         </Pressable>
       );
     },
-    [styles, handleItemPress, lockedGradients, pendingScrim, theme.colors.primary],
+    [
+      styles,
+      handleItemPress,
+      lockedGradients,
+      pendingScrim,
+      theme.colors.primary,
+    ],
   );
 
   const keyExtractor = useCallback((item: GridItem) => `grid-${item.id}`, []);
@@ -230,10 +245,7 @@ export function ProfileGridView({
   const ListFooter = useMemo(
     () =>
       isFetchingNextPage ? (
-        <ActivityIndicator
-          style={styles.loader}
-          color={theme.colors.primary}
-        />
+        <ActivityIndicator style={styles.loader} color={theme.colors.primary} />
       ) : null,
     [isFetchingNextPage, styles.loader, theme.colors.primary],
   );

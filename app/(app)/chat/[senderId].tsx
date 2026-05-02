@@ -1,4 +1,5 @@
 import { PickedFile, useMediaPicker } from "@/hooks/use-media-picker";
+import PaymentConfirmSheet from "@/src/components/payment/PaymentConfirmSheet";
 import {
   appendGiftedMessages,
   GiftedChat,
@@ -18,6 +19,7 @@ import {
   uploadAndProcessMessageAttachment,
   uploadImageAttachment,
 } from "@/src/features/upload/upload.hooks";
+import { useUnlockMessage } from "@/src/features/wallet/wallet.hooks";
 import { useChatRealtime } from "@/src/lib/pusher";
 import type {
   MessengerMessage,
@@ -88,6 +90,9 @@ function toGiftedMessage(m: MessengerMessage): GiftedIMessage {
     },
     isSeen: m.isSeen,
     messengerAttachments: m.attachments?.length > 0 ? m.attachments : undefined,
+    price: m.price,
+    hasUserUnlockedMessage: m.hasUserUnlockedMessage,
+    originalMessageId: m.id,
   };
 }
 
@@ -290,7 +295,33 @@ function AttachmentPreview({
   isUploading: boolean;
   theme: AppTheme;
 }) {
+  const isVideo = attachment?.type.startsWith("video/") ?? false;
+  const [videoThumb, setVideoThumb] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!attachment || !isVideo) {
+      setVideoThumb(null);
+      return;
+    }
+    let cancelled = false;
+    import("expo-video-thumbnails")
+      .then(({ getThumbnailAsync }) =>
+        getThumbnailAsync(attachment.uri, { time: 0 }),
+      )
+      .then((result) => {
+        if (!cancelled) setVideoThumb(result.uri);
+      })
+      .catch(() => {
+        // fall back to showing a placeholder
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [attachment?.uri, isVideo]);
+
   if (!attachment) return null;
+
+  const previewUri = isVideo ? videoThumb : attachment.uri;
 
   return (
     <View
@@ -311,15 +342,51 @@ function AttachmentPreview({
         }}
       >
         {/* Preview */}
-        <Image
-          source={{ uri: attachment.uri }}
+        <View
           style={{
             width: 56,
             height: 56,
             borderRadius: 12,
+            overflow: "hidden",
           }}
-          contentFit="cover"
-        />
+        >
+          {previewUri ? (
+            <Image
+              source={{ uri: previewUri }}
+              style={{ width: 56, height: 56 }}
+              contentFit="cover"
+            />
+          ) : (
+            <View
+              style={{
+                width: 56,
+                height: 56,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: theme.colors.surface,
+              }}
+            >
+              <Ionicons
+                name="videocam"
+                size={26}
+                color={theme.colors.textSecondary}
+              />
+            </View>
+          )}
+          {isVideo && (
+            <View
+              style={{
+                ...StyleSheet.absoluteFillObject,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "rgba(0,0,0,0.25)",
+              }}
+              pointerEvents="none"
+            >
+              <Ionicons name="play" size={18} color="#fff" />
+            </View>
+          )}
+        </View>
 
         {/* Meta */}
         <View
@@ -394,6 +461,13 @@ export default function MessengerChatScreen() {
     string | null
   >(null);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+  const [isLockEnabled, setIsLockEnabled] = useState(false);
+  const [lockPrice, setLockPrice] = useState(0);
+  const [unlockTarget, setUnlockTarget] = useState<{
+    messageId: number;
+    price: number;
+    username: string;
+  } | null>(null);
 
   const { senderId, name, username, avatar, isAiBot } = useLocalSearchParams<{
     senderId?: string | string[];
@@ -424,6 +498,7 @@ export default function MessengerChatScreen() {
   const sendMutation = useSendMessengerMessage(peerId);
   const sendAiChatMutation = useSendAiChatMessage();
   const markMessageAsReadMutation = useMarkMessageAsRead();
+  const unlockMessageMutation = useUnlockMessage();
   const queryClient = useQueryClient();
   const { openMediaPicker } = useMediaPicker();
 
@@ -467,7 +542,68 @@ export default function MessengerChatScreen() {
   const removeAttachment = useCallback(() => {
     setAttachments(null);
     setProcessedAttachmentId(null);
+    setIsLockEnabled(false);
+    setLockPrice(0);
   }, []);
+
+  const handleToggleLock = useCallback(() => {
+    if (isLockEnabled) {
+      setIsLockEnabled(false);
+      setLockPrice(0);
+      return;
+    }
+    Alert.prompt(
+      "Set Price",
+      "Set a price to unlock this attachment:",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Lock",
+          onPress: (value: string | undefined) => {
+            const trimmed = (value ?? "").trim();
+            const parsed = parseInt(trimmed, 10);
+            if (
+              !Number.isFinite(parsed) ||
+              parsed <= 0 ||
+              parsed > 100 ||
+              String(parsed) !== trimmed
+            ) {
+              Alert.alert(
+                "Invalid price",
+                "Please enter a whole dollar amount from 1 to 100.",
+              );
+              return;
+            }
+            setLockPrice(parsed);
+            setIsLockEnabled(true);
+          },
+        },
+      ],
+      "plain-text",
+      "",
+      "number-pad",
+    );
+  }, [isLockEnabled]);
+
+  const handleUnlockConfirm = useCallback(async () => {
+    if (!unlockTarget) return;
+    try {
+      await unlockMessageMutation.mutateAsync({
+        messageId: unlockTarget.messageId,
+        peerId,
+      });
+      setUnlockTarget(null);
+    } catch (err: unknown) {
+      const msg =
+        err &&
+        typeof err === "object" &&
+        "message" in err &&
+        typeof (err as { message?: unknown }).message === "string"
+          ? (err as { message: string }).message
+          : "Could not unlock this message. Please try again.";
+      Alert.alert("Unlock failed", msg);
+    }
+  }, [unlockTarget, unlockMessageMutation, peerId]);
   useChatRealtime(peerId, myId);
 
   useEffect(() => {
@@ -749,11 +885,13 @@ export default function MessengerChatScreen() {
         } else {
           await sendMutation.mutateAsync({
             message: trimmed,
-            price: 0,
+            price: isLockEnabled ? lockPrice : 0,
             attachments: processedAttachmentId ? [processedAttachmentId] : [],
           });
           setAttachments(null);
           setProcessedAttachmentId(null);
+          setIsLockEnabled(false);
+          setLockPrice(0);
         }
         /** Let React Query subscribers apply cache before dropping the temp row (prevents flicker). */
         await new Promise<void>((resolve) => queueMicrotask(() => resolve()));
@@ -775,6 +913,8 @@ export default function MessengerChatScreen() {
       attachments,
       processedAttachmentId,
       isUploadingAttachment,
+      isLockEnabled,
+      lockPrice,
     ],
   );
 
@@ -802,6 +942,54 @@ export default function MessengerChatScreen() {
           isUploading={isUploadingAttachment}
           theme={theme}
         />
+        {attachments && !isAiConversation && (
+          <Pressable
+            onPress={handleToggleLock}
+            hitSlop={8}
+            style={[
+              styles.lockToggleBar,
+              {
+                backgroundColor: isLockEnabled
+                  ? theme.colors.primary + "18"
+                  : theme.colors.surface,
+                borderColor: isLockEnabled
+                  ? theme.colors.primary
+                  : theme.colors.border,
+              },
+            ]}
+          >
+            <Ionicons
+              name={isLockEnabled ? "lock-closed" : "lock-open-outline"}
+              size={16}
+              color={
+                isLockEnabled
+                  ? theme.colors.primary
+                  : theme.colors.textSecondary
+              }
+            />
+            <Text
+              style={[
+                styles.lockToggleLabel,
+                {
+                  color: isLockEnabled
+                    ? theme.colors.primary
+                    : theme.colors.textSecondary,
+                },
+              ]}
+            >
+              {isLockEnabled ? `Locked · $${lockPrice}` : "Lock attachment"}
+            </Text>
+            <Ionicons
+              name={isLockEnabled ? "close-circle" : "chevron-forward"}
+              size={14}
+              color={
+                isLockEnabled
+                  ? theme.colors.primary
+                  : theme.colors.textSecondary
+              }
+            />
+          </Pressable>
+        )}
         <InputToolbar<GiftedIMessage>
           {...toolbarProps}
           containerStyle={[
@@ -818,6 +1006,10 @@ export default function MessengerChatScreen() {
       theme,
       insets.bottom,
       styles,
+      isLockEnabled,
+      lockPrice,
+      handleToggleLock,
+      isAiConversation,
     ],
   );
 
@@ -866,7 +1058,10 @@ export default function MessengerChatScreen() {
    * Offset for keyboard-controller KAV (screen-top → view). Using header + full
    * safe-top often over-pads; header-only keeps the composer tight to the keyboard.
    */
-  const keyboardVerticalOffset = useMemo(() => Platform.OS === "ios" ? headerHeight : 0, [headerHeight]);
+  const keyboardVerticalOffset = useMemo(
+    () => (Platform.OS === "ios" ? headerHeight : 0),
+    [headerHeight],
+  );
 
   if (!Number.isFinite(peerId) || peerId <= 0) {
     return (
@@ -904,9 +1099,32 @@ export default function MessengerChatScreen() {
         user={currentUser}
         renderBubble={renderBubble}
         renderCustomView={(bubbleProps: BubbleProps<GiftedIMessage>) => {
-          const atts = bubbleProps.currentMessage?.messengerAttachments;
+          const msg = bubbleProps.currentMessage;
+          const atts = msg?.messengerAttachments;
           if (!atts?.length) return null;
-          return <MessageMediaStack attachments={atts} theme={theme} />;
+
+          const isMessageLocked =
+            (msg?.price ?? 0) > 0 && !msg?.hasUserUnlockedMessage;
+          const isSender = msg?.user._id === myId;
+
+          return (
+            <MessageMediaStack
+              attachments={atts}
+              theme={theme}
+              isLocked={isMessageLocked}
+              isSender={isSender}
+              price={msg?.price}
+              hasUserUnlockedMessage={msg?.hasUserUnlockedMessage ?? false}
+              onUnlockPress={() => {
+                if (!msg?.originalMessageId || isSender) return;
+                setUnlockTarget({
+                  messageId: msg.originalMessageId,
+                  price: msg.price ?? 0,
+                  username: peerDisplay.username || peerDisplay.name,
+                });
+              }}
+            />
+          );
         }}
         renderInputToolbar={renderInputToolbar}
         isUsernameVisible={false}
@@ -986,6 +1204,18 @@ export default function MessengerChatScreen() {
           </Send>
         )}
       />
+
+      {unlockTarget && (
+        <PaymentConfirmSheet
+          visible={Boolean(unlockTarget)}
+          onClose={() => setUnlockTarget(null)}
+          onConfirm={() => void handleUnlockConfirm()}
+          action="unlock_message"
+          username={unlockTarget.username}
+          amount={unlockTarget.price}
+          loading={unlockMessageMutation.isPending}
+        />
+      )}
     </View>
   );
 }
@@ -1025,6 +1255,23 @@ const createStyles = (theme: AppTheme) =>
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: theme.colors.border,
       backgroundColor: theme.colors.background,
+    },
+    lockToggleBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginHorizontal: 12,
+      marginTop: 4,
+      marginBottom: 2,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: theme.radius.md,
+      borderWidth: 1,
+    },
+    lockToggleLabel: {
+      flex: 1,
+      fontSize: 13,
+      fontWeight: "500",
     },
     inputToolbarInner: {
       borderTopWidth: 0,

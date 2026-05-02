@@ -1,4 +1,5 @@
 import { useAuth } from "@/src/features/auth/auth.hooks";
+import { initializeSessionSeed } from "@/src/lib/seed.store";
 import { asyncStoragePersister } from "@/src/lib/persister";
 import { ThemeProvider, useTheme } from "@/src/theme/ThemeProvider";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
@@ -19,6 +20,8 @@ import "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 SplashScreen.preventAutoHideAsync();
+
+initializeSessionSeed();
 
 // Inner layout that can use theme hooks
 function RootLayoutInner() {

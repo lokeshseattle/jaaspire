@@ -1,3 +1,4 @@
+import { queryClient } from "@/src/lib/query-client";
 import { apiClient } from "@/src/services/api/api.client";
 import {
   ExplorePost,
@@ -8,7 +9,9 @@ import {
   SearchResponse,
 } from "@/src/services/api/api.types";
 import { isLargeItem } from "@/src/utils/helpers";
+import type { InfiniteData } from "@tanstack/react-query";
 import { useInfiniteQuery } from "@tanstack/react-query";
+import { useLayoutEffect } from "react";
 import { usePostStore } from "./post.store";
 
 export const useGetExploreQuery = () => {
@@ -72,7 +75,7 @@ export const useGlobalSearchPostsQuery = (
   query: string,
   filter: GlobalSearchPostsFilter,
 ) => {
-  return useInfiniteQuery({
+  const infiniteQuery = useInfiniteQuery({
     queryKey: ["global-search", query, filter],
     queryFn: ({ pageParam }) =>
       apiClient
@@ -86,26 +89,38 @@ export const useGlobalSearchPostsQuery = (
       lastPage.data.pagination.has_more
         ? lastPage.data.pagination.current_page + 1
         : undefined,
-    select: (data) => {
-      const allPosts: Post[] = data.pages.flatMap((page) =>
-        page.data.filter === "people" ? [] : page.data.posts,
-      );
-      usePostStore.getState().upsertPosts(allPosts);
-      return {
-        ...data,
-        pages: data.pages.map((page) => {
-          if (page.data.filter === "people") {
-            return page;
-          }
-          return {
-            ...page,
-            data: {
-              ...page.data,
-              posts: page.data.posts.map((post) => post.id),
-            },
-          };
-        }),
-      };
-    },
+    select: (data) => ({
+      ...data,
+      pages: data.pages.map((page) => {
+        if (page.data.filter === "people") {
+          return page;
+        }
+        return {
+          ...page,
+          data: {
+            ...page.data,
+            posts: page.data.posts.map((post) => post.id),
+          },
+        };
+      }),
+    }),
   });
+
+  useLayoutEffect(() => {
+    if (query.length === 0) return;
+    const raw = queryClient.getQueryData<InfiniteData<SearchResponse>>([
+      "global-search",
+      query,
+      filter,
+    ]);
+    if (!raw?.pages?.length) return;
+    const allPosts: Post[] = raw.pages.flatMap((page) =>
+      page.data.filter === "people" ? [] : page.data.posts,
+    );
+    if (allPosts.length > 0) {
+      usePostStore.getState().upsertPosts(allPosts);
+    }
+  }, [query, filter, infiniteQuery.dataUpdatedAt]);
+
+  return infiniteQuery;
 };

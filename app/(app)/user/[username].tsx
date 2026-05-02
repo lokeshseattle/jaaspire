@@ -23,7 +23,14 @@ import {
   useLocalSearchParams,
   useNavigation,
 } from "expo-router";
-import { useCallback, useLayoutEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Alert,
   Modal,
@@ -65,13 +72,16 @@ const tabs: Record<TabKey, TabConfig> = {
 
 export default function UserProfileScreen() {
   const navigation = useNavigation();
-  const { username } = useLocalSearchParams<{ username: string }>();
+  const { username, tab, subscribed } = useLocalSearchParams<{
+    username: string;
+    tab?: string;
+    subscribed?: string;
+  }>();
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const headerHeight = useHeaderHeight();
   const { data: me } = useGetProfile();
 
-  console.log(981792891);
   const {
     data: profileByUsername,
     isLoading: profileByUsernameLoading,
@@ -87,12 +97,32 @@ export default function UserProfileScreen() {
 
   const [activeTab, setActiveTab] = useState<TabKey>("gallery");
   const [menuVisible, setMenuVisible] = useState(false);
+  const lastSubscriptionAlertRef = useRef<string | undefined>(undefined);
 
   const isOwnProfile = useMemo(() => {
     const u = me?.data?.username;
     if (!u || username == null) return false;
     return u.toLowerCase() === String(username).toLowerCase();
   }, [me?.data?.username, username]);
+
+  useLayoutEffect(() => {
+    if (!isOwnProfile) return;
+    router.replace("/(app)/(tabs)/profile");
+  }, [isOwnProfile]);
+
+  useEffect(() => {
+    if (tab === "premium") {
+      setActiveTab("premium");
+    }
+  }, [tab]);
+
+  useEffect(() => {
+    if (!subscribed || lastSubscriptionAlertRef.current === subscribed) return;
+    lastSubscriptionAlertRef.current = subscribed;
+    Alert.alert("Subscribed", `You subscribed to @${username}.`, [
+      { text: "OK" },
+    ]);
+  }, [subscribed, username]);
 
   const profileData = profileByUsername?.data;
 
@@ -119,7 +149,7 @@ export default function UserProfileScreen() {
       return (
         <ProfilePostsLockedPlaceholder
           username={String(username)}
-          followStatus={profileData.viewer.follow_status}
+          followStatus={profileData.viewer?.follow_status}
         />
       );
     }
@@ -209,8 +239,12 @@ export default function UserProfileScreen() {
   }, [username, closeMenu, unblockMutation]);
 
   useLayoutEffect(() => {
+    const title =
+      __DEV__ && profileData?.id != null
+        ? `${username} (id ${profileData.id})`
+        : username;
     navigation.setOptions({
-      headerTitle: username,
+      headerTitle: title,
       headerRight: isOwnProfile
         ? undefined
         : () => (
@@ -225,6 +259,7 @@ export default function UserProfileScreen() {
     });
   }, [
     username,
+    profileData?.id,
     navigation,
     isOwnProfile,
     openMenu,

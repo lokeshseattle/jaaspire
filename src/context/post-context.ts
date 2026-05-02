@@ -7,6 +7,7 @@ type PostContextType = {
   toggleLike: () => void;
   onPressComments: () => void;
   onPressShare: () => void;
+  onTip: () => void;
 };
 
 const PostContext = createContext<PostContextType | null>(null);

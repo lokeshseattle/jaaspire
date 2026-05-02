@@ -18,6 +18,12 @@ export type GiftedIMessage = {
   isSeen?: boolean;
   /** Media attached to the message (images, videos, etc.). */
   messengerAttachments?: MessengerMediaAttachment[];
+  /** Unlock price — > 0 means the attachment is locked. */
+  price?: number;
+  /** Whether the current viewer has already unlocked this message. */
+  hasUserUnlockedMessage?: boolean;
+  /** Original server message id — needed to call the unlock API. */
+  originalMessageId?: number;
 };
 
 /* Avoid resolving package `types` to .tsx sources (strict TS errors in the library). */

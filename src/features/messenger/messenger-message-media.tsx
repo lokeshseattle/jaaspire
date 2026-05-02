@@ -10,6 +10,7 @@ import {
   Pressable,
   StatusBar,
   StyleSheet,
+  Text,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -18,9 +19,7 @@ const SCREEN_WIDTH = Dimensions.get("window").width;
 const BUBBLE_MEDIA_MAX_W = Math.min(260, SCREEN_WIDTH - 80);
 const BUBBLE_MEDIA_MAX_H = 200;
 
-function firstNonEmpty(
-  ...vals: (string | null | undefined)[]
-): string | null {
+function firstNonEmpty(...vals: (string | null | undefined)[]): string | null {
   for (const v of vals) {
     if (typeof v !== "string") continue;
     const t = v.trim();
@@ -31,6 +30,10 @@ function firstNonEmpty(
 
 /** Best URL to show in the bubble (poster / thumb); avoids using raw video URL in Image when possible. */
 function getBubbleThumbnailUri(a: MessengerMediaAttachment): string | null {
+  if (a.path && a.attachmentType === "image") {
+    return a.path;
+  }
+
   const raw = a as MessengerMediaAttachment & { preview_url?: string | null };
   const fromApi = firstNonEmpty(
     a.thumbnail,
@@ -73,11 +76,7 @@ function FullScreenImageViewer({
       <SafeAreaView style={fullStyles.safeArea}>
         <StatusBar barStyle="light-content" />
         <View style={fullStyles.backdrop}>
-          <Pressable
-            onPress={onClose}
-            style={fullStyles.closeBtn}
-            hitSlop={12}
-          >
+          <Pressable onPress={onClose} style={fullStyles.closeBtn} hitSlop={12}>
             <Ionicons name="close" size={28} color="#fff" />
           </Pressable>
 
@@ -340,9 +339,19 @@ const thumbStyles = StyleSheet.create({
 export function MessageMediaStack({
   attachments,
   theme,
+  isLocked = false,
+  onUnlockPress,
+  price,
+  isSender = false,
+  hasUserUnlockedMessage = false,
 }: {
   attachments: MessengerMediaAttachment[];
   theme: AppTheme;
+  isLocked?: boolean;
+  onUnlockPress?: () => void;
+  price?: number;
+  isSender?: boolean;
+  hasUserUnlockedMessage?: boolean;
 }) {
   const mediaAttachments = useMemo(
     () =>
@@ -354,10 +363,64 @@ export function MessageMediaStack({
 
   if (mediaAttachments.length === 0) return null;
 
+  // Sender always sees the full media with a lock badge to indicate it's paid
+  if (isLocked && !isSender) {
+    const firstAttachment = mediaAttachments[0];
+    const thumbnailUri = getBubbleThumbnailUri(firstAttachment);
+    const formattedPrice =
+      price != null ? `$${price} to unlock` : "Tap to unlock";
+
+    return (
+      <View style={stackStyles.container}>
+        <Pressable onPress={onUnlockPress} style={lockedStyles.container}>
+          {thumbnailUri ? (
+            <Image
+              source={{ uri: thumbnailUri }}
+              style={lockedStyles.blurredThumb}
+              contentFit="cover"
+              transition={150}
+            />
+          ) : (
+            <View
+              style={[
+                lockedStyles.blurredThumb,
+                { backgroundColor: theme.colors.surface },
+              ]}
+            />
+          )}
+          <View style={lockedStyles.overlay}>
+            <View
+              style={[
+                lockedStyles.iconBadge,
+                { backgroundColor: "rgba(0,0,0,0.55)" },
+              ]}
+            >
+              <Ionicons name="lock-closed" size={28} color="#fff" />
+            </View>
+            <Text style={lockedStyles.priceLabel}>{formattedPrice}</Text>
+          </View>
+        </Pressable>
+      </View>
+    );
+  }
+
   return (
     <View style={stackStyles.container}>
       {mediaAttachments.map((a) => (
-        <AttachmentThumbnail key={a.id} attachment={a} theme={theme} />
+        <View key={a.id} style={stackStyles.attachmentWrapper}>
+          <AttachmentThumbnail attachment={a} theme={theme} />
+          {isLocked && isSender && (
+            <View style={lockedStyles.senderBadge}>
+              <Ionicons
+                name={
+                  hasUserUnlockedMessage ? "lock-open-outline" : "lock-closed"
+                }
+                size={12}
+                color="#fff"
+              />
+            </View>
+          )}
+        </View>
       ))}
     </View>
   );
@@ -366,5 +429,54 @@ export function MessageMediaStack({
 const stackStyles = StyleSheet.create({
   container: {
     paddingBottom: 2,
+  },
+  attachmentWrapper: {
+    position: "relative",
+  },
+});
+
+const lockedStyles = StyleSheet.create({
+  container: {
+    maxWidth: BUBBLE_MEDIA_MAX_W,
+    maxHeight: BUBBLE_MEDIA_MAX_H,
+    borderRadius: 12,
+    overflow: "hidden",
+    margin: 4,
+  },
+  blurredThumb: {
+    width: BUBBLE_MEDIA_MAX_W,
+    height: BUBBLE_MEDIA_MAX_H,
+    opacity: 0.35,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.45)",
+    gap: 8,
+  },
+  iconBadge: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  priceLabel: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "600",
+    letterSpacing: 0.2,
+  },
+  senderBadge: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

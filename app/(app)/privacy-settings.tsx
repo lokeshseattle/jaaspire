@@ -3,6 +3,7 @@ import {
   useGetProfile,
   useSetEnable2faFlagMutation,
   useSetOpenProfileFlagMutation,
+  useSetSettingsRatesMutation,
   useUpdateProfile,
 } from "@/src/features/profile/profile.hooks";
 import { AppTheme } from "@/src/theme";
@@ -57,6 +58,7 @@ export default function PrivacySettingsScreen() {
   const { data, isLoading } = useGetProfile();
   const profile = data?.data;
   const updateProfile = useUpdateProfile();
+  const setSettingsRates = useSetSettingsRatesMutation();
   const openProfileFlag = useSetOpenProfileFlagMutation();
   const enable2faFlag = useSetEnable2faFlagMutation();
 
@@ -139,9 +141,13 @@ export default function PrivacySettingsScreen() {
         await enable2faFlag.mutateAsync(email2fa);
       }
       if (priceDirty) {
-        await updateProfile.mutateAsync(
-          price != null ? { price_1_month: price } : {},
-        );
+        if (price != null) {
+          await setSettingsRates.mutateAsync({
+            profile_access_price: price,
+          });
+        } else {
+          await updateProfile.mutateAsync({});
+        }
       }
 
       setBaseline({
@@ -161,6 +167,7 @@ export default function PrivacySettingsScreen() {
     email2fa,
     openProfileFlag,
     enable2faFlag,
+    setSettingsRates,
     updateProfile,
     trigger,
   ]);
@@ -176,6 +183,7 @@ export default function PrivacySettingsScreen() {
   const savePending =
     openProfileFlag.isPending ||
     enable2faFlag.isPending ||
+    setSettingsRates.isPending ||
     updateProfile.isPending;
 
   const saveDisabled =

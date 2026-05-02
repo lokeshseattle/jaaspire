@@ -2,37 +2,38 @@
 import { useCommentsSheet } from "@/hooks/use-comment-sheet";
 import { useShareSheet } from "@/hooks/use-share-sheet";
 import { CommentsBottomSheet } from "@/src/components/comments/CommentsBottomSheet";
-import { SharePostBottomSheet } from "@/src/components/share/SharePostBottomSheet";
 import PostItem from "@/src/components/home/posts/PostWrapper";
 import Stories from "@/src/components/home/story";
+import { SharePostBottomSheet } from "@/src/components/share/SharePostBottomSheet";
+import { useNotificationBadgeStore } from "@/src/features/notifications/notification-badge.store";
 import {
-    useGetFeedQuery,
-    useTrackPostView,
+  useGetFeedQuery,
+  useTrackPostView,
 } from "@/src/features/post/post.hooks";
 import { useUnreadMessengerCount } from "@/src/features/profile/notification.hooks";
 import { useGetAllStories } from "@/src/features/story/story.hooks";
 import { useUnreadMessengerBadgeRealtime } from "@/src/lib/pusher";
-import { videoManager } from "@/src/lib/video-manager.old";
+import { videoManager } from "@/src/lib/video-manager";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { router, useFocusEffect, useNavigation } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    FlatList,
-    NativeScrollEvent,
-    NativeSyntheticEvent,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
-    ViewabilityConfig,
-    ViewToken,
+  ActivityIndicator,
+  FlatList,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  ViewabilityConfig,
+  ViewToken,
 } from "react-native";
 import Animated, {
-    useAnimatedStyle,
-    useSharedValue,
+  useAnimatedStyle,
+  useSharedValue,
 } from "react-native-reanimated";
 
 const HEADER_HEIGHT = 56;
@@ -132,8 +133,13 @@ export default function Home() {
 
   useFocusEffect(
     useCallback(() => {
+      videoManager.setPinnedFeedPostId(null);
       setIsScreenFocused(true);
       return () => {
+        const visibleId = visiblePostIdRef.current;
+        if (typeof visibleId === "number") {
+          videoManager.setPinnedFeedPostId(visibleId);
+        }
         setIsScreenFocused(false);
         videoManager.pauseAll();
       };
@@ -146,6 +152,7 @@ export default function Home() {
 
   useUnreadMessengerBadgeRealtime();
   const unreadMessageCount = useUnreadMessengerCount();
+  const notificationUnread = useNotificationBadgeStore((s) => s.unreadCount);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener("tabPress" as any, () => {
@@ -246,29 +253,52 @@ export default function Home() {
 
   const HeaderRight = useMemo(
     () => (
-      <Pressable
-        onPress={() => router.push("/messages")}
-        style={({ pressed }) => [
-          styles.headerIconButton,
-          pressed && styles.headerIconButtonPressed,
-        ]}
-        hitSlop={12}
-      >
-        <Ionicons
-          name="chatbubble-outline"
-          size={24}
-          color={theme.colors.icon}
-        />
-        {unreadMessageCount > 0 && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText} numberOfLines={1}>
-              {unreadMessageCount > 99 ? "99+" : unreadMessageCount}
-            </Text>
-          </View>
-        )}
-      </Pressable>
+      <View style={styles.headerRightRow}>
+        <Pressable
+          onPress={() => router.push("/notifications")}
+          style={({ pressed }) => [
+            styles.headerIconButton,
+            pressed && styles.headerIconButtonPressed,
+          ]}
+          hitSlop={12}
+        >
+          <Ionicons
+            name="notifications-outline"
+            size={24}
+            color={theme.colors.icon}
+          />
+          {notificationUnread > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText} numberOfLines={1}>
+                {notificationUnread > 99 ? "99+" : notificationUnread}
+              </Text>
+            </View>
+          )}
+        </Pressable>
+        <Pressable
+          onPress={() => router.push("/messages")}
+          style={({ pressed }) => [
+            styles.headerIconButton,
+            pressed && styles.headerIconButtonPressed,
+          ]}
+          hitSlop={12}
+        >
+          <Ionicons
+            name="chatbubble-outline"
+            size={24}
+            color={theme.colors.icon}
+          />
+          {unreadMessageCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText} numberOfLines={1}>
+                {unreadMessageCount > 99 ? "99+" : unreadMessageCount}
+              </Text>
+            </View>
+          )}
+        </Pressable>
+      </View>
     ),
-    [theme.colors.icon, unreadMessageCount],
+    [theme.colors.icon, notificationUnread, unreadMessageCount],
   );
 
   return (
@@ -340,8 +370,13 @@ const createStyles = (theme: AppTheme) =>
       borderBottomColor: theme.colors.border,
     },
     headerSpacer: {
-      width: 24,
+      width: 88,
       height: 24,
+    },
+    headerRightRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
     },
     listContent: {
       paddingTop: HEADER_HEIGHT,

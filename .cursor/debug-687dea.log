@@ -1,0 +1,6 @@
+{"sessionId":"687dea","hypothesisId":"H4","location":"use-video-player.ts:useEffect.cleanup","message":"managed_player_unmount_pause","data":{"postId":3036},"timestamp":1776906592512}
+{"sessionId":"687dea","hypothesisId":"H1","location":"video-manager.ts:pause","message":"videoManager.pause","data":{"postId":3036},"timestamp":1776906592512}
+{"sessionId":"687dea","hypothesisId":"H4","location":"use-video-player.ts:useEffect.cleanup","message":"managed_player_unmount_pause","data":{"postId":3030},"timestamp":1776906592515}
+{"sessionId":"687dea","hypothesisId":"H1","location":"video-manager.ts:pause","message":"videoManager.pause","data":{"postId":3030},"timestamp":1776906592515}
+{"sessionId":"687dea","hypothesisId":"H2","location":"index.tsx:useFocusEffect.cleanup","message":"home_tab_blur_cleanup_before_pauseAll","data":{"pinnedVisiblePostId":3036},"timestamp":1776906592519}
+{"sessionId":"687dea","hypothesisId":"H1","location":"video-manager.ts:pauseAll","message":"videoManager.pauseAll","data":{},"timestamp":1776906592519}

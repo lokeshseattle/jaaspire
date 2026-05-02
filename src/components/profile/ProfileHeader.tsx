@@ -1,13 +1,35 @@
 import { ThemedText as Text } from "@/src/components/themed-text";
+import { WEB_ORIGIN } from "@/src/constants/app-env";
 import { useGetProfile } from "@/src/features/profile/profile.hooks";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { Feather } from "@expo/vector-icons";
+import * as Linking from "expo-linking";
 import { Link, router } from "expo-router";
-import React, { useState } from "react";
-import { Image, Pressable, StyleSheet, View } from "react-native";
+import React, { useCallback, useState } from "react";
+import {
+  Image,
+  Platform,
+  Pressable,
+  Share,
+  StyleSheet,
+  View,
+} from "react-native";
 
-const ProfileHeader = ({ username, isOwnProfile }: { username: string, isOwnProfile?: boolean }) => {
+function profileWebUrl(username: string): string {
+  const base = WEB_ORIGIN.replace(/\/+$/, "");
+  return `${base}/${encodeURIComponent(username)}`;
+}
+
+const ProfileHeader = ({
+  username,
+  isOwnProfile,
+  onShareProfile,
+}: {
+  username: string;
+  isOwnProfile?: boolean;
+  onShareProfile?: () => void;
+}) => {
   const { theme } = useTheme();
   const styles = createStyles(theme);
 
@@ -16,26 +38,46 @@ const ProfileHeader = ({ username, isOwnProfile }: { username: string, isOwnProf
 
   // console.log(profile)
 
-  const [activeTab, setActiveTab] = useState<"gallery" | "home_feed" | "premium">(
-    "gallery",
-  );
+  const [activeTab, setActiveTab] = useState<
+    "gallery" | "home_feed" | "premium"
+  >("gallery");
 
   const navigateToFollowersFollowing = (type: "followers" | "following") => {
     router.push({
       pathname: "/(app)/followers-following",
       params: {
         type,
-        username
+        username,
       },
     });
   };
+
+  const handleShareProfile = useCallback(async () => {
+    const webUrl = profileWebUrl(username);
+    const appUrl = Linking.createURL(`/user/${username}`);
+    const message = `Check out @${username} on Jaaspire`;
+    try {
+      await Share.share(
+        Platform.OS === "android"
+          ? { message: `${message}\n${webUrl}\n${appUrl}` }
+          : { message: `${message}\n${appUrl}`, url: webUrl },
+      );
+    } catch {
+      /* dismissed */
+    }
+  }, [username]);
 
   if (profile)
     return (
       <>
         {/* HEADER */}
         <View style={styles.header}>
-          <Text style={styles.username}>{profile?.username}</Text>
+          <View style={styles.usernameRow}>
+            <Text style={styles.username}>{profile?.username}</Text>
+            {__DEV__ && profile?.id != null && (
+              <Text style={styles.devUserId}> · id {profile.id}</Text>
+            )}
+          </View>
           <View style={styles.headerIcons}>
             {/* <Pressable onPress={forceLogout}>
               <Text>Logout</Text>
@@ -68,14 +110,20 @@ const ProfileHeader = ({ username, isOwnProfile }: { username: string, isOwnProf
             </View>
 
             {/* <Link href="/(app)/followers-following?type=followers" asChild> */}
-            <Pressable onPress={() => navigateToFollowersFollowing("followers")} style={styles.stat}>
+            <Pressable
+              onPress={() => navigateToFollowersFollowing("followers")}
+              style={styles.stat}
+            >
               <Text style={styles.statNumber}>{profile.counts.followers}</Text>
               <Text style={styles.statLabel}>{`Followers`}</Text>
             </Pressable>
             {/* </Link> */}
 
             {/* <Link href="/(app)/followers-following?type=following" asChild> */}
-            <Pressable onPress={() => navigateToFollowersFollowing("following")} style={styles.stat}>
+            <Pressable
+              onPress={() => navigateToFollowersFollowing("following")}
+              style={styles.stat}
+            >
               <Text style={styles.statNumber}>{profile.counts.following}</Text>
               <Text style={styles.statLabel}>Following</Text>
             </Pressable>
@@ -97,10 +145,7 @@ const ProfileHeader = ({ username, isOwnProfile }: { username: string, isOwnProf
           >
             <Text style={styles.editText}>Edit Profile</Text>
           </Pressable>
-          <Pressable
-            onPress={() => { }}
-            style={styles.button}
-          >
+          <Pressable onPress={handleShareProfile} style={styles.button}>
             <Text style={styles.editText}>Share Profile</Text>
           </Pressable>
         </View>
@@ -129,11 +174,11 @@ const ProfileHeader = ({ username, isOwnProfile }: { username: string, isOwnProf
             />
           </Pressable>
 
-          <Pressable style={styles.tab} onPress={() => setActiveTab("reels")}>
+          <Pressable style={styles.tab} onPress={() => setActiveTab("flicks")}>
             <Ionicons
               name="play-outline"
               size={22}
-              color={activeTab === "reels" ? "black" : "gray"}
+              color={activeTab === "flicks" ? "black" : "gray"}
             />
           </Pressable>
 
@@ -167,10 +212,23 @@ const createStyles = (theme: AppTheme) =>
       alignItems: "center",
     },
 
+    usernameRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      alignItems: "baseline",
+      flex: 1,
+    },
+
     username: {
       fontSize: 18,
       fontWeight: "600",
       color: theme.colors.textPrimary,
+    },
+
+    devUserId: {
+      fontSize: 13,
+      fontWeight: "500",
+      color: theme.colors.textSecondary,
     },
 
     headerIcons: {

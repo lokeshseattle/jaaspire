@@ -102,7 +102,12 @@ const Comments = ({ theme }: { theme: AppTheme }) => {
 };
 
 const Tip = ({ theme }: { theme: AppTheme }) => {
-  return <Octicons name="gift" size={24} color={theme.colors.icon} />;
+  const { onTip } = usePost();
+  return (
+    <Pressable onPress={onTip}>
+      <Octicons name="gift" size={24} color={theme.colors.icon} />
+    </Pressable>
+  );
 };
 
 const ShareButton = ({ theme }: { theme: AppTheme }) => {

@@ -4,6 +4,7 @@ import {
   BookmarkPostResponse,
   BookmarksResponse,
   CreateReportPayload,
+  DeletePostResponse,
   FeedResponse,
   PinPostResponse,
   PossibleErrorResponse,
@@ -11,6 +12,7 @@ import {
   ReportTypesResponse,
   SinglePostResponse,
 } from "@/src/services/api/api.types";
+import type { InfiniteData } from "@tanstack/react-query";
 import {
   useInfiniteQuery,
   useMutation,
@@ -18,10 +20,68 @@ import {
   useQuery,
   UseQueryResult,
 } from "@tanstack/react-query";
+import type { AxiosResponse } from "axios";
+import { useLayoutEffect } from "react";
 import { usePostStore } from "./post.store";
 
+/** Feed-like infinite queries whose `pages[].data.posts` should drop a deleted post id. */
+const INFINITE_POST_LIST_ROOT_KEYS = new Set([
+  "feed",
+  "user_feed",
+  "bookmarks",
+  "flicks",
+  "explore",
+  "global-search",
+]);
+
+function filterPostsArrayRemovingId(
+  posts: unknown[],
+  postId: number,
+): unknown[] {
+  return posts.filter((item) => {
+    if (typeof item === "number") return item !== postId;
+    if (item && typeof item === "object" && "id" in item) {
+      return (item as { id: number }).id !== postId;
+    }
+    return true;
+  });
+}
+
+function stripDeletedPostFromInfiniteCaches(postId: number) {
+  queryClient.setQueriesData(
+    {
+      predicate: (query) => {
+        const root = query.queryKey[0];
+        return (
+          typeof root === "string" && INFINITE_POST_LIST_ROOT_KEYS.has(root)
+        );
+      },
+    },
+    (oldData: unknown) => {
+      if (!oldData || typeof oldData !== "object" || !("pages" in oldData))
+        return oldData;
+      const infinite = oldData as InfiniteData<{ data: { posts?: unknown[] } }>;
+      if (!Array.isArray(infinite.pages)) return oldData;
+      return {
+        ...infinite,
+        pages: infinite.pages.map((page) => {
+          const posts = page?.data?.posts;
+          if (!Array.isArray(posts)) return page;
+          return {
+            ...page,
+            data: {
+              ...page.data,
+              posts: filterPostsArrayRemovingId(posts, postId),
+            },
+          };
+        }),
+      };
+    },
+  );
+}
+
 export const useGetFeedQuery = () => {
-  return useInfiniteQuery({
+  const query = useInfiniteQuery({
     queryKey: ["feed"],
     queryFn: ({ pageParam }) =>
       apiClient
@@ -36,27 +96,26 @@ export const useGetFeedQuery = () => {
 
     initialPageParam: 1,
 
-    select: (data) => {
-      const allPosts = data.pages.flatMap(
-        (page) => page.data.posts, // adjust if your structure differs
-      );
-
-      // Normalize into Zustand
-      usePostStore.getState().upsertPosts(allPosts);
-
-      //Return only IDs instead of full post objects
-      return {
-        ...data,
-        pages: data.pages.map((page) => ({
-          ...page,
-          data: {
-            ...page.data,
-            posts: page.data.posts.map((post) => post.id),
-          },
-        })),
-      };
-    },
+    select: (data) => ({
+      ...data,
+      pages: data.pages.map((page) => ({
+        ...page,
+        data: {
+          ...page.data,
+          posts: page.data.posts.map((post) => post.id),
+        },
+      })),
+    }),
   });
+
+  useLayoutEffect(() => {
+    const raw = queryClient.getQueryData<InfiniteData<FeedResponse>>(["feed"]);
+    if (!raw?.pages?.length) return;
+    const allPosts = raw.pages.flatMap((page) => page.data.posts);
+    usePostStore.getState().upsertPosts(allPosts);
+  }, [query.dataUpdatedAt]);
+
+  return query;
 };
 
 export const useGetUserFeedQuery = (
@@ -66,7 +125,7 @@ export const useGetUserFeedQuery = (
 ) => {
   const enabledByOption = options?.enabled ?? true;
 
-  return useInfiniteQuery({
+  const query = useInfiniteQuery({
     queryKey: ["user_feed", username, type],
     queryFn: ({ pageParam }) =>
       apiClient
@@ -82,27 +141,31 @@ export const useGetUserFeedQuery = (
     initialPageParam: 1,
     enabled: enabledByOption && !!username,
 
-    select: (data) => {
-      const allPosts = data.pages.flatMap(
-        (page) => page.data.posts, // adjust if your structure differs
-      );
-
-      // Normalize into Zustand
-      usePostStore.getState().upsertPosts(allPosts);
-
-      //Return only IDs instead of full post objects
-      return {
-        ...data,
-        pages: data.pages.map((page) => ({
-          ...page,
-          data: {
-            ...page.data,
-            posts: page.data.posts.map((post) => post.id),
-          },
-        })),
-      };
-    },
+    select: (data) => ({
+      ...data,
+      pages: data.pages.map((page) => ({
+        ...page,
+        data: {
+          ...page.data,
+          posts: page.data.posts.map((post) => post.id),
+        },
+      })),
+    }),
   });
+
+  useLayoutEffect(() => {
+    if (!username) return;
+    const raw = queryClient.getQueryData<InfiniteData<FeedResponse>>([
+      "user_feed",
+      username,
+      type,
+    ]);
+    if (!raw?.pages?.length) return;
+    const allPosts = raw.pages.flatMap((page) => page.data.posts);
+    usePostStore.getState().upsertPosts(allPosts);
+  }, [query.dataUpdatedAt, username, type]);
+
+  return query;
 };
 
 // export const useToggleLikeMutation = () => {
@@ -287,7 +350,7 @@ export const useGetSinglePost = (
   postId: string,
   mode: "explore" | "user" = "explore",
 ) => {
-  return useInfiniteQuery({
+  const query = useInfiniteQuery({
     queryKey: ["single-post", postId, mode],
     queryFn: ({ pageParam }) =>
       apiClient.get<SinglePostResponse>(`/posts/${postId}`, {
@@ -300,8 +363,6 @@ export const useGetSinglePost = (
     },
 
     select: (data) => {
-      const store = usePostStore.getState();
-
       const allRecommended: number[] = [];
       let mainPostId: number | null = null;
 
@@ -309,13 +370,8 @@ export const useGetSinglePost = (
         const mainPost = page.data.data.post;
         const recommended = page.data.data.recommended.posts;
 
-        // 1️⃣ Normalize everything
-        store.upsertPosts([mainPost, ...recommended]);
-
-        // 2️⃣ Capture main post ID (same every page)
         mainPostId = mainPost.id;
 
-        // 3️⃣ Collect recommended IDs
         allRecommended.push(...recommended.map((p) => p.id));
       }
 
@@ -326,6 +382,21 @@ export const useGetSinglePost = (
       };
     },
   });
+
+  useLayoutEffect(() => {
+    const raw = queryClient.getQueryData<
+      InfiniteData<AxiosResponse<SinglePostResponse>>
+    >(["single-post", postId, mode]);
+    if (!raw?.pages?.length) return;
+
+    for (const page of raw.pages) {
+      const mainPost = page.data.data.post;
+      const recommended = page.data.data.recommended.posts;
+      usePostStore.getState().upsertPosts([mainPost, ...recommended]);
+    }
+  }, [postId, mode, query.dataUpdatedAt]);
+
+  return query;
 };
 
 export const useBookmarkPostMutation = (): UseMutationResult<
@@ -372,6 +443,29 @@ export const useBookmarkPostMutation = (): UseMutationResult<
 
       // Rollback
       usePostStore.getState().upsertPosts([context.previousPost]);
+    },
+  });
+};
+
+export const useDeletePostMutation = (): UseMutationResult<
+  DeletePostResponse,
+  PossibleErrorResponse,
+  number
+> => {
+  return useMutation({
+    mutationFn: (postId: number) =>
+      apiClient
+        .delete<DeletePostResponse>(`/posts/${postId}`)
+        .then((d) => d.data),
+    onSuccess: (_data, postId) => {
+      usePostStore.getState().removePost(postId);
+      stripDeletedPostFromInfiniteCaches(postId);
+      queryClient.removeQueries({
+        predicate: (q) =>
+          q.queryKey[0] === "single-post" && q.queryKey[1] === postId,
+      });
+      queryClient.removeQueries({ queryKey: ["post-comments", postId] });
+      // queryClient.invalidateQueries({ queryKey: ["profile"] });
     },
   });
 };
@@ -429,8 +523,8 @@ export const usePinPostMutation = (): UseMutationResult<
   });
 };
 
-export const useGetBookmarksQuery = (type?: "all" | "image" | "video") => {
-  return useInfiniteQuery({
+export const useGetBookmarksQuery = (type?: "all" | "photos" | "videos") => {
+  const query = useInfiniteQuery({
     queryKey: ["bookmarks", type],
     queryFn: ({ pageParam }) =>
       apiClient
@@ -445,27 +539,29 @@ export const useGetBookmarksQuery = (type?: "all" | "image" | "video") => {
 
     initialPageParam: 1,
 
-    select: (data) => {
-      const allPosts = data.pages.flatMap(
-        (page) => page.data.posts, // adjust if your structure differs
-      );
-
-      // Normalize into Zustand
-      usePostStore.getState().upsertPosts(allPosts);
-
-      //Return only IDs instead of full post objects
-      return {
-        ...data,
-        pages: data.pages.map((page) => ({
-          ...page,
-          data: {
-            ...page.data,
-            posts: page.data.posts.map((post) => post.id),
-          },
-        })),
-      };
-    },
+    select: (data) => ({
+      ...data,
+      pages: data.pages.map((page) => ({
+        ...page,
+        data: {
+          ...page.data,
+          posts: page.data.posts.map((post) => post.id),
+        },
+      })),
+    }),
   });
+
+  useLayoutEffect(() => {
+    const raw = queryClient.getQueryData<InfiniteData<BookmarksResponse>>([
+      "bookmarks",
+      type,
+    ]);
+    if (!raw?.pages?.length) return;
+    const allPosts = raw.pages.flatMap((page) => page.data.posts);
+    usePostStore.getState().upsertPosts(allPosts);
+  }, [query.dataUpdatedAt, type]);
+
+  return query;
 };
 
 export const useGetReport = (): UseQueryResult<

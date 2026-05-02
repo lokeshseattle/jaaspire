@@ -5,26 +5,46 @@ type PlayerEntry = {
   postId: number;
   lastUsed: number;
   isCleared: boolean;
+  url: string;
 };
 
 class VideoPlayerManager {
   private players = new Map<number, PlayerEntry>();
   private mountedPlayers = new Set<number>();
   /**
-   * Android hardware decoders are limited (typically 3-4 on real devices,
-   * sometimes 2 on emulators). A VideoPlayer consumes a decoder slot only
-   * when connected to a VideoView, BUT expo-video may also hold a codec
-   * during buffering.  Keep the pool small to avoid codec exhaustion.
+   * Hard cap (decoder budget). Flicks competes for the same pool; the visible
+   * Home post is pinned on tab blur so LRU eviction does not recycle it first.
    */
   private maxPlayers = 3;
+  /** Last primary Home feed post — not eligible for eviction while user is away (e.g. on Flicks). */
+  private pinnedFeedPostId: number | null = null;
   private currentlyPlaying: number | null = null;
   private globalMuted: boolean = true;
   private muteSubscribers = new Set<(muted: boolean) => void>();
+
+  /** Call when Home blurs: protect this post's player from eviction. Clear on Home focus (`null`). */
+  setPinnedFeedPostId(postId: number | null): void {
+    this.pinnedFeedPostId = postId;
+  }
 
   getOrCreatePlayer(postId: number, url: string): VideoPlayer {
     const existing = this.players.get(postId);
     if (existing) {
       existing.lastUsed = Date.now();
+
+      if (existing.url !== url) {
+        try {
+          existing.player.replace(url);
+          existing.url = url;
+          existing.isCleared = false;
+          existing.player.loop = true;
+          existing.player.muted = this.globalMuted;
+        } catch (e) {
+          console.warn(`[VM] Failed to replace source ${postId}:`, e);
+          this.players.delete(postId);
+          return this.getOrCreatePlayer(postId, url);
+        }
+      }
 
       if (existing.isCleared) {
         try {
@@ -40,8 +60,8 @@ class VideoPlayerManager {
       return existing.player;
     }
 
-    if (this.players.size >= this.maxPlayers) {
-      this.evictOne(postId);
+    while (this.players.size >= this.maxPlayers) {
+      if (!this.evictOne(postId)) break;
     }
 
     const player = createVideoPlayer(url);
@@ -53,19 +73,22 @@ class VideoPlayerManager {
       postId,
       lastUsed: Date.now(),
       isCleared: false,
+      url,
     });
 
     return player;
   }
 
   preload(postId: number, url: string): void {
-    if (this.players.has(postId)) {
-      const entry = this.players.get(postId)!;
-      if (entry.isCleared) {
+    const entry = this.players.get(postId);
+
+    if (entry) {
+      if (entry.isCleared || entry.url !== url) {
         this.getOrCreatePlayer(postId, url);
       }
       return;
     }
+
     this.getOrCreatePlayer(postId, url);
   }
 
@@ -150,7 +173,7 @@ class VideoPlayerManager {
     return undefined;
   }
 
-  /** Seek existing player to start (e.g. when returning to reels tab). */
+  /** Seek existing player to start (e.g. when returning to flicks tab). */
   seekToStart(postId: number): void {
     const entry = this.players.get(postId);
     if (!entry || entry.isCleared) return;
@@ -191,6 +214,7 @@ class VideoPlayerManager {
     this.players.forEach((entry, id) => {
       if (id === this.currentlyPlaying) return;
       if (id === reservePostId) return;
+      if (this.pinnedFeedPostId != null && id === this.pinnedFeedPostId) return;
       if (this.mountedPlayers.has(id)) return;
       if (entry.isCleared) return;
 
@@ -229,22 +253,32 @@ class VideoPlayerManager {
   }
 
   releaseAll(): void {
+    const pin = this.pinnedFeedPostId;
+    const pinnedEntry = pin != null ? this.players.get(pin) : undefined;
+
     this.players.forEach(({ player }, id) => {
+      if (pin != null && id === pin) return;
       try {
         player.release();
       } catch (e) {
         console.warn(`[VM] Failed to release ${id}:`, e);
       }
     });
+
     this.players.clear();
     this.mountedPlayers.clear();
     this.currentlyPlaying = null;
+
+    if (pinnedEntry != null && pin != null) {
+      this.players.set(pin, pinnedEntry);
+    }
   }
 
   getDebugInfo(): object {
     return {
       totalPlayers: this.players.size,
       mountedPlayers: this.mountedPlayers.size,
+      pinnedFeedPostId: this.pinnedFeedPostId,
       currentlyPlaying: this.currentlyPlaying,
       players: Array.from(this.players.entries()).map(([id, entry]) => ({
         postId: id,

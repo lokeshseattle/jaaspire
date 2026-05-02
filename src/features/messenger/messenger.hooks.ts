@@ -149,6 +149,7 @@ export function messengerPayloadToMessage(
 ): MessengerMessage {
   const id = Number(payload.id);
   return {
+    hasUserUnlockedMessage: Boolean(payload.hasUserUnlockedMessage),
     id,
     sender_id: payload.sender_id,
     receiver_id: payload.receiver_id,

@@ -1,7 +1,9 @@
 // app/(tabs)/profile.tsx
+import { useShareProfileSheet } from "@/hooks/use-share-profile-sheet";
 import { ProfileFeedView } from "@/src/components/profile/ProfileFeedView";
 import { ProfileGridView } from "@/src/components/profile/ProfileGridView";
 import ProfileHeader from "@/src/components/profile/ProfileHeader";
+import { ShareProfileBottomSheet } from "@/src/components/share/ShareProfileBottomSheet";
 import { AnimatedTabBar } from "@/src/components/ui/animated-tabbar";
 import { useGetUserFeedQuery } from "@/src/features/post/post.hooks";
 import { useGetProfile } from "@/src/features/profile/profile.hooks";
@@ -48,12 +50,23 @@ export default function ProfileScreen() {
   const [activeTab, setActiveTab] = useState<TabKey>("gallery");
 
   const {
+    bottomSheetRef: shareProfileSheetRef,
+    selectedUsername: selectedShareUsername,
+    openShareProfile,
+    onDismiss: onShareProfileDismiss,
+  } = useShareProfileSheet();
+
+  const {
     data: profileData,
     refetch: refetchProfile,
     isRefetching: isRefetchingProfile,
   } = useGetProfile();
 
   const username = profileData?.data.username;
+
+  const handleShareProfile = useCallback(() => {
+    if (username) openShareProfile(username);
+  }, [username, openShareProfile]);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -102,7 +115,13 @@ export default function ProfileScreen() {
   const ListHeader = useMemo(
     () => (
       <>
-        {username && <ProfileHeader username={username} isOwnProfile={true} />}
+        {username && (
+          <ProfileHeader
+            username={username}
+            isOwnProfile={true}
+            onShareProfile={handleShareProfile}
+          />
+        )}
         <View style={styles.tabContainer}>
           <AnimatedTabBar
             tabs={tabs}
@@ -151,7 +170,16 @@ export default function ProfileScreen() {
     }
   };
 
-  return <View style={styles.container}>{renderContent()}</View>;
+  return (
+    <View style={styles.container}>
+      {renderContent()}
+      <ShareProfileBottomSheet
+        bottomSheetRef={shareProfileSheetRef}
+        username={selectedShareUsername}
+        onDismiss={onShareProfileDismiss}
+      />
+    </View>
+  );
 }
 
 const createStyles = (theme: AppTheme) =>

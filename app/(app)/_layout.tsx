@@ -119,6 +119,15 @@ export default function AppLayout() {
       />
 
       <Stack.Screen
+        name="help-support"
+        options={{
+          headerShown: true,
+          headerTitle: "Help & Support",
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+
+      <Stack.Screen
         name="wallet"
         options={{
           headerShown: true,
@@ -132,6 +141,16 @@ export default function AppLayout() {
         options={{
           headerShown: true,
           title: "Messages",
+          presentation: "card",
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+
+      <Stack.Screen
+        name="notifications"
+        options={{
+          headerShown: true,
+          title: "Alerts",
           presentation: "card",
           headerBackButtonDisplayMode: "minimal",
         }}
@@ -212,6 +231,15 @@ export default function AppLayout() {
           headerTitle: "Explore",
           headerBackButtonDisplayMode: "minimal",
           animation: "fade_from_bottom",
+        }}
+      />
+
+      <Stack.Screen
+        name="flick/[postId]"
+        options={{
+          headerShown: false,
+          animation: "fade_from_bottom",
+          contentStyle: { backgroundColor: "#000000" },
         }}
       />
 

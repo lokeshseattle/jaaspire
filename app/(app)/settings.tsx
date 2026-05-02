@@ -106,7 +106,12 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.section}>
-        <Item theme={theme} icon="help-circle-outline" label="Help & Support" />
+        <Item
+          theme={theme}
+          icon="help-circle-outline"
+          label="Help & Support"
+          onPress={() => router.push("/help-support")}
+        />
         <Item theme={theme} icon="person-add-outline" label="Invite" />
       </View>
 
