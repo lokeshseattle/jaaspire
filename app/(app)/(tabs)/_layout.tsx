@@ -11,15 +11,10 @@ export default function TabsLayout() {
   const pathname = usePathname();
   const segments = useSegments();
   const isFlicksTab =
-    pathname === "/flicks" ||
-    (segments as string[]).includes("flicks");
+    pathname === "/flicks" || (segments as string[]).includes("flicks");
   const isDarkTheme = theme.colors.background === "#0B0F14";
   /** Flicks is full-bleed black; other tabs follow app theme (must update on tab change — child-only StatusBar may not restore when leaving Flicks). */
-  const statusBarStyle = isFlicksTab
-    ? "light"
-    : isDarkTheme
-      ? "light"
-      : "dark";
+  const statusBarStyle = isFlicksTab ? "light" : isDarkTheme ? "light" : "dark";
 
   /** Bottom tab chrome: force dark chrome on Flicks regardless of light/dark app theme. */
   const flicksTabChrome = {
@@ -27,6 +22,7 @@ export default function TabsLayout() {
       backgroundColor: "#000000",
       borderTopColor: "rgba(255,255,255,0.14)",
       borderTopWidth: 1,
+      paddingBottom: 20,
     },
     tabBarActiveTintColor: theme.colors.primary,
     tabBarInactiveTintColor: "rgba(255,255,255,0.5)",
@@ -36,6 +32,7 @@ export default function TabsLayout() {
       backgroundColor: theme.colors.background,
       borderTopColor: theme.colors.border,
       borderTopWidth: 1,
+      paddingBottom: 10,
     },
     tabBarActiveTintColor: theme.colors.primary,
     tabBarInactiveTintColor: theme.colors.textSecondary,

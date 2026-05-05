@@ -63,13 +63,16 @@ export type PublicRouteAlias = {
  * - /p/:postId        → /post/:postId (short link)
  */
 export const PUBLIC_ROUTE_ALIASES: readonly PublicRouteAlias[] = [
-  
   {
     description: "Web post URLs: /posts/id → /post/id (matches post/[postId])",
     pattern: /^\/posts\/([^/]+)\/?$/,
     replacement: "/post/$1",
   },
-  
+  {
+    description: "Creator wallet links: /creator/* → /wallet",
+    pattern: /^\/creator\/?.*$/,
+    replacement: "/wallet",
+  },
 ];
 
 /**
