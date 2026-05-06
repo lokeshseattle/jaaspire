@@ -40,9 +40,21 @@ export function useManagedVideoPlayer(
   const postIdRef = useRef(postId);
   const playerRef = useRef<VideoPlayer | null>(null);
   const stuckReplaceAttemptedRef = useRef(false);
+  const [resetKey, setResetKey] = useState(0);
 
   isFocusedRef.current = isFocused;
   postIdRef.current = postId;
+
+  useEffect(() => {
+    return videoManager.subscribeToReset(() => {
+      playerRef.current = null;
+      setPlayer(null);
+      setIsReady(false);
+      setIsBuffering(false);
+      setIsPlaying(false);
+      setResetKey((k) => k + 1);
+    });
+  }, []);
 
   useEffect(() => {
     if (!url) {
@@ -60,7 +72,6 @@ export function useManagedVideoPlayer(
     playerRef.current = p;
     videoManager.mount(currentPostId);
 
-    // Set player ref first
     setPlayer(p);
 
     const initial = safePlayerSnapshot(p);
@@ -124,10 +135,13 @@ export function useManagedVideoPlayer(
     return () => {
       statusSub.remove();
       playingSub.remove();
-      videoManager.unmount(currentPostId);
-      videoManager.pause(currentPostId);
+      const stillOwns = videoManager.getPlayer(currentPostId) === p;
+      if (stillOwns) {
+        videoManager.unmount(currentPostId);
+        videoManager.pause(currentPostId);
+      }
     };
-  }, [postId, url]);
+  }, [postId, url, resetKey]);
 
   useEffect(() => {
     return videoManager.subscribeToMute(setIsMuted);
@@ -150,7 +164,7 @@ export function useManagedVideoPlayer(
         videoManager.pause(currentPostId);
       }
     }
-  }, [isFocused]);
+  }, [isFocused, isReady]);
 
   useEffect(() => {
     if (!url || !isFocused) {
@@ -223,37 +237,6 @@ export function useManagedVideoPlayer(
     if (!snap || snap.status !== "readyToPlay") return;
     videoManager.play(postIdRef.current);
   }, []);
-  // Add near other hooks in useManagedVideoPlayer (remove the old console.log("123..."...) lines from the hook body)
-
-  // useEffect(() => {
-  //   if (!__DEV__) return;
-  //   console.log("[useManagedVideoPlayer]", {
-  //     postId,
-  //     url: url?.slice(0, 80),
-  //     isFocused,
-  //     nextPostId,
-  //     nextPostUrl: nextPostUrl?.slice(0, 80),
-  //     isReady,
-  //     isBuffering,
-  //     isPlaying,
-  //     isMuted,
-  //   });
-  // }, [
-  //   postId,
-  //   url,
-  //   isFocused,
-  //   nextPostId,
-  //   nextPostUrl,
-  //   isReady,
-  //   isBuffering,
-  //   isPlaying,
-  //   isMuted,
-  // ]);
-  // console.log("123togglePlayPause", togglePlayPause);
-  // console.log("123toggleMute", toggleMute);
-  // console.log("123pause", pause);
-  // console.log("123play", play);
-
   return {
     player,
     isReady,

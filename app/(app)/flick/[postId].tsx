@@ -4,9 +4,9 @@ import { CommentsBottomSheet } from "@/src/components/comments/CommentsBottomShe
 import FlickItem from "@/src/components/flicks/FlickItem";
 import { SharePostBottomSheet } from "@/src/components/share/SharePostBottomSheet";
 import {
-  fetchFlickById,
-  useGetFlicksQuery,
-  useGetUserFlicksQuery,
+    fetchFlickById,
+    useGetFlicksQuery,
+    useGetUserFlicksQuery,
 } from "@/src/features/flicks/flicks.hooks";
 import { useTrackPostView } from "@/src/features/post/post.hooks";
 import { usePostStore } from "@/src/features/post/post.store";
@@ -19,29 +19,30 @@ import * as Haptics from "expo-haptics";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
-  memo,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
+    memo,
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
 } from "react";
 import {
-  ActivityIndicator,
-  Dimensions,
-  FlatList,
-  type LayoutChangeEvent,
-  ListRenderItemInfo,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-  PixelRatio,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  ViewabilityConfig,
-  ViewToken,
+    ActivityIndicator,
+    Dimensions,
+    FlatList,
+    type LayoutChangeEvent,
+    ListRenderItemInfo,
+    type NativeScrollEvent,
+    type NativeSyntheticEvent,
+    PixelRatio,
+    Platform,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
+    ViewabilityConfig,
+    ViewToken,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useShallow } from "zustand/react/shallow";
@@ -391,16 +392,24 @@ export default function FeedFlickScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      setIsScreenFocused(true);
-      const ids = postIdsRef.current;
-      const idx = focusedIndexRef.current;
-      if (ids.length > 0) {
-        const id = ids[Math.min(Math.max(idx, 0), ids.length - 1)];
-        videoManager.seekToStart(id);
+      if (Platform.OS === "android") {
+        videoManager.resetAll();
+      } else {
+        const ids = postIdsRef.current;
+        const idx = focusedIndexRef.current;
+        if (ids.length > 0) {
+          const id = ids[Math.min(Math.max(idx, 0), ids.length - 1)];
+          videoManager.seekToStart(id);
+        }
       }
+      setIsScreenFocused(true);
       return () => {
         setIsScreenFocused(false);
-        videoManager.pauseAll();
+        if (Platform.OS === "android") {
+          videoManager.resetAll();
+        } else {
+          videoManager.pauseAll();
+        }
       };
     }, []),
   );

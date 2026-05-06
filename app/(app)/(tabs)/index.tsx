@@ -139,9 +139,9 @@ export default function Home() {
         const visibleId = visiblePostIdRef.current;
         if (typeof visibleId === "number") {
           videoManager.setPinnedFeedPostId(visibleId);
+          videoManager.pause(visibleId);
         }
         setIsScreenFocused(false);
-        videoManager.pauseAll();
       };
     }, []),
   );
@@ -221,13 +221,13 @@ export default function Home() {
           visibleFeedIndex={visibleFeedIndexRef.current}
           nextId={nextId}
           visiblePostId={visiblePostIdRef.current}
-          isScreenFocused={isScreenFocusedRef.current}
+          isScreenFocused={isScreenFocused}
           openComments={openComments}
           openShare={openShare}
         />
       );
     },
-    [openComments, openShare, getNextPostId],
+    [openComments, openShare, getNextPostId, isScreenFocused],
   );
 
   const keyExtractor = useCallback((item: number) => item.toString(), []);

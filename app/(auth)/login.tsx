@@ -1,9 +1,9 @@
 import { useTheme } from "@/src/theme/ThemeProvider";
 
-import { AuthScreenLayout } from "@/src/features/auth/AuthScreenLayout";
 import Button from "@/src/components/ui/button";
 import FormInput from "@/src/components/ui/input";
 import { useAuth, useLogin } from "@/src/features/auth/auth.hooks";
+import { AuthScreenLayout } from "@/src/features/auth/AuthScreenLayout";
 import { setServerErrors } from "@/src/utils/form-errors";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -59,7 +59,10 @@ export default function Login() {
     <AuthScreenLayout
       title="Sign In"
       centerVertically
-      footerLink={{ label: "Don't have an account? Register", href: "/(auth)/register" }}
+      footerLink={{
+        label: "Don't have an account? Register",
+        href: "/(auth)/register",
+      }}
     >
       <FormInput
         control={control}
@@ -69,7 +72,8 @@ export default function Login() {
         Left={
           <Ionicons name="mail-outline" size={24} color={theme.colors.icon} />
         }
-        rules={{ required: "It is required" }}
+        rules={{ required: __DEV__ ? false : "It is required" }}
+        defaultValue={__DEV__ ? "developer+20@convoia.com" : undefined}
         accessibilityLabel="Email or username"
       />
       <FormInput
@@ -79,6 +83,7 @@ export default function Login() {
         placeholder="Enter your password"
         secureTextEntry
         passwordToggle
+        defaultValue={__DEV__ ? "Test@123" : undefined}
         Left={
           <Ionicons
             name="lock-closed-outline"
@@ -86,7 +91,7 @@ export default function Login() {
             color={theme.colors.icon}
           />
         }
-        rules={{ required: "Password is required" }}
+        rules={{ required: __DEV__ ? false : "Password is required" }}
         accessibilityLabel="Password"
       />
       <Button

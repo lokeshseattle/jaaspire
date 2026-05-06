@@ -3,43 +3,43 @@ import ReportModal from "@/src/components/home/posts/ReportModal";
 import StoryAvatar from "@/src/components/home/story/StoryAvatar";
 import RichText from "@/src/components/ui/rich-text";
 import {
-  useBookmarkPostMutation,
-  useDeletePostMutation,
-  useToggleLikeMutation,
+    useBookmarkPostMutation,
+    useDeletePostMutation,
+    useToggleLikeMutation,
 } from "@/src/features/post/post.hooks";
 import { useGetProfile } from "@/src/features/profile/profile.hooks";
 import type { PossibleErrorResponse, Post } from "@/src/services/api/api.types";
 import { getMediaType } from "@/src/utils/helpers";
 import { FontAwesome, Ionicons } from "@expo/vector-icons";
 import Feather from "@expo/vector-icons/Feather";
+import { isAxiosError } from "axios";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import { isAxiosError } from "axios";
 import { VideoView, type VideoContentFit } from "expo-video";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  findNodeHandle,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  UIManager,
-  View,
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    findNodeHandle,
+    Modal,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    UIManager,
+    View,
 } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
+    runOnJS,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
+    withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -517,7 +517,14 @@ function FlickItemInner({
         },
       },
     ]);
-  }, [closeFlickMenu, deletePostMutation, me?.id, onDeleteFlick, post.id, post.user?.id]);
+  }, [
+    closeFlickMenu,
+    deletePostMutation,
+    me?.id,
+    onDeleteFlick,
+    post.id,
+    post.user?.id,
+  ]);
 
   /** While playing: brief flash after resume/mute. While user-paused: persistent HUD (see `playbackEverStarted` + isReady/!isBuffering). */
   const [playingHudFlash, setPlayingHudFlash] = useState(false);
@@ -1109,10 +1116,7 @@ function FlickItemInner({
                 >
                   <Ionicons name="trash-outline" size={20} color="#FF8A80" />
                   <Text
-                    style={[
-                      styles.flickMenuLabel,
-                      styles.flickMenuLabelDanger,
-                    ]}
+                    style={[styles.flickMenuLabel, styles.flickMenuLabelDanger]}
                   >
                     Delete
                   </Text>

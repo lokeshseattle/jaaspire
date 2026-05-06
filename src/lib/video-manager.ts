@@ -21,6 +21,7 @@ class VideoPlayerManager {
   private currentlyPlaying: number | null = null;
   private globalMuted: boolean = true;
   private muteSubscribers = new Set<(muted: boolean) => void>();
+  private resetSubscribers = new Set<() => void>();
 
   /** Call when Home blurs: protect this post's player from eviction. Clear on Home focus (`null`). */
   setPinnedFeedPostId(postId: number | null): void {
@@ -205,6 +206,27 @@ class VideoPlayerManager {
   subscribeToMute(callback: (muted: boolean) => void): () => void {
     this.muteSubscribers.add(callback);
     return () => this.muteSubscribers.delete(callback);
+  }
+
+  subscribeToReset(callback: () => void): () => void {
+    this.resetSubscribers.add(callback);
+    return () => this.resetSubscribers.delete(callback);
+  }
+
+  /** Release every player unconditionally and notify hooks to re-create from scratch. */
+  resetAll(): void {
+    this.players.forEach(({ player }, id) => {
+      try {
+        player.release();
+      } catch (e) {
+        console.warn(`[VM] Failed to release ${id}:`, e);
+      }
+    });
+    this.players.clear();
+    this.mountedPlayers.clear();
+    this.currentlyPlaying = null;
+    this.pinnedFeedPostId = null;
+    this.resetSubscribers.forEach((sub) => sub());
   }
 
   private evictOne(reservePostId?: number): boolean {

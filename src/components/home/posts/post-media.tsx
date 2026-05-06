@@ -560,28 +560,28 @@ function PostMediaInnerMain({
     const sub = player.addListener(
       "timeUpdate" as any,
       ({ currentTime }: { currentTime: number }) => {
-        if (isScrubbing.value || !player.duration) return;
+        try {
+          if (isScrubbing.value || !player.duration) return;
 
-        if (isPaidVideo && parsedDuration) {
-          const cap = player.duration;
-          maxProgressRatio.value = cap / parsedDuration;
+          if (isPaidVideo && parsedDuration) {
+            const cap = player.duration;
+            maxProgressRatio.value = cap / parsedDuration;
 
-          if (currentTime >= cap - 0.1) {
-            pause();
-            progress.value = cap / parsedDuration;
-            if (!previewEndedRef.current) {
-              previewEndedRef.current = true;
-              setPreviewEnded(true);
+            if (currentTime >= cap - 0.1) {
+              pause();
+              progress.value = cap / parsedDuration;
+              if (!previewEndedRef.current) {
+                previewEndedRef.current = true;
+                setPreviewEnded(true);
+              }
+            } else {
+              progress.value = currentTime / parsedDuration;
             }
           } else {
-            progress.value = currentTime / parsedDuration;
-            // if (previewEndedRef.current) {
-            //   previewEndedRef.current = false;
-            //   setPreviewEnded(false);
-            // }
+            progress.value = currentTime / player.duration;
           }
-        } else {
-          progress.value = currentTime / player.duration;
+        } catch {
+          /* player was released between resetAll() and effect cleanup */
         }
       },
     );

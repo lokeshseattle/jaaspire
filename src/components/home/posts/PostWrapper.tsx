@@ -50,6 +50,7 @@ const PostItem = ({
   const isPrimaryFeedPost = visiblePostId === id;
   const isFocused = isPrimaryFeedPost && isScreenFocused;
   const inVideoWindow =
+    isScreenFocused &&
     visibleFeedIndex >= 0 &&
     Math.abs(feedIndex - visibleFeedIndex) <= PRELOAD_RADIUS;
 
