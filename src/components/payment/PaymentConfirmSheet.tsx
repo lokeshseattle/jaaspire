@@ -20,7 +20,11 @@ import {
   Text,
   View,
 } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
 import Animated, {
   Easing,
   cancelAnimation,
@@ -115,6 +119,7 @@ interface SlideToConfirmProps {
 
 function SlideToConfirm({ onConfirm, loading, theme }: SlideToConfirmProps) {
   const translateX = useSharedValue(0);
+  const startX = useSharedValue(0);
   const trackWidth = useSharedValue(0);
   const confirmed = useSharedValue(false);
 
@@ -131,10 +136,15 @@ function SlideToConfirm({ onConfirm, loading, theme }: SlideToConfirmProps) {
 
   const pan = Gesture.Pan()
     .enabled(!loading)
-    .onChange((e) => {
+    .activeOffsetX([-8, 8])
+    .onBegin(() => {
+      "worklet";
+      startX.value = translateX.value;
+    })
+    .onUpdate((e) => {
       "worklet";
       const max = trackWidth.value - THUMB_SIZE - 8;
-      const next = translateX.value + e.changeX;
+      const next = startX.value + e.translationX;
       translateX.value = Math.max(0, Math.min(next, max));
     })
     .onEnd(() => {
@@ -360,7 +370,7 @@ export default function PaymentConfirmSheet({
       hardwareAccelerated
       onRequestClose={onClose}
     >
-      <View style={styles.modalRoot} collapsable={false}>
+      <GestureHandlerRootView style={styles.modalRoot} collapsable={false}>
         <Pressable style={styles.overlayHitTarget} onPress={onClose}>
           <Animated.View
             pointerEvents="none"
@@ -532,7 +542,7 @@ export default function PaymentConfirmSheet({
             />
           )}
         </Animated.View>
-      </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }

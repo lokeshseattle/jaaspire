@@ -24,7 +24,11 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
 import Animated, {
   Easing,
   cancelAnimation,
@@ -77,6 +81,7 @@ function SlideToConfirm({
   disabled = false,
 }: SlideToConfirmProps) {
   const translateX = useSharedValue(0);
+  const startX = useSharedValue(0);
   const trackWidth = useSharedValue(0);
   const confirmed = useSharedValue(false);
 
@@ -93,10 +98,15 @@ function SlideToConfirm({
 
   const pan = Gesture.Pan()
     .enabled(!loading && !disabled)
-    .onChange((e) => {
+    .activeOffsetX([-8, 8])
+    .onBegin(() => {
+      "worklet";
+      startX.value = translateX.value;
+    })
+    .onUpdate((e) => {
       "worklet";
       const max = trackWidth.value - THUMB_SIZE - 8;
-      const next = translateX.value + e.changeX;
+      const next = startX.value + e.translationX;
       translateX.value = Math.max(0, Math.min(next, max));
     })
     .onEnd(() => {
@@ -305,27 +315,28 @@ export default function TipBottomSheet({
       hardwareAccelerated
       onRequestClose={onClose}
     >
-      <KeyboardAvoidingView
-        style={styles.modalRoot}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={0}
-      >
-        <Pressable style={styles.overlayHitTarget} onPress={onClose}>
-          <Animated.View
-            pointerEvents="none"
-            style={[styles.overlayFill, overlayAnimatedStyle]}
-          />
-        </Pressable>
-
-        <Animated.View
-          collapsable={false}
-          style={[styles.sheet, sheetAnimatedStyle]}
-          onLayout={(e) => {
-            const h = e.nativeEvent.layout.height;
-            if (h > 0) sheetHeightSv.value = h;
-          }}
+      <GestureHandlerRootView style={styles.modalRoot}>
+        <KeyboardAvoidingView
+          style={styles.modalRoot}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          keyboardVerticalOffset={0}
         >
-          <View style={styles.handle} />
+          <Pressable style={styles.overlayHitTarget} onPress={onClose}>
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.overlayFill, overlayAnimatedStyle]}
+            />
+          </Pressable>
+
+          <Animated.View
+            collapsable={false}
+            style={[styles.sheet, sheetAnimatedStyle]}
+            onLayout={(e) => {
+              const h = e.nativeEvent.layout.height;
+              if (h > 0) sheetHeightSv.value = h;
+            }}
+          >
+            <View style={styles.handle} />
 
           <View style={styles.titleRow}>
             <View style={styles.iconBadge}>
@@ -451,8 +462,9 @@ export default function TipBottomSheet({
               disabled={isTipping}
             />
           )}
-        </Animated.View>
-      </KeyboardAvoidingView>
+          </Animated.View>
+        </KeyboardAvoidingView>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
