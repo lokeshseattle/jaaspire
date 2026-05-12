@@ -75,9 +75,15 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         <Item
           theme={theme}
-          onPress={() => router.push("/bookmarks")}
+          onPress={() => router.push("/(app)/manage-subscriptions")}
           icon="card-outline"
           label="Subscriptions"
+        />
+        <Item
+          theme={theme}
+          onPress={() => router.push("/(app)/manage-payments")}
+          icon="receipt-outline"
+          label="Payments"
         />
         <Item
           theme={theme}

@@ -8,12 +8,14 @@ import NetworkListener from "@/src/components/toast/NetworkListener";
 import { ToastProvider } from "@/src/components/toast/ToastProvider";
 import { queryClient } from "@/src/lib/query-client";
 import { startSystemVolumeUnmuteSync } from "@/src/lib/system-volume-unmute-sync";
+import { registerForPushNotificationsAsync } from "@/src/utils/notifications";
 import { ActionSheetProvider } from "@expo/react-native-action-sheet";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
+import * as Notifications from "expo-notifications";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import "react-native-reanimated";
@@ -23,10 +25,22 @@ SplashScreen.preventAutoHideAsync();
 
 initializeSessionSeed();
 
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
+
 // Inner layout that can use theme hooks
 function RootLayoutInner() {
   const { restoreSession, isLoading: authLoading } = useAuth();
   const { theme } = useTheme();
+  const notificationListener =
+    useRef<Notifications.EventSubscription | null>(null);
+  const responseListener = useRef<Notifications.EventSubscription | null>(null);
 
   // Determine if dark mode
   const isDark = theme.colors.background === "#0B0F14";
@@ -37,6 +51,27 @@ function RootLayoutInner() {
 
   useEffect(() => {
     return startSystemVolumeUnmuteSync();
+  }, []);
+
+  useEffect(() => {
+    void registerForPushNotificationsAsync().then((token) => {
+      console.log("Expo Push Token:", token);
+    });
+
+    notificationListener.current =
+      Notifications.addNotificationReceivedListener((notification) => {
+        console.log("Notification received:", notification);
+      });
+
+    responseListener.current =
+      Notifications.addNotificationResponseReceivedListener((response) => {
+        console.log("Notification tapped:", response);
+      });
+
+    return () => {
+      notificationListener.current?.remove();
+      responseListener.current?.remove();
+    };
   }, []);
 
   // Hide splash for every entry route (including cold-start universal links that skip app/index.tsx).

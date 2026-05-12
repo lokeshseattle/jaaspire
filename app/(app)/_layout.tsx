@@ -119,6 +119,24 @@ export default function AppLayout() {
       />
 
       <Stack.Screen
+        name="manage-subscriptions"
+        options={{
+          headerShown: true,
+          headerTitle: "Manage subscriptions",
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+
+      <Stack.Screen
+        name="manage-payments"
+        options={{
+          headerShown: true,
+          headerTitle: "Manage payments",
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
+
+      <Stack.Screen
         name="help-support"
         options={{
           headerShown: true,

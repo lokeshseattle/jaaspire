@@ -32,7 +32,8 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.RECORD_AUDIO",
         "com.android.vending.BILLING"
-      ]
+      ],
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "output": "static",
@@ -74,7 +75,8 @@
         }
       ],
       "@react-native-community/datetimepicker",
-      "expo-iap"
+      "expo-iap",
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true,

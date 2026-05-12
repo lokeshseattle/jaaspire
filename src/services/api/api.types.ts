@@ -1038,6 +1038,74 @@ export type SubscribeResponse = {
   };
 };
 
+export type SubscriptionActiveTab = "subscriptions" | "subscribers";
+
+export type SubscriptionUser = {
+  id: number;
+  username: string;
+  name: string;
+  avatar: string;
+};
+
+export type Subscription = {
+  id: number;
+  status: string;
+  amount: number;
+  provider: string;
+  expires_at: string;
+  canceled_at: string | null;
+  created_at: string;
+  user: SubscriptionUser;
+};
+
+export type SubscriptionsResponse = {
+  success: boolean;
+  message: string;
+  data: {
+    active: SubscriptionActiveTab;
+    subscribers_count: number;
+    subscriptions: Subscription[];
+    pagination: Pagination;
+  };
+};
+
+export type CancelSubscriptionResponse = {
+  success: boolean;
+  message: string;
+};
+
+export type PaymentUser = {
+  id: number;
+  username: string;
+  name: string;
+  avatar: string;
+};
+
+export type Payment = {
+  id: number;
+  type: string;
+  status: string;
+  amount: number;
+  currency: string;
+  provider: string;
+  invoice_id: number | null;
+  post_id: number | null;
+  stream_id: number | null;
+  subscription_id: number | null;
+  created_at: string;
+  sender: PaymentUser;
+  receiver: PaymentUser;
+};
+
+export type PaymentsResponse = {
+  success: boolean;
+  message: string;
+  data: {
+    payments: Payment[];
+    pagination: Pagination;
+  };
+};
+
 export type UnlockPostResponse = {
   success: boolean;
   transaction_id: number;
