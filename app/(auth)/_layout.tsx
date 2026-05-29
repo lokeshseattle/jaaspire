@@ -1,8 +1,14 @@
+import { useAuth } from "@/src/features/auth/auth.hooks";
 import { useTheme } from "@/src/theme/ThemeProvider";
-import { Stack } from "expo-router";
+import { Redirect, Stack } from "expo-router";
 
 export default function AuthLayout() {
   const { theme } = useTheme();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (!isLoading && isAuthenticated) {
+    return <Redirect href="/(app)/(tabs)" />;
+  }
 
   return (
     <Stack

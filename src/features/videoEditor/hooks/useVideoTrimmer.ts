@@ -179,7 +179,7 @@ export const useVideoTrimmer = ({
         setTrimRange({ startTime: 0, endTime: Math.min(duration, MAX_DURATION) });
     }, [duration, trackWidth, maxDistancePx]);
 
-    console.log({ trimRange });
+    // console.log({ trimRange });
 
     return {
         trimRange,

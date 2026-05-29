@@ -413,8 +413,7 @@ export default function PaymentConfirmSheet({
 
   const showWalletOption = !iapOnly && balanceGateReady && walletAvailable;
   /** Apple Pay / Google Pay when IAP is configured (post/message unlock or creator subscription). */
-  const showIapRow =
-    iapOnly || isWalletIapPurchaseAction || isSubscribeAction;
+  const showIapRow = iapOnly || isWalletIapPurchaseAction || isSubscribeAction;
 
   const [selectedMethod, setSelectedMethod] = useState<"wallet" | "iap">(
     "wallet",
@@ -549,7 +548,7 @@ export default function PaymentConfirmSheet({
           <View style={styles.priceBlock}>
             <Text style={styles.priceLabel}>
               {isSubscribeAction
-                ? "1 month subscription"
+                ? "Auto-renewing subscription"
                 : isBuyPostAction
                   ? "Post price"
                   : isUnlockMessageAction

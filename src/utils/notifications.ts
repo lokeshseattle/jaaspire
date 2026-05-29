@@ -44,9 +44,9 @@ export async function registerForPushNotificationsAsync(): Promise<
   }
   if (finalStatus !== "granted") {
     if (__DEV__) {
-      console.warn(
-        "Push notification permission not granted; skipping device registration.",
-      );
+      // console.warn(
+        // "Push notification permission not granted; skipping device registration.",
+      // );
     }
     return null;
   }
@@ -56,7 +56,7 @@ export async function registerForPushNotificationsAsync(): Promise<
     Constants?.easConfig?.projectId;
   if (!projectId) {
     if (__DEV__) {
-      console.warn("EAS project ID not found; skipping push token registration.");
+      // console.warn("EAS project ID not found; skipping push token registration.");
     }
     return null;
   }
@@ -70,7 +70,7 @@ export async function registerForPushNotificationsAsync(): Promise<
     return pushTokenString;
   } catch (e: unknown) {
     if (__DEV__) {
-      console.warn("Failed to get Expo push token:", e);
+      // console.warn("Failed to get Expo push token:", e);
     }
     return null;
   }

@@ -7,6 +7,7 @@ import { ShareProfileBottomSheet } from "@/src/components/share/ShareProfileBott
 import { AnimatedTabBar } from "@/src/components/ui/animated-tabbar";
 import { useGetUserFeedQuery } from "@/src/features/post/post.hooks";
 import { useGetProfile } from "@/src/features/profile/profile.hooks";
+import { useGetAllStories } from "@/src/features/story/story.hooks";
 import { useVideoFinalized } from "@/src/lib/pusher";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
@@ -88,6 +89,8 @@ export default function ProfileScreen() {
 
   useVideoFinalized();
 
+  const { refetch: refetchStories } = useGetAllStories();
+
   // Get post IDs from query
   const postIds = useMemo(() => {
     if (!feedData?.pages) return [];
@@ -96,8 +99,8 @@ export default function ProfileScreen() {
 
   // Handle refresh
   const handleRefresh = useCallback(async () => {
-    await Promise.all([refetchProfile(), refetchFeed()]);
-  }, [refetchProfile, refetchFeed]);
+    await Promise.all([refetchProfile(), refetchFeed(), refetchStories()]);
+  }, [refetchProfile, refetchFeed, refetchStories]);
 
   // Handle pagination
   const handleEndReached = useCallback(() => {

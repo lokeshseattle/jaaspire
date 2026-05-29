@@ -153,7 +153,7 @@ export default function StoryEditor({ imageUri }: Props) {
         quality: 1,
       });
 
-      __DEV__ && console.log("👁️ uri: ", uri);
+      // __DEV__ && console.log("👁️ uri: ", uri);
 
       uploadStoryImage.mutate(
         { uri },
@@ -162,12 +162,12 @@ export default function StoryEditor({ imageUri }: Props) {
             router.replace("/(app)/(tabs)");
           },
           onError: (e) => {
-            console.log("👁️ error: ", e);
+            // console.log("👁️ error: ", e);
           },
         },
       );
     } catch (e) {
-      console.log("Capture error:", e);
+      // console.log("Capture error:", e);
     } finally {
       setIsCapturing(false);
       setSaving(false);

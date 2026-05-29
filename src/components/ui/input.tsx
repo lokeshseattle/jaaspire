@@ -130,10 +130,10 @@ function FormInput<T extends FieldValues>(props: FormInputProps<T>) {
                   visible={isPickerOpen}
                   value={value}
                   onChange={(date) => {
-                    console.log(
-                      "DatePickerSheet onChange fired:",
-                      date.toISOString()
-                    );
+                    // console.log(
+                      // "DatePickerSheet onChange fired:",
+                      // date.toISOString()
+                    // );
                     onChange(date);
                   }}
                   onClose={() => setIsPickerOpen(false)}

@@ -177,7 +177,7 @@ export const useAddComment = () => {
       if (context?.previousPost) {
         usePostStore.getState().upsertPosts([context.previousPost]);
       }
-      console.error("Failed to add comment:", err);
+      // console.error("Failed to add comment:", err);
     },
 
     onSettled: (_data, _error, variables) => {
@@ -212,7 +212,7 @@ export const useDeleteComment = () => {
         }));
     },
     onError: (error) => {
-      console.error("Failed to delete comment:", error);
+      // console.error("Failed to delete comment:", error);
     },
   });
 };

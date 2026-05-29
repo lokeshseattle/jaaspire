@@ -118,11 +118,11 @@ export function SharePostBottomSheet({
           <Pressable
             onPress={() => {
               if (postId == null) return;
-              console.log("share post to peer", {
-                postId,
-                peerId: peer.id,
-                peerName: peer.name,
-              });
+              // console.log("share post to peer", {
+                // postId,
+                // peerId: peer.id,
+                // peerName: peer.name,
+              // });
             }}
             style={({ pressed }) => [
               styles.sendBtn,

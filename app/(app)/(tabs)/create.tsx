@@ -380,7 +380,7 @@ function CreateContent() {
         return;
       }
     } catch (e) {
-      console.error("Post failed:", e);
+      // console.error("Post failed:", e);
     }
   }, [
     selectedVideo,

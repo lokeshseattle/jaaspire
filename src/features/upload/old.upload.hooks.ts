@@ -264,7 +264,7 @@ async function uploadVideoInChunks(
 
     isComplete = true
 
-    console.log(isComplete, finalizeRes.data)
+    // console.log(isComplete, finalizeRes.data)
 
     return { ...finalizeRes.data, isComplete };
 }

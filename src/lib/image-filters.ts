@@ -322,7 +322,7 @@ export async function processImage(
     // or a more advanced library for permanent filter application
     return uri;
   } catch (error) {
-    console.error('Error processing image:', error);
+    // console.error('Error processing image:', error);
     throw error;
   }
 }
@@ -357,7 +357,7 @@ export async function finalizeImage(
     
     return saved.uri;
   } catch (error) {
-    console.error('Error finalizing image:', error);
+    // console.error('Error finalizing image:', error);
     throw error;
   }
 }

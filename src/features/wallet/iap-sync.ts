@@ -120,10 +120,10 @@ export async function collectCreatorSubscriptionRestoreBodies(
     if (!body) {
       skipped += 1;
       if (__DEV__) {
-        console.warn(
-          "[iap-sync] skipped active sub (missing restore payload)",
-          sub.productId,
-        );
+        // console.warn(
+          // "[iap-sync] skipped active sub (missing restore payload)",
+          // sub.productId,
+        // );
       }
       continue;
     }
@@ -233,7 +233,7 @@ export async function syncWalletConsumables(
       result.skipped += 1;
       result.errors.push(message);
       if (__DEV__) {
-        console.warn("[iap-sync] wallet consumable verify failed", message);
+        // console.warn("[iap-sync] wallet consumable verify failed", message);
       }
       break;
     }

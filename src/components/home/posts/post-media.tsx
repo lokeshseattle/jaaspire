@@ -96,11 +96,11 @@ class PostMediaErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.warn(
-      "[PostMedia] Error boundary caught:",
-      error,
-      info.componentStack,
-    );
+    // console.warn(
+      // "[PostMedia] Error boundary caught:",
+      // error,
+      // info.componentStack,
+    // );
   }
 
   render() {

@@ -25,7 +25,7 @@ export default function VideoEditorPage() {
     const [progress, setProgress] = useState(0);
     const storyMutation = useUploadAndCreateStory()
 
-    console.log("line23", progress)
+    // console.log("line23", progress)
     const { setUploadProgress } = useStoryStore();
 
     const videoUploadMutation = useVideoUpload();
@@ -48,12 +48,12 @@ export default function VideoEditorPage() {
                 onSuccess: (data) => {
                     // setIsLoading(false);
 
-                    console.log("success566")
+                    // console.log("success566")
                 },
                 onSettled: () => {
                     // setIsLoading(false);
 
-                    console.log("settled566")
+                    // console.log("settled566")
                 },
                 onError: () => {
                     // setIsLoading(false);
@@ -61,12 +61,12 @@ export default function VideoEditorPage() {
             }
         );
     };
-    console.log({ progress })
+    // console.log({ progress })
 
 
     const handleConfirm = useCallback((result: VideoEditorResult) => {
-        console.log('Trim result:', result);
-        console.log("Before handle Upload78978")
+        // console.log('Trim result:', result);
+        // console.log("Before handle Upload78978")
         // handleUpload()
 
         storyMutation.mutate({
@@ -78,7 +78,7 @@ export default function VideoEditorPage() {
                 end: result.endTime / 1000
             })
         });
-        console.log("after handle Upload78978")
+        // console.log("after handle Upload78978")
 
         // Option 1: Go back with params
         router.back();

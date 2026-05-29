@@ -20,6 +20,7 @@ import {
   NotificationsAPIResponse,
   TNotification,
 } from "../services/api/api.types";
+import { useAuthStore } from "../features/auth/auth.store";
 import { queryClient } from "./query-client";
 
 /* =========================================================
@@ -29,19 +30,19 @@ import { queryClient } from "./query-client";
 const PUSHER_LOG_PREFIX = "[Pusher]";
 
 function pusherDebug(...args: unknown[]) {
-  if (__DEV__) {
-    console.log(PUSHER_LOG_PREFIX, ...args);
-  }
+  // if (__DEV__) {
+  //   console.log(PUSHER_LOG_PREFIX, ...args);
+  // }
 }
 
 function pusherWarn(...args: unknown[]) {
-  if (__DEV__) {
-    console.warn(PUSHER_LOG_PREFIX, ...args);
-  }
+  // if (__DEV__) {
+  //   console.warn(PUSHER_LOG_PREFIX, ...args);
+  // }
 }
 
 function pusherError(message: string, ...args: unknown[]) {
-  console.error(PUSHER_LOG_PREFIX, message, ...args);
+  // console.error(PUSHER_LOG_PREFIX, message, ...args);
 }
 
 /* =========================================================
@@ -222,6 +223,19 @@ const RECONNECT_MAX_DELAY_MS = 30_000;
 const WATCHDOG_INTERVAL_MS = 30_000;
 const WATCHDOG_STALE_MS = 2 * 60_000;
 
+function isAuthenticatedForRealtime(): boolean {
+  return useAuthStore.getState().isAuthenticated;
+}
+
+function canAttemptReconnect(): boolean {
+  return (
+    isAuthenticatedForRealtime() &&
+    isInitialized &&
+    isNetworkReachable &&
+    currentAppState === "active"
+  );
+}
+
 function markRealtimeActivity(source: string) {
   lastActivityAt = Date.now();
   pusherDebug("activity", { source, at: lastActivityAt });
@@ -239,6 +253,10 @@ function clearReconnectTimer() {
 }
 
 async function forceReconnect(reason: string) {
+  if (!isAuthenticatedForRealtime()) {
+    pusherDebug("forceReconnect skipped (not authenticated)", { reason });
+    return;
+  }
   if (reconnectInFlight) {
     pusherDebug("forceReconnect skipped (already running)", { reason });
     return;
@@ -275,9 +293,10 @@ async function forceReconnect(reason: string) {
 }
 
 function scheduleReconnect(reason: string) {
-  if (!isInitialized || !isNetworkReachable || currentAppState !== "active") {
+  if (!canAttemptReconnect()) {
     pusherDebug("scheduleReconnect skipped", {
       reason,
+      isAuthenticated: isAuthenticatedForRealtime(),
       isInitialized,
       isNetworkReachable,
       currentAppState,
@@ -306,7 +325,7 @@ function scheduleReconnect(reason: string) {
 function startRealtimeWatchdog() {
   if (watchdogInterval) return;
   watchdogInterval = setInterval(() => {
-    if (!isInitialized || !activeUserId) return;
+    if (!isAuthenticatedForRealtime() || !activeUserId) return;
     if (!isNetworkReachable || currentAppState !== "active") return;
 
     const idleForMs = Date.now() - lastActivityAt;
@@ -393,6 +412,11 @@ export const subscribeUserChannel = async (
   userId: string,
   options?: { forceResubscribe?: boolean },
 ) => {
+  if (!isAuthenticatedForRealtime()) {
+    pusherDebug("subscribeUserChannel skipped (not authenticated)", { userId });
+    return null;
+  }
+
   activeUserId = userId;
   const nextChannelName = `private-user.${userId}`;
   const forceResubscribe = options?.forceResubscribe === true;
@@ -536,6 +560,11 @@ const bindAppLifecycleRecovery = () => {
 };
 
 const recoverRealtime = async (reason: "app_active" | "network_restored") => {
+  if (!isAuthenticatedForRealtime()) {
+    pusherDebug("recoverRealtime skipped (not authenticated)", { reason });
+    return;
+  }
+
   pusherDebug("recoverRealtime", {
     reason,
     isInitialized,
@@ -569,6 +598,33 @@ export const teardownPusherLifecycle = () => {
   reconnectInFlight = false;
   reconnectAttempt = 0;
   lifecycleBound = false;
+};
+
+export const disconnectPusherOnLogout = async () => {
+  clearReconnectTimer();
+  reconnectInFlight = false;
+  reconnectAttempt = 0;
+  stopRealtimeWatchdog();
+
+  const channelToUnsubscribe = activeChannelName;
+  activeUserId = null;
+  activeChannelName = null;
+  channel = null;
+
+  if (!isInitialized) return;
+
+  try {
+    if (channelToUnsubscribe) {
+      await pusherInstance.unsubscribe({ channelName: channelToUnsubscribe });
+    }
+    await pusherInstance.disconnect();
+  } catch (error) {
+    pusherWarn("disconnect on logout failed", error);
+  } finally {
+    isConnected = false;
+    isInitialized = false;
+    pusherInitPromise = null;
+  }
 };
 
 /* =========================================================
@@ -780,7 +836,7 @@ export const useUnreadMessengerBadgeRealtime = () => {
         (old) => {
           if (!old) return old;
 
-          console.log("2232313", data);
+          // console.log("2232313", data);
 
           const raw = old.data?.messages ?? 0;
           const current =

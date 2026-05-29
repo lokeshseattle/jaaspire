@@ -118,11 +118,11 @@ export function ShareProfileBottomSheet({
           <Pressable
             onPress={() => {
               if (username == null) return;
-              console.log("share profile to peer", {
-                username,
-                peerId: peer.id,
-                peerName: peer.name,
-              });
+              // console.log("share profile to peer", {
+                // username,
+                // peerId: peer.id,
+                // peerName: peer.name,
+              // });
             }}
             style={({ pressed }) => [
               styles.sendBtn,

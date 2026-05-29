@@ -426,7 +426,7 @@ export default function NotificationsScreen() {
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const notificationHandler = (item: TNotification) => {
-    console.log("👁️ notificationHandler: ", item);
+    // console.log("👁️ notificationHandler: ", item);
 
     const username = item.from_user?.username;
     const postId = item.post?.id;

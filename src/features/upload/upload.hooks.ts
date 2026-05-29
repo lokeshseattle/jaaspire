@@ -133,7 +133,7 @@ export async function uploadVideoInChunks(
       tempFile.delete();
     }
   } catch (error) {
-    console.error("Error uploading video in chunks", error);
+    // console.error("Error uploading video in chunks", error);
     throw error;
   } finally {
     handle.close();
@@ -145,7 +145,7 @@ export async function uploadVideoInChunks(
   });
 
   isComplete = true;
-  console.log(isComplete, finalizeRes.data);
+  // console.log(isComplete, finalizeRes.data);
 
   return { ...finalizeRes.data, isComplete };
 }
@@ -366,7 +366,7 @@ export async function uploadThumbnailPostInChunks(
   });
 
   isComplete = true;
-  console.log(isComplete, finalizeRes.data);
+  // console.log(isComplete, finalizeRes.data);
 
   return { ...finalizeRes.data, isComplete };
 }
@@ -633,24 +633,24 @@ async function retryWithBackoff<T>(
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       if (__DEV__ && attempt > 1) {
-        console.log(
-          `[Upload] Retry attempt ${attempt}/${retries} for ${context}`,
-        );
+        // console.log(
+          // `[Upload] Retry attempt ${attempt}/${retries} for ${context}`,
+        // );
       }
       return await fn();
     } catch (error) {
       lastError = error;
       if (__DEV__) {
-        console.warn(
-          `[Upload] Attempt ${attempt}/${retries} failed for ${context}:`,
-          error instanceof Error ? error.message : error,
-        );
+        // console.warn(
+          // `[Upload] Attempt ${attempt}/${retries} failed for ${context}:`,
+          // error instanceof Error ? error.message : error,
+        // );
       }
 
       if (attempt < retries) {
         const backoffDelay = delay * Math.pow(2, attempt - 1);
         if (__DEV__) {
-          console.log(`[Upload] Waiting ${backoffDelay}ms before retry...`);
+          // console.log(`[Upload] Waiting ${backoffDelay}ms before retry...`);
         }
         await sleep(backoffDelay);
       }
@@ -666,9 +666,9 @@ export async function uploadVideoPostInChunks(
   onProgress?: (progress: number) => void,
 ): Promise<UploadPostChunkResponse> {
   if (__DEV__) {
-    console.log("[Upload] Starting chunked upload");
-    console.log("[Upload] File URI:", fileUri);
-    console.log("[Upload] File Name:", fileName);
+    // console.log("[Upload] Starting chunked upload");
+    // console.log("[Upload] File URI:", fileUri);
+    // console.log("[Upload] File Name:", fileName);
   }
 
   const file = new File(fileUri);
@@ -680,10 +680,10 @@ export async function uploadVideoPostInChunks(
   const handle = file.open();
 
   if (__DEV__) {
-    console.log("[Upload] Total file size:", totalSize, "bytes");
-    console.log("[Upload] Chunk size:", chunkSize, "bytes");
-    console.log("[Upload] Total chunks:", totalChunks);
-    console.log("[Upload] Upload ID:", uploadId);
+    // console.log("[Upload] Total file size:", totalSize, "bytes");
+    // console.log("[Upload] Chunk size:", chunkSize, "bytes");
+    // console.log("[Upload] Total chunks:", totalChunks);
+    // console.log("[Upload] Upload ID:", uploadId);
   }
 
   try {
@@ -692,10 +692,10 @@ export async function uploadVideoPostInChunks(
       const length = Math.min(chunkSize, totalSize - start);
 
       if (__DEV__) {
-        console.log(`[Upload] Processing chunk ${i}/${totalChunks}`);
-        console.log(
-          `[Upload] Chunk range: ${start} - ${start + length} (${length} bytes)`,
-        );
+        // console.log(`[Upload] Processing chunk ${i}/${totalChunks}`);
+        // console.log(
+          // `[Upload] Chunk range: ${start} - ${start + length} (${length} bytes)`,
+        // );
       }
 
       handle.offset = start;
@@ -705,7 +705,7 @@ export async function uploadVideoPostInChunks(
       tempFile.write(bytes);
 
       if (__DEV__) {
-        console.log("[Upload] Temp file created:", tempFile.uri);
+        // console.log("[Upload] Temp file created:", tempFile.uri);
       }
 
       const formData = new FormData();
@@ -728,9 +728,9 @@ export async function uploadVideoPostInChunks(
         );
 
         if (__DEV__) {
-          console.log(
-            `[Upload] Chunk ${i}/${totalChunks} uploaded successfully`,
-          );
+          // console.log(
+            // `[Upload] Chunk ${i}/${totalChunks} uploaded successfully`,
+          // );
         }
         onProgress?.(i / totalChunks);
       } finally {
@@ -738,25 +738,25 @@ export async function uploadVideoPostInChunks(
         if (tempFile.exists) {
           tempFile.delete();
           if (__DEV__) {
-            console.log("[Upload] Temp file deleted:", tempFile.uri);
+            // console.log("[Upload] Temp file deleted:", tempFile.uri);
           }
         }
       }
     }
   } catch (error) {
     if (__DEV__) {
-      console.error("[Upload] Chunk upload failed after all retries:", error);
+      // console.error("[Upload] Chunk upload failed after all retries:", error);
     }
     throw error;
   } finally {
     handle.close();
     if (__DEV__) {
-      console.log("[Upload] File handle closed");
+      // console.log("[Upload] File handle closed");
     }
   }
 
   if (__DEV__) {
-    console.log("[Upload] All chunks uploaded, finalizing...");
+    // console.log("[Upload] All chunks uploaded, finalizing...");
   }
 
   const finalizeRes = await retryWithBackoff(
@@ -774,11 +774,11 @@ export async function uploadVideoPostInChunks(
   isComplete = true;
 
   if (__DEV__) {
-    console.log("[Upload] Upload complete!");
-    console.log(
-      "[Upload] Response:",
-      JSON.stringify(finalizeRes.data, null, 2),
-    );
+    // console.log("[Upload] Upload complete!");
+    // console.log(
+      // "[Upload] Response:",
+      // JSON.stringify(finalizeRes.data, null, 2),
+    // );
   }
 
   return { ...finalizeRes.data, isComplete };

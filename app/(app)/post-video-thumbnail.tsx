@@ -155,7 +155,7 @@ export default function PostVideoThumbnailScreen() {
       setThumbnail(generated);
       setThumbnailTimeMs(timeMs);
     } catch (e) {
-      console.warn("Thumbnail extraction error:", e);
+      // console.warn("Thumbnail extraction error:", e);
 
       // ❗ DO NOT show error blindly
       // Only show if we truly have no thumbnail

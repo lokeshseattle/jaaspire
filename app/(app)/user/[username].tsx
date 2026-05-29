@@ -1,16 +1,16 @@
 // app/(app)/user/[username].tsx
+import ReportModal from "@/src/components/home/posts/ReportModal";
 import { ProfileFeedView } from "@/src/components/profile/ProfileFeedView";
 import { ProfileGridView } from "@/src/components/profile/ProfileGridView";
 import { ProfilePostsLockedPlaceholder } from "@/src/components/profile/ProfilePostsLockedPlaceholder";
 import UserProfileHeader from "@/src/components/profile/UserProfileHeader";
-import ReportModal from "@/src/components/home/posts/ReportModal";
 import { AnimatedTabBar } from "@/src/components/ui/animated-tabbar";
 import { useGetUserFeedQuery } from "@/src/features/post/post.hooks";
 import {
-  useBlockUserMutation,
-  useGetProfile,
-  useGetProfileByUsername,
-  useUnblockUserMutation,
+    useBlockUserMutation,
+    useGetProfile,
+    useGetProfileByUsername,
+    useUnblockUserMutation,
 } from "@/src/features/profile/profile.hooks";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
@@ -19,29 +19,29 @@ import { Ionicons } from "@expo/vector-icons";
 import { useHeaderHeight } from "@react-navigation/elements";
 import * as Linking from "expo-linking";
 import {
-  router,
-  useFocusEffect,
-  useLocalSearchParams,
-  useNavigation,
+    router,
+    useFocusEffect,
+    useLocalSearchParams,
+    useNavigation,
 } from "expo-router";
 import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
 } from "react";
 import {
-  Alert,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  Share,
-  StyleSheet,
-  Text,
-  View,
+    Alert,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    Share,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
 
 export type TabKey = "gallery" | "home_feed" | "premium" | "video";
@@ -95,7 +95,9 @@ export default function UserProfileScreen() {
     profileByUsername?.data?.blocked_status === "blocked_by_user";
   const isBlockedByYou =
     profileByUsername?.data?.blocked_status === "blocked_by_you";
-  const isDeletionPending = Boolean(profileByUsername?.data?.deletion_requested_at);
+  const isDeletionPending = Boolean(
+    profileByUsername?.data?.deletion_requested_at,
+  );
 
   const [activeTab, setActiveTab] = useState<TabKey>("gallery");
   const [menuVisible, setMenuVisible] = useState(false);
@@ -279,7 +281,7 @@ export default function UserProfileScreen() {
     styles.headerRightButton,
   ]);
 
-  console.log({ activeTab }, 981792891);
+  // console.log({ activeTab }, 981792891);
 
   const mode = useMemo(() => {
     switch (activeTab) {
@@ -448,9 +450,7 @@ export default function UserProfileScreen() {
             onPress={handleReport}
           >
             <Ionicons name="flag-outline" size={22} color="#EF4444" />
-            <Text
-              style={[styles.menuRowLabel, styles.menuRowLabelDestructive]}
-            >
+            <Text style={[styles.menuRowLabel, styles.menuRowLabelDestructive]}>
               Report
             </Text>
           </Pressable>

@@ -1,14 +1,16 @@
 import { ThemedText as Text } from "@/src/components/themed-text";
+import StoryAvatar from "@/src/components/home/story/StoryAvatar";
 import { WEB_ORIGIN } from "@/src/constants/app-env";
 import { useGetProfile } from "@/src/features/profile/profile.hooks";
+import { useGetAllStories } from "@/src/features/story/story.hooks";
+import { useAddStory } from "@/src/features/story/use-add-story";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { Feather } from "@expo/vector-icons";
 import * as Linking from "expo-linking";
 import { Link, router } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
-  Image,
   Platform,
   Pressable,
   Share,
@@ -35,8 +37,16 @@ const ProfileHeader = ({
 
   const { data, isLoading, isSuccess, refetch } = useGetProfile();
   const profile = isSuccess ? data.data : null;
+  const { data: storiesData } = useGetAllStories();
+  const { openAddStory, isUploading } = useAddStory();
 
-  // console.log(profile)
+  const myStory = useMemo(() => {
+    if (!profile?.username) return null;
+    return storiesData?.data.stories.find((s) => s.username === profile.username);
+  }, [storiesData?.data.stories, profile?.username]);
+
+  const hasStory = (myStory?.stories?.length ?? 0) > 0;
+  const seen = myStory?.is_viewed === 1;
 
   const [activeTab, setActiveTab] = useState<
     "gallery" | "home_feed" | "premium"
@@ -96,11 +106,15 @@ const ProfileHeader = ({
 
         {/* PROFILE INFO */}
         <View style={styles.profileRow}>
-          <Image
-            source={{
-              uri: profile.avatar,
-            }}
-            style={styles.avatar}
+          <StoryAvatar
+            uri={profile.avatar}
+            username={profile.username}
+            hasStory={hasStory}
+            seen={seen}
+            size={90}
+            showAddButton
+            onAddStory={openAddStory}
+            isUploading={isUploading}
           />
 
           <View style={styles.statsContainer}>

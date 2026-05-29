@@ -10,7 +10,7 @@ export default function NetworkListener() {
     const unsubscribe = NetInfo.addEventListener((state) => {
       const isConnected = state.isConnected;
 
-      console.log("NetInfo:", isConnected);
+      // console.log("NetInfo:", isConnected);
 
       // First render → just store value
       if (wasConnected.current === null) {

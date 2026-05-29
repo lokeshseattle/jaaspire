@@ -237,6 +237,8 @@ export type TUserProfile = {
   wallet: {
     balance: number;
   };
+  /** Present on GET /users/:username; not returned by /auth/me. */
+  story_status?: StoryStatus;
   /** Stable UUID for StoreKit appAccountToken / Play obfuscatedAccountId. */
   iap_account_token?: string | null;
 };

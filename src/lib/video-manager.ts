@@ -41,7 +41,7 @@ class VideoPlayerManager {
           existing.player.loop = true;
           existing.player.muted = this.globalMuted;
         } catch (e) {
-          console.warn(`[VM] Failed to replace source ${postId}:`, e);
+          // console.warn(`[VM] Failed to replace source ${postId}:`, e);
           this.players.delete(postId);
           return this.getOrCreatePlayer(postId, url);
         }
@@ -52,7 +52,7 @@ class VideoPlayerManager {
           existing.player.replace(url);
           existing.isCleared = false;
         } catch (e) {
-          console.warn(`[VM] Failed to revive player ${postId}:`, e);
+          // console.warn(`[VM] Failed to revive player ${postId}:`, e);
           this.players.delete(postId);
           return this.getOrCreatePlayer(postId, url);
         }
@@ -110,7 +110,7 @@ class VideoPlayerManager {
       try {
         entry.player.release();
       } catch (e) {
-        console.warn(`[VM] Failed to release zombie ${postId}:`, e);
+        // console.warn(`[VM] Failed to release zombie ${postId}:`, e);
       }
       this.players.delete(postId);
     }
@@ -123,7 +123,7 @@ class VideoPlayerManager {
         try {
           current.player.pause();
         } catch (e) {
-          console.warn(`[VM] Failed to pause ${this.currentlyPlaying}:`, e);
+          // console.warn(`[VM] Failed to pause ${this.currentlyPlaying}:`, e);
         }
       }
     }
@@ -135,7 +135,7 @@ class VideoPlayerManager {
         entry.lastUsed = Date.now();
         this.currentlyPlaying = postId;
       } catch (e) {
-        console.warn(`[VM] Failed to play ${postId}:`, e);
+        // console.warn(`[VM] Failed to play ${postId}:`, e);
       }
     }
   }
@@ -146,7 +146,7 @@ class VideoPlayerManager {
       try {
         entry.player.pause();
       } catch (e) {
-        console.warn(`[VM] Failed to pause ${postId}:`, e);
+        // console.warn(`[VM] Failed to pause ${postId}:`, e);
       }
     }
     if (this.currentlyPlaying === postId) {
@@ -160,7 +160,7 @@ class VideoPlayerManager {
       try {
         player.pause();
       } catch (e) {
-        console.warn(`[VM] Failed to pause ${id}:`, e);
+        // console.warn(`[VM] Failed to pause ${id}:`, e);
       }
     });
     this.currentlyPlaying = null;
@@ -181,7 +181,7 @@ class VideoPlayerManager {
     try {
       entry.player.currentTime = 0;
     } catch (e) {
-      console.warn(`[VM] Failed seekToStart ${postId}:`, e);
+      // console.warn(`[VM] Failed seekToStart ${postId}:`, e);
     }
   }
 
@@ -192,7 +192,7 @@ class VideoPlayerManager {
         try {
           player.muted = muted;
         } catch (e) {
-          console.warn(`[VM] Failed to set muted ${postId}:`, e);
+          // console.warn(`[VM] Failed to set muted ${postId}:`, e);
         }
       }
     });
@@ -219,7 +219,7 @@ class VideoPlayerManager {
       try {
         player.release();
       } catch (e) {
-        console.warn(`[VM] Failed to release ${id}:`, e);
+        // console.warn(`[VM] Failed to release ${id}:`, e);
       }
     });
     this.players.clear();
@@ -252,7 +252,7 @@ class VideoPlayerManager {
         try {
           entry.player.release();
         } catch (e) {
-          console.warn(`[VM] Failed to release ${candidateId}:`, e);
+          // console.warn(`[VM] Failed to release ${candidateId}:`, e);
         }
       }
       this.players.delete(candidateId);
@@ -269,7 +269,7 @@ class VideoPlayerManager {
         entry.player.replace(null as any);
         entry.isCleared = true;
       } catch (e) {
-        console.warn(`[VM] Failed to clear ${postId}:`, e);
+        // console.warn(`[VM] Failed to clear ${postId}:`, e);
       }
     }
   }
@@ -283,7 +283,7 @@ class VideoPlayerManager {
       try {
         player.release();
       } catch (e) {
-        console.warn(`[VM] Failed to release ${id}:`, e);
+        // console.warn(`[VM] Failed to release ${id}:`, e);
       }
     });
 

@@ -105,13 +105,13 @@ export const useMediaPicker = () => {
           quality,
         });
 
-        console.log("result", result);
+        // console.log("result", result);
 
         if (
           result?.assets?.[0]?.duration &&
           result.assets[0].duration > MAX_VIDEO_DURATION
         ) {
-          console.log("video duration is too long");
+          // console.log("video duration is too long");
           Alert.alert("Error", "Video duration is too long", [
             { text: "OK", style: "destructive" },
           ]);

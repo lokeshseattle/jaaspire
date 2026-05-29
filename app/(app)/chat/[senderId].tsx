@@ -1255,7 +1255,7 @@ export default function MessengerChatScreen() {
     if (hasNextPage && !isFetchingNextPage) {
       fetchNextPage();
 
-      console.log("fetching next page");
+      // console.log("fetching next page");
     }
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 

@@ -11,7 +11,7 @@ export async function registerPushDevice(
     await apiClient.post<PushDeviceRegisterResponse>("/push/devices", body);
   } catch (error) {
     if (__DEV__) {
-      console.warn("Failed to register push device:", error);
+      // console.warn("Failed to register push device:", error);
     }
   }
 }
@@ -21,7 +21,7 @@ export async function unregisterPushDevice(token: string): Promise<void> {
     await apiClient.delete(`/push/devices/${encodeURIComponent(token)}`);
   } catch (error) {
     if (__DEV__) {
-      console.warn("Failed to unregister push device:", error);
+      // console.warn("Failed to unregister push device:", error);
     }
   }
 }

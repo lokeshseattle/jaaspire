@@ -121,7 +121,7 @@ export default function WalletScreen() {
     } catch (e) {
       setPurchasingSku(null);
       if (__DEV__) {
-        console.warn("[wallet iap] startPurchase failed", e);
+        // console.warn("[wallet iap] startPurchase failed", e);
       }
       Alert.alert(
         "Could not start purchase",

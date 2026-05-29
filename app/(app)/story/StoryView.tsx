@@ -37,7 +37,7 @@ const StoryView = ({ username, onClose, isPanning = false }: TProps) => {
 
   const loggedInUser = loginProfile?.data.username;
 
-  console.log(username);
+  // console.log(username);
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -228,7 +228,7 @@ const StoryView = ({ username, onClose, isPanning = false }: TProps) => {
     return null;
   }
 
-  console.log(currentStory.id);
+  // console.log(currentStory.id);
 
   return (
     <View style={styles.container}>

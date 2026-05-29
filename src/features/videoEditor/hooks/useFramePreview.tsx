@@ -54,7 +54,7 @@ export const useFramePreview = ({
                     x,
                 }));
             } catch (error) {
-                console.warn('Failed to generate preview thumbnail:', error);
+                // console.warn('Failed to generate preview thumbnail:', error);
             }
         },
         [videoUri]

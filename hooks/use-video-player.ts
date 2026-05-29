@@ -118,7 +118,7 @@ export function useManagedVideoPlayer(
             setIsReady(false);
             setIsBuffering(false);
             if (__DEV__) {
-              console.error(`[VideoPlayer:${currentPostId}] error:`, error);
+              // console.error(`[VideoPlayer:${currentPostId}] error:`, error);
             }
             break;
         }
@@ -189,10 +189,10 @@ export function useManagedVideoPlayer(
         p.replace(url);
       } catch (e) {
         if (__DEV__) {
-          console.warn(
-            `[VideoPlayer:${postId}] stuck-loading replace failed:`,
-            e,
-          );
+          // console.warn(
+            // `[VideoPlayer:${postId}] stuck-loading replace failed:`,
+            // e,
+          // );
         }
       }
     }, STUCK_LOADING_REPLACE_MS);

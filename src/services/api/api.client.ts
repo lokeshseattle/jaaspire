@@ -36,20 +36,20 @@ const logger = {
 
     const fullUrl = buildFullUrl(config);
 
-    console.log(`\n🚀 ${config.method?.toUpperCase()} ${fullUrl}`);
-    console.log(`📦 Body: ${JSON.stringify(config.data) ?? "None"}`);
-    console.log(`🔑 Auth: ${hasToken ? "Yes" : "No"}\n`);
+    // console.log(`\n🚀 ${config.method?.toUpperCase()} ${fullUrl}`);
+    // console.log(`📦 Body: ${JSON.stringify(config.data) ?? "None"}`);
+    // console.log(`🔑 Auth: ${hasToken ? "Yes" : "No"}\n`);
   },
   response: (response: AxiosResponse) => {
     if (!__DEV__ || !LOG_RESPONSE) return;
-    console.log(`\n✅ ${response.status} ${response.config.url}`);
-    console.log(`📥 ${JSON.stringify(response.data, null, 2)}\n`);
+    // console.log(`\n✅ ${response.status} ${response.config.url}`);
+    // console.log(`📥 ${JSON.stringify(response.data, null, 2)}\n`);
   },
   error: (error: AxiosError) => {
     if (!__DEV__ || !LOG_ERROR) return;
-    console.log(`\n❌ ${error.response?.status ?? "ERR"} ${error.config?.url}`);
-    console.log(`📛 ${error.message}`);
-    console.log(`📥 ${JSON.stringify(error.response?.data, null, 2)}\n`);
+    // console.log(`\n❌ ${error.response?.status ?? "ERR"} ${error.config?.url}`);
+    // console.log(`📛 ${error.message}`);
+    // console.log(`📥 ${JSON.stringify(error.response?.data, null, 2)}\n`);
   },
 };
 

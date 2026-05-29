@@ -57,7 +57,7 @@ function resolveRouterPath(rawUrl: string): string {
     return rewriteMarketingPathToRouterPath(rawUrl);
   } catch (error) {
     if (__DEV__) {
-      console.warn(LOG_PREFIX, "rewriteMarketingPathToRouterPath threw", error);
+      // console.warn(LOG_PREFIX, "rewriteMarketingPathToRouterPath threw", error);
     }
     return LINKING_SAFE_FALLBACK_PATH;
   }
@@ -98,20 +98,20 @@ export function useNotificationDeepLink(
         const rawUrl = getNotificationDeepLinkUrl(data);
         if (!rawUrl) {
           if (__DEV__) {
-            console.warn(LOG_PREFIX, "Message notification missing data.url", {
-              data,
-            });
+            // console.warn(LOG_PREFIX, "Message notification missing data.url", {
+              // data,
+            // });
           }
           path = NOTIFICATIONS_ALERT_ROUTE;
         } else {
           path = resolveRouterPath(rawUrl);
           if (path === LINKING_SAFE_FALLBACK_PATH) {
             if (__DEV__) {
-              console.warn(
-                LOG_PREFIX,
-                "Unrecognized message URL; routing to fallback",
-                { rawUrl, path },
-              );
+              // console.warn(
+                // LOG_PREFIX,
+                // "Unrecognized message URL; routing to fallback",
+                // { rawUrl, path },
+              // );
             }
           }
         }
@@ -120,11 +120,11 @@ export function useNotificationDeepLink(
       }
 
       if (__DEV__) {
-        console.log(LOG_PREFIX, "Navigating", {
-          isMessage,
-          path,
-          notification_type: data?.notification_type,
-        });
+        // console.log(LOG_PREFIX, "Navigating", {
+          // isMessage,
+          // path,
+          // notification_type: data?.notification_type,
+        // });
       }
 
       setTimeout(() => {
@@ -132,7 +132,7 @@ export function useNotificationDeepLink(
           router.push(path as Href);
         } catch (error) {
           if (__DEV__) {
-            console.warn(LOG_PREFIX, "router.push failed", { path, error });
+            // console.warn(LOG_PREFIX, "router.push failed", { path, error });
           }
           try {
             router.push(LINKING_SAFE_FALLBACK_PATH);
@@ -151,11 +151,11 @@ export function useNotificationDeepLink(
         })
         .catch((error) => {
           if (__DEV__) {
-            console.warn(
-              LOG_PREFIX,
-              "getLastNotificationResponseAsync failed",
-              error,
-            );
+            // console.warn(
+              // LOG_PREFIX,
+              // "getLastNotificationResponseAsync failed",
+              // error,
+            // );
           }
         });
     }

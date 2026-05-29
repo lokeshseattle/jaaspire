@@ -1,6 +1,7 @@
 import SubscribePaymentConfirmSheet from "@/src/components/payment/SubscribePaymentConfirmSheet";
 // import { logSubscriptionDebug } from "@/src/features/wallet/iap-dev.store";
 import TipBottomSheet from "@/src/components/payment/TipBottomSheet";
+import StoryAvatar from "@/src/components/home/story/StoryAvatar";
 import { ThemedText as Text } from "@/src/components/themed-text";
 import {
   useFollowToggleMutation,
@@ -18,7 +19,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useCallback, useState } from "react";
-import { Image, Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 
 const ProfileHeader = ({ username }: { username: string }) => {
   const { theme } = useTheme();
@@ -125,11 +126,13 @@ const ProfileHeader = ({ username }: { username: string }) => {
       <>
         {/* PROFILE INFO */}
         <View style={styles.profileRow}>
-          <Image
-            source={{
-              uri: profile.avatar,
-            }}
-            style={styles.avatar}
+          <StoryAvatar
+            uri={profile.avatar}
+            username={profile.username}
+            hasStory={profile.story_status?.has_stories ?? false}
+            seen={profile.story_status?.all_viewed ?? true}
+            size={90}
+            disabled={blockedByYou || blockedByOther || isDeletionPending}
           />
 
           <View style={styles.statsContainer}>

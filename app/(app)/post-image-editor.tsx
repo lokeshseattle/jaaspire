@@ -141,7 +141,7 @@ export default function PostImageEditorScreen() {
       }
       router.back();
     } catch (error) {
-      console.error('Error applying edits:', error);
+      // console.error('Error applying edits:', error);
     } finally {
       setIsProcessing(false);
     }

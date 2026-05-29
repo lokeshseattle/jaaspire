@@ -270,7 +270,7 @@ export const VideoEditorScreen: React.FC<VideoEditorProps> = ({
                     clearInterval(checkDuration);
                 }
             } catch (err) {
-                console.error('Error getting duration:', err);
+                // console.error('Error getting duration:', err);
                 setError('Failed to load video');
                 setIsLoading(false);
                 clearInterval(checkDuration);

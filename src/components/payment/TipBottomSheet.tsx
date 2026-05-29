@@ -3,10 +3,7 @@ import IapLegalFooter from "@/src/components/wallet/IapLegalFooter";
 import { useNotificationCounts } from "@/src/features/profile/notification.hooks";
 import { storeProductIdFromIapSku } from "@/src/features/wallet/iap.constants";
 import { useIap } from "@/src/features/wallet/iap.context";
-import {
-  useIapSkus,
-  useTipUser,
-} from "@/src/features/wallet/wallet.hooks";
+import { useIapSkus, useTipUser } from "@/src/features/wallet/wallet.hooks";
 import type { IapSkuListItem } from "@/src/services/api/api.types";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
@@ -700,7 +697,9 @@ export default function TipBottomSheet({
                         />
                         <View style={styles.methodTextWrap}>
                           <Text style={styles.methodLabel}>
-                            {Platform.OS === "ios" ? "App Store" : "Google Play"}
+                            {Platform.OS === "ios"
+                              ? "App Store"
+                              : "Google Play"}
                           </Text>
                           {selectedStorePrice ? (
                             <Text style={styles.methodHint}>
@@ -750,16 +749,13 @@ export default function TipBottomSheet({
             </View>
           ) : null}
 
-          {selectedStars > 0 &&
-          showIapRow &&
-          canUseIap &&
-          selectedMethod === "iap" ? (
+          {selectedStars > 0 && showIapRow && canUseIap && (
             <IapLegalFooter
               theme={theme}
               variant="consumable"
               style={styles.legalFooter}
             />
-          ) : null}
+          )}
 
           {balancePending ? (
             <View style={styles.sliderPlaceholder}>
