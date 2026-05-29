@@ -263,11 +263,11 @@ export const useSendMessengerMessage = (
 > => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: SendMessengerMessageRequest) =>
+    mutationFn: ({ message, sku_key, attachments }: SendMessengerMessageRequest) =>
       apiClient
         .post<SendMessengerMessageResponse>(
           `/messenger/${peerUserId}/send`,
-          body,
+          { message, sku_key, attachments },
         )
         .then((r) => r.data),
     onSuccess: (response) => {

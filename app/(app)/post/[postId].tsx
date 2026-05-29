@@ -1,23 +1,14 @@
-import { useCommentsSheet } from "@/hooks/use-comment-sheet";
-import { useShareSheet } from "@/hooks/use-share-sheet";
-import { CommentsBottomSheet } from "@/src/components/comments/CommentsBottomSheet";
-import PostItem from "@/src/components/home/posts/PostWrapper";
-import { SharePostBottomSheet } from "@/src/components/share/SharePostBottomSheet";
-import {
-  useGetSinglePost,
-  useTrackPostView,
-} from "@/src/features/post/post.hooks";
-import { videoManager } from "@/src/lib/video-manager";
-import { useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FeedContainer } from "@/src/components/feed/FeedContainer";
+import { useFeedController } from "@/src/components/feed/use-feed-controller";
+import { useGetSinglePost } from "@/src/features/post/post.hooks";
+import { useLocalSearchParams } from "expo-router";
+import { useCallback, useMemo } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   StyleSheet,
   Text,
   View,
   ViewabilityConfig,
-  ViewToken,
 } from "react-native";
 
 const VIEWABILITY_CONFIG: ViewabilityConfig = {
@@ -29,26 +20,6 @@ const PostScreen = () => {
   const { postId } = useLocalSearchParams<{
     postId: string;
   }>();
-
-  const [visiblePostId, setVisiblePostId] = useState<number | null>(null);
-  const [isScreenFocused, setIsScreenFocused] = useState(true);
-
-  const visiblePostIdRef = useRef<number | null>(null);
-  const visibleFeedIndexRef = useRef<number>(-1);
-  const isScreenFocusedRef = useRef(true);
-
-  const trackPostView = useTrackPostView();
-  const trackPostViewRef = useRef(trackPostView);
-  trackPostViewRef.current = trackPostView;
-
-  const { bottomSheetRef, selectedPostId, openComments, onDismiss } =
-    useCommentsSheet();
-  const {
-    bottomSheetRef: shareBottomSheetRef,
-    selectedPostId: selectedSharePostId,
-    openShare,
-    onDismiss: onShareDismiss,
-  } = useShareSheet();
 
   const {
     data,
@@ -77,105 +48,10 @@ const PostScreen = () => {
     }
     return out;
   }, [mainPostId, recommendedPostIds]);
-
-  const visibleFeedIndex = useMemo(() => {
-    if (visiblePostId == null) return -1;
-    return postIds.indexOf(visiblePostId);
-  }, [visiblePostId, postIds]);
-
-  visiblePostIdRef.current = visiblePostId;
-  visibleFeedIndexRef.current = visibleFeedIndex;
-  isScreenFocusedRef.current = isScreenFocused;
-
-  useEffect(() => {
-    setVisiblePostId(null);
-  }, [postId]);
-
-  useFocusEffect(
-    useCallback(() => {
-      setIsScreenFocused(true);
-      setVisiblePostId((v) =>
-        mainPostId != null && v == null ? mainPostId : v,
-      );
-      return () => {
-        setIsScreenFocused(false);
-        videoManager.pauseAll();
-      };
-    }, [mainPostId]),
-  );
-
-  const onViewableItemsChanged = useCallback(
-    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-      if (viewableItems.length === 0) {
-        const fallback = postIds[0];
-        if (fallback != null) setVisiblePostId(fallback);
-        return;
-      }
-
-      let mostVisibleItem = viewableItems[0];
-      for (const item of viewableItems) {
-        if (item.isViewable) {
-          mostVisibleItem = item;
-          break;
-        }
-      }
-
-      const newVisibleId = mostVisibleItem.item as number;
-
-      setVisiblePostId((prevId) => {
-        if (prevId !== newVisibleId) {
-          trackPostViewRef.current.mutate(newVisibleId);
-        }
-        return newVisibleId;
-      });
-    },
-    [postIds],
-  );
-
-  const onViewableItemsChangedRef = useRef(onViewableItemsChanged);
-  onViewableItemsChangedRef.current = onViewableItemsChanged;
-
-  const viewabilityConfigCallbackPairs = useRef([
-    {
-      viewabilityConfig: VIEWABILITY_CONFIG,
-      onViewableItemsChanged: (info: {
-        viewableItems: ViewToken[];
-        changed: ViewToken[];
-      }) => onViewableItemsChangedRef.current(info),
-    },
-  ]);
-
-  const getNextPostId = useCallback(
-    (currentId: number): number | undefined => {
-      const currentIndex = postIds.indexOf(currentId);
-      if (currentIndex === -1 || currentIndex >= postIds.length - 1) {
-        return undefined;
-      }
-      return postIds[currentIndex + 1];
-    },
-    [postIds],
-  );
-
-  const renderItem = useCallback(
-    ({ item: id, index }: { item: number; index: number }) => {
-      const nextId = getNextPostId(id);
-      return (
-        <PostItem
-          id={id}
-          feedIndex={index}
-          visibleFeedIndex={visibleFeedIndexRef.current}
-          nextId={nextId}
-          visiblePostId={visiblePostIdRef.current}
-          isScreenFocused={isScreenFocusedRef.current}
-          openComments={openComments}
-          openShare={openShare}
-        />
-      );
-    },
-    [openComments, openShare, getNextPostId],
-  );
-
-  const keyExtractor = useCallback((item: number) => String(item), []);
+  const controller = useFeedController({
+    postIds,
+    viewabilityConfig: VIEWABILITY_CONFIG,
+  });
 
   const handleEndReached = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) {
@@ -187,18 +63,6 @@ const PostScreen = () => {
     () =>
       isFetchingNextPage ? <ActivityIndicator style={styles.loader} /> : null,
     [isFetchingNextPage],
-  );
-
-  /**
-   * Bundle visiblePostId + isScreenFocused into extraData so FlatList re-renders
-   * cells when EITHER changes. Without isScreenFocused here, focus toggles
-   * (post → flick → post) don't propagate to PostWrapper, leaving PostMedia's
-   * `isFocused` prop stale: video can't auto-resume after pauseAll, and the
-   * VideoView stays mounted causing surface conflicts (black frame).
-   */
-  const flatListExtraData = useMemo(
-    () => ({ visiblePostId, isScreenFocused }),
-    [visiblePostId, isScreenFocused],
   );
 
   if (isLoading) {
@@ -219,31 +83,21 @@ const PostScreen = () => {
 
   return (
     <View style={styles.container}>
-      <FlatList
-        data={postIds}
-        keyExtractor={keyExtractor}
-        renderItem={renderItem}
-        ListFooterComponent={ListFooter}
-        viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs.current}
+      <FeedContainer
+        controller={controller}
+        postIds={postIds}
+        onRefresh={async () => undefined}
+        isRefreshing={false}
         onEndReached={handleEndReached}
-        onEndReachedThreshold={0.5}
-        removeClippedSubviews
-        windowSize={5}
-        maxToRenderPerBatch={3}
-        initialNumToRender={3}
-        updateCellsBatchingPeriod={100}
-        extraData={flatListExtraData}
-      />
-
-      <CommentsBottomSheet
-        bottomSheetRef={bottomSheetRef}
-        postId={selectedPostId}
-        onDismiss={onDismiss}
-      />
-      <SharePostBottomSheet
-        bottomSheetRef={shareBottomSheetRef}
-        postId={selectedSharePostId}
-        onDismiss={onShareDismiss}
+        isFetchingNextPage={isFetchingNextPage}
+        flatListProps={{
+          ListFooterComponent: ListFooter,
+          removeClippedSubviews: true,
+          windowSize: 5,
+          maxToRenderPerBatch: 3,
+          initialNumToRender: 3,
+          updateCellsBatchingPeriod: 100,
+        }}
       />
     </View>
   );

@@ -64,6 +64,12 @@ export type PublicRouteAlias = {
  */
 export const PUBLIC_ROUTE_ALIASES: readonly PublicRouteAlias[] = [
   {
+    description:
+      "Push / web messenger: /my/messenger?chat=id → /chat/id (app/(app)/chat/[senderId].tsx)",
+    pattern: /^\/my\/messenger\/?$/,
+    replacement: "/chat",
+  },
+  {
     description: "Web post URLs: /posts/id → /post/id (matches post/[postId])",
     pattern: /^\/posts\/([^/]+)\/?$/,
     replacement: "/post/$1",
@@ -92,6 +98,7 @@ const RESERVED_SINGLE_SEGMENT_PATHS = new Set([
   "help-support",
   "login",
   "messages",
+  "delete-account",
   "notifications",
   "p",
   "pending-requests",
@@ -112,7 +119,8 @@ const RESERVED_SINGLE_SEGMENT_PATHS = new Set([
   "wallet",
 ]);
 
-const SAFE_FALLBACK_PATH = "/(app)/(tabs)";
+/** Returned when a marketing/public URL has no matching rewrite rule. */
+export const LINKING_SAFE_FALLBACK_PATH = "/(app)/(tabs)" as const;
 
 function splitPathnameQueryAndHash(input: string): {
   pathname: string;
@@ -158,6 +166,68 @@ function splitPathnameQueryAndHash(input: string): {
 }
 
 /**
+ * Extracts peer/sender id from push or web messenger URLs, e.g.
+ * `/my/messenger?chat=5452`, `/chat/5452`, or `?chat=5452`.
+ */
+export function extractChatPeerIdFromPushUrl(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  try {
+    if (trimmed.includes("://")) {
+      const u = new URL(trimmed);
+      const fromQuery = u.searchParams.get("chat");
+      if (fromQuery) return fromQuery;
+
+      const pathMatch = u.pathname.match(/\/chat\/([^/]+)\/?$/);
+      if (pathMatch?.[1]) return decodeURIComponent(pathMatch[1]);
+    }
+  } catch {
+    /* fall through */
+  }
+
+  const { pathname, rest } = splitPathnameQueryAndHash(trimmed);
+  if (pathname === "/chat" && rest.startsWith("?")) {
+    const params = new URLSearchParams(rest.slice(1));
+    const chat = params.get("chat");
+    if (chat) return chat;
+  }
+
+  const pathMatch = pathname.match(/^\/chat\/([^/]+)\/?$/);
+  if (pathMatch?.[1]) return decodeURIComponent(pathMatch[1]);
+
+  const queryMatch = trimmed.match(/[?&]chat=([^&#]+)/);
+  if (queryMatch?.[1]) return decodeURIComponent(queryMatch[1]);
+
+  return null;
+}
+
+/**
+ * Maps /chat?chat={senderId} → /chat/{senderId} for app/(app)/chat/[senderId].tsx.
+ */
+function applyChatSenderIdFromQuery(
+  pathname: string,
+  rest: string,
+): string | null {
+  if (pathname !== "/chat" || rest === "") return null;
+
+  const hashIdx = rest.indexOf("#");
+  const queryPart = hashIdx >= 0 ? rest.slice(0, hashIdx) : rest;
+  const hashPart = hashIdx >= 0 ? rest.slice(hashIdx) : "";
+  if (!queryPart.startsWith("?")) return null;
+
+  const params = new URLSearchParams(queryPart.slice(1));
+  const senderId = params.get("chat");
+  if (!senderId) return null;
+
+  params.delete("chat");
+  const remainingQuery = params.toString();
+  const suffix = remainingQuery ? `?${remainingQuery}` : "";
+
+  return `/chat/${encodeURIComponent(senderId)}${suffix}${hashPart}`;
+}
+
+/**
  * Rewrites a marketing/public path segment to an Expo Router pathname.
  * Accepts a full URL or a path; preserves query + hash on output.
  * Falls back to the home tab for unsupported public URLs.
@@ -169,6 +239,8 @@ export function rewriteMarketingPathToRouterPath(inputPath: string): string {
     for (const rule of PUBLIC_ROUTE_ALIASES) {
       if (rule.pattern.test(pathname)) {
         const rewritten = pathname.replace(rule.pattern, rule.replacement);
+        const withChatParam = applyChatSenderIdFromQuery(rewritten, rest);
+        if (withChatParam != null) return withChatParam;
         return `${rewritten}${rest}`;
       }
     }
@@ -185,8 +257,8 @@ export function rewriteMarketingPathToRouterPath(inputPath: string): string {
       }
     }
 
-    return SAFE_FALLBACK_PATH;
+    return LINKING_SAFE_FALLBACK_PATH;
   } catch {
-    return SAFE_FALLBACK_PATH;
+    return LINKING_SAFE_FALLBACK_PATH;
   }
 }

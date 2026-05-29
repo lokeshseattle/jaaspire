@@ -3,6 +3,7 @@ import { ProfileFeedView } from "@/src/components/profile/ProfileFeedView";
 import { ProfileGridView } from "@/src/components/profile/ProfileGridView";
 import { ProfilePostsLockedPlaceholder } from "@/src/components/profile/ProfilePostsLockedPlaceholder";
 import UserProfileHeader from "@/src/components/profile/UserProfileHeader";
+import ReportModal from "@/src/components/home/posts/ReportModal";
 import { AnimatedTabBar } from "@/src/components/ui/animated-tabbar";
 import { useGetUserFeedQuery } from "@/src/features/post/post.hooks";
 import {
@@ -94,9 +95,11 @@ export default function UserProfileScreen() {
     profileByUsername?.data?.blocked_status === "blocked_by_user";
   const isBlockedByYou =
     profileByUsername?.data?.blocked_status === "blocked_by_you";
+  const isDeletionPending = Boolean(profileByUsername?.data?.deletion_requested_at);
 
   const [activeTab, setActiveTab] = useState<TabKey>("gallery");
   const [menuVisible, setMenuVisible] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const lastSubscriptionAlertRef = useRef<string | undefined>(undefined);
 
   const isOwnProfile = useMemo(() => {
@@ -128,6 +131,7 @@ export default function UserProfileScreen() {
 
   const canViewPosts = useMemo(() => {
     if (!username) return false;
+    if (profileData?.deletion_requested_at) return false;
     if (profileData?.blocked_status === "blocked_by_you") return false;
     if (isOwnProfile) return true;
     if (!profileData?.viewer) return false;
@@ -138,7 +142,10 @@ export default function UserProfileScreen() {
   }, [username, isOwnProfile, profileData]);
 
   const feedEnabled =
-    !!username && (isOwnProfile || canViewPosts) && !isBlockedByYou;
+    !!username &&
+    (isOwnProfile || canViewPosts) &&
+    !isBlockedByYou &&
+    !isDeletionPending;
 
   const postsListEmpty = useMemo(() => {
     if (isOwnProfile) return null;
@@ -164,6 +171,11 @@ export default function UserProfileScreen() {
 
   const closeMenu = useCallback(() => setMenuVisible(false), []);
   const openMenu = useCallback(() => setMenuVisible(true), []);
+
+  const handleReport = useCallback(() => {
+    closeMenu();
+    setReportOpen(true);
+  }, [closeMenu]);
 
   const handleShare = useCallback(async () => {
     closeMenu();
@@ -349,7 +361,7 @@ export default function UserProfileScreen() {
 
   // Render content based on active tab
   const renderContent = () => {
-    if (isBlockedByYou) {
+    if (isBlockedByYou || isDeletionPending) {
       return (
         <ScrollView
           style={styles.blockedProfileScroll}
@@ -428,6 +440,21 @@ export default function UserProfileScreen() {
             <Text style={styles.menuRowLabel}>Share</Text>
           </Pressable>
           <View style={styles.menuDivider} />
+          <Pressable
+            style={({ pressed }) => [
+              styles.menuRow,
+              pressed && styles.menuRowPressed,
+            ]}
+            onPress={handleReport}
+          >
+            <Ionicons name="flag-outline" size={22} color="#EF4444" />
+            <Text
+              style={[styles.menuRowLabel, styles.menuRowLabelDestructive]}
+            >
+              Report
+            </Text>
+          </Pressable>
+          <View style={styles.menuDivider} />
           {isBlockedByUser || isBlockedByYou ? (
             <Pressable
               style={({ pressed }) => [
@@ -463,6 +490,15 @@ export default function UserProfileScreen() {
           )}
         </View>
       </Modal>
+      <ReportModal
+        visible={reportOpen}
+        onClose={() => setReportOpen(false)}
+        target={
+          reportOpen && profileData?.id
+            ? { kind: "user", userId: profileData.id }
+            : null
+        }
+      />
     </View>
   );
 }

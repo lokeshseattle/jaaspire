@@ -1,5 +1,7 @@
+import IapRecoveryBanner from "@/src/components/wallet/IapRecoveryBanner";
 import { useAuth } from "@/src/features/auth/auth.hooks";
 import { useGetProfile } from "@/src/features/profile/profile.hooks";
+import { IapProvider } from "@/src/features/wallet/IapProvider";
 import {
   initializePusher,
   subscribeUserChannel,
@@ -94,244 +96,266 @@ export default function AppLayout() {
   }
 
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        headerStyle: {
-          backgroundColor: theme.colors.background,
-        },
-        headerTintColor: theme.colors.textPrimary,
-        headerShadowVisible: false,
-        contentStyle: {
-          backgroundColor: theme.colors.background,
-        },
-      }}
-    >
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-
-      <Stack.Screen
-        name="settings"
-        options={{
-          headerShown: true,
-          headerTitle: "Settings",
-          headerBackButtonDisplayMode: "minimal",
-        }}
-      />
-
-      <Stack.Screen
-        name="manage-subscriptions"
-        options={{
-          headerShown: true,
-          headerTitle: "Manage subscriptions",
-          headerBackButtonDisplayMode: "minimal",
-        }}
-      />
-
-      <Stack.Screen
-        name="manage-payments"
-        options={{
-          headerShown: true,
-          headerTitle: "Manage payments",
-          headerBackButtonDisplayMode: "minimal",
-        }}
-      />
-
-      <Stack.Screen
-        name="help-support"
-        options={{
-          headerShown: true,
-          headerTitle: "Help & Support",
-          headerBackButtonDisplayMode: "minimal",
-        }}
-      />
-
-      <Stack.Screen
-        name="wallet"
-        options={{
-          headerShown: true,
-          headerTitle: "Wallet",
-          headerBackButtonDisplayMode: "minimal",
-        }}
-      />
-
-      <Stack.Screen
-        name="messages"
-        options={{
-          headerShown: true,
-          title: "Messages",
-          presentation: "card",
-          headerBackButtonDisplayMode: "minimal",
-        }}
-      />
-
-      <Stack.Screen
-        name="notifications"
-        options={{
-          headerShown: true,
-          title: "Alerts",
-          presentation: "card",
-          headerBackButtonDisplayMode: "minimal",
-        }}
-      />
-
-      <Stack.Screen
-        name="chat/[senderId]"
-        options={{
-          headerShown: true,
-          headerBackButtonDisplayMode: "minimal",
-          title: "Chat",
-        }}
-      />
-
-      <Stack.Screen
-        name="story/[username]"
-        options={{
-          animation: "fade",
+    <IapProvider>
+      <IapRecoveryBanner />
+      <Stack
+        screenOptions={{
           headerShown: false,
+          headerStyle: {
+            backgroundColor: theme.colors.background,
+          },
+          headerTintColor: theme.colors.textPrimary,
+          headerShadowVisible: false,
+          contentStyle: {
+            backgroundColor: theme.colors.background,
+          },
         }}
-      />
+      >
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 
-      <Stack.Screen
-        name="user/[username]"
-        options={({ route }) => {
-          return {
+        <Stack.Screen
+          name="settings"
+          options={{
+            headerShown: true,
+            headerTitle: "Settings",
+            headerBackButtonDisplayMode: "minimal",
+          }}
+        />
+
+        <Stack.Screen
+          name="manage-subscriptions"
+          options={{
+            headerShown: true,
+            headerTitle: "Manage subscriptions",
+            headerBackButtonDisplayMode: "minimal",
+          }}
+        />
+
+        <Stack.Screen
+          name="manage-payments"
+          options={{
+            headerShown: true,
+            headerTitle: "Manage payments",
+            headerBackButtonDisplayMode: "minimal",
+          }}
+        />
+
+        <Stack.Screen
+          name="help-support"
+          options={{
+            headerShown: true,
+            headerTitle: "Help & Support",
+            headerBackButtonDisplayMode: "minimal",
+          }}
+        />
+
+        <Stack.Screen
+          name="wallet"
+          options={{
+            headerShown: true,
+            headerTitle: "Balance",
+            headerBackButtonDisplayMode: "minimal",
+          }}
+        />
+
+        {/* Dev: subscription IAP debug screen */}
+        {/* <Stack.Screen
+        name="iap-debug"
+        options={{
+          headerShown: true,
+          headerTitle: "Subscription debug",
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      /> */}
+
+        <Stack.Screen
+          name="messages"
+          options={{
+            headerShown: true,
+            title: "Messages",
+            presentation: "card",
+            headerBackButtonDisplayMode: "minimal",
+          }}
+        />
+
+        <Stack.Screen
+          name="notifications"
+          options={{
+            headerShown: true,
+            title: "Alerts",
+            presentation: "card",
+            headerBackButtonDisplayMode: "minimal",
+          }}
+        />
+
+        <Stack.Screen
+          name="chat/[senderId]"
+          options={{
             headerShown: true,
             headerBackButtonDisplayMode: "minimal",
-          };
-        }}
-      />
+            title: "Chat",
+          }}
+        />
 
-      <Stack.Screen
-        name="user/[username]/posts/[postId]"
-        options={({ route }) => {
-          const params = route.params as { username?: string | string[] };
-          const raw = params?.username;
-          const username =
-            typeof raw === "string"
-              ? raw
-              : Array.isArray(raw)
-                ? raw[0]
-                : undefined;
+        <Stack.Screen
+          name="story/[username]"
+          options={{
+            animation: "fade",
+            headerShown: false,
+          }}
+        />
 
-          return {
+        <Stack.Screen
+          name="user/[username]"
+          options={({ route }) => {
+            return {
+              headerShown: true,
+              headerBackButtonDisplayMode: "minimal",
+            };
+          }}
+        />
+
+        <Stack.Screen
+          name="user/[username]/posts/[postId]"
+          options={({ route }) => {
+            const params = route.params as { username?: string | string[] };
+            const raw = params?.username;
+            const username =
+              typeof raw === "string"
+                ? raw
+                : Array.isArray(raw)
+                  ? raw[0]
+                  : undefined;
+
+            return {
+              headerShown: true,
+              headerTitleAlign: "center",
+              headerTitle: () => (
+                <UserPostDetailHeaderTitle username={username} />
+              ),
+              headerBackButtonDisplayMode: "minimal",
+              animation: "fade_from_bottom",
+            };
+          }}
+        />
+
+        <Stack.Screen
+          name="story-editor"
+          options={{
+            headerShown: false,
+            presentation: "transparentModal",
+            animation: "fade",
+          }}
+        />
+
+        <Stack.Screen
+          name="video-editor"
+          options={{
+            headerShown: false,
+            animation: "fade",
+          }}
+        />
+
+        <Stack.Screen
+          name="post/[postId]"
+          options={{
             headerShown: true,
-            headerTitleAlign: "center",
-            headerTitle: () => (
-              <UserPostDetailHeaderTitle username={username} />
-            ),
+            headerTitle: "Explore",
             headerBackButtonDisplayMode: "minimal",
             animation: "fade_from_bottom",
-          };
-        }}
-      />
+          }}
+        />
 
-      <Stack.Screen
-        name="story-editor"
-        options={{
-          headerShown: false,
-          presentation: "transparentModal",
-          animation: "fade",
-        }}
-      />
+        <Stack.Screen
+          name="flick/[postId]"
+          options={{
+            headerShown: false,
+            animation: "fade_from_bottom",
+            contentStyle: { backgroundColor: "#000000" },
+          }}
+        />
 
-      <Stack.Screen
-        name="video-editor"
-        options={{
-          headerShown: false,
-          animation: "fade",
-        }}
-      />
+        <Stack.Screen
+          name="global-search"
+          options={{
+            headerShown: true,
+            headerBackButtonDisplayMode: "minimal",
+          }}
+        />
 
-      <Stack.Screen
-        name="post/[postId]"
-        options={{
-          headerShown: true,
-          headerTitle: "Explore",
-          headerBackButtonDisplayMode: "minimal",
-          animation: "fade_from_bottom",
-        }}
-      />
+        <Stack.Screen
+          name="followers-following"
+          options={{
+            headerShown: true,
+            headerBackButtonDisplayMode: "minimal",
+          }}
+        />
 
-      <Stack.Screen
-        name="flick/[postId]"
-        options={{
-          headerShown: false,
-          animation: "fade_from_bottom",
-          contentStyle: { backgroundColor: "#000000" },
-        }}
-      />
+        <Stack.Screen
+          name="bookmarks"
+          options={{
+            headerShown: true,
+            headerTitle: "Bookmarks",
+            headerBackButtonDisplayMode: "minimal",
+          }}
+        />
 
-      <Stack.Screen
-        name="global-search"
-        options={{
-          headerShown: true,
-          headerBackButtonDisplayMode: "minimal",
-        }}
-      />
+        <Stack.Screen
+          name="pending-requests"
+          options={{
+            headerShown: true,
+            headerTitle: "Pending Requests",
+            headerBackButtonDisplayMode: "minimal",
+          }}
+        />
 
-      <Stack.Screen
-        name="followers-following"
-        options={{
-          headerShown: true,
-          headerBackButtonDisplayMode: "minimal",
-        }}
-      />
+        <Stack.Screen
+          name="post-image-editor"
+          options={{
+            headerShown: false,
+            headerTitle: "Image",
+            headerBackButtonDisplayMode: "minimal",
+            presentation: "fullScreenModal",
+          }}
+        />
 
-      <Stack.Screen
-        name="bookmarks"
-        options={{
-          headerShown: true,
-          headerTitle: "Bookmarks",
-          headerBackButtonDisplayMode: "minimal",
-        }}
-      />
+        <Stack.Screen
+          name="post-video-thumbnail"
+          options={{
+            headerShown: false,
+            headerTitle: "Thumbnail",
+            headerBackButtonDisplayMode: "minimal",
+            presentation: "fullScreenModal",
+          }}
+        />
 
-      <Stack.Screen
-        name="pending-requests"
-        options={{
-          headerShown: true,
-          headerTitle: "Pending Requests",
-          headerBackButtonDisplayMode: "minimal",
-        }}
-      />
+        <Stack.Screen
+          name="blocked-users"
+          options={{
+            headerShown: true,
+            headerTitle: "Blocked Users",
+            headerBackButtonDisplayMode: "minimal",
+          }}
+        />
 
-      <Stack.Screen
-        name="post-image-editor"
-        options={{
-          headerShown: false,
-          headerTitle: "Image",
-          headerBackButtonDisplayMode: "minimal",
-          presentation: "fullScreenModal",
-        }}
-      />
+        <Stack.Screen
+          name="privacy-settings"
+          options={{
+            headerShown: true,
+            headerTitle: "Privacy",
+            headerBackButtonDisplayMode: "minimal",
+          }}
+        />
 
-      <Stack.Screen
-        name="post-video-thumbnail"
-        options={{
-          headerShown: false,
-          headerTitle: "Thumbnail",
-          headerBackButtonDisplayMode: "minimal",
-          presentation: "fullScreenModal",
-        }}
-      />
-
-      <Stack.Screen
-        name="blocked-users"
-        options={{
-          headerShown: true,
-          headerTitle: "Blocked Users",
-          headerBackButtonDisplayMode: "minimal",
-        }}
-      />
-
-      <Stack.Screen
-        name="privacy-settings"
-        options={{
-          headerShown: true,
-          headerTitle: "Privacy",
-          headerBackButtonDisplayMode: "minimal",
-        }}
-      />
-    </Stack>
+        <Stack.Screen
+          name="delete-account"
+          options={{
+            headerShown: true,
+            headerTitle: "Delete account",
+            headerBackButtonDisplayMode: "minimal",
+          }}
+        />
+      </Stack>
+    </IapProvider>
   );
 }

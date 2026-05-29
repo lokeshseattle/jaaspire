@@ -1,11 +1,14 @@
 import { useAuth } from "@/src/features/auth/auth.hooks";
+import { useRestorePurchases } from "@/src/features/wallet/use-restore-purchases";
 import { AppTheme, ThemeMode } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React from "react";
 import {
+  ActivityIndicator,
   Alert,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -60,7 +63,10 @@ export default function SettingsScreen() {
   const { theme, mode, setMode } = useTheme();
   const styles = createStyles(theme);
   const { logout } = useAuth();
+  const { restore, isRestoring } = useRestorePurchases();
   const insets = useSafeAreaInsets();
+  const showRestorePurchases =
+    Platform.OS === "ios" || Platform.OS === "android";
 
   return (
     <ScrollView
@@ -79,6 +85,38 @@ export default function SettingsScreen() {
           icon="card-outline"
           label="Subscriptions"
         />
+        {showRestorePurchases ? (
+          <TouchableOpacity
+            style={styles.item}
+            activeOpacity={0.7}
+            onPress={() => void restore()}
+            disabled={isRestoring}
+          >
+            <View style={styles.left}>
+              <Ionicons
+                name="refresh-outline"
+                size={20}
+                color={theme.colors.icon}
+              />
+              <View style={styles.restoreLabelWrap}>
+                <Text style={styles.label}>Restore purchases</Text>
+                <Text style={styles.restoreHint}>
+                  Sync subscriptions and uncredited star packs from this store
+                  account
+                </Text>
+              </View>
+            </View>
+            {isRestoring ? (
+              <ActivityIndicator size="small" color={theme.colors.primary} />
+            ) : (
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={theme.colors.icon}
+              />
+            )}
+          </TouchableOpacity>
+        ) : null}
         <Item
           theme={theme}
           onPress={() => router.push("/(app)/manage-payments")}
@@ -101,14 +139,21 @@ export default function SettingsScreen() {
           theme={theme}
           onPress={() => router.push("/(app)/privacy-settings")}
           icon="shield-checkmark-outline"
-          label="Privacy"
+          label="Privacy & Monetization"
         />
         <Item
           theme={theme}
           icon="wallet-outline"
-          label="Wallet"
+          label="Balance"
           onPress={() => router.push("/wallet")}
         />
+        {/* Dev: subscription IAP event log (re-enable for local debugging) */}
+        {/* <Item
+          theme={theme}
+          icon="bug-outline"
+          label="Subscription debug"
+          onPress={() => router.push("/(app)/iap-debug")}
+        /> */}
       </View>
 
       <View style={styles.section}>
@@ -151,6 +196,13 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.section}>
+        <Item
+          theme={theme}
+          icon="trash-outline"
+          label="Delete account"
+          danger
+          onPress={() => router.push("/(app)/delete-account")}
+        />
         <Item
           theme={theme}
           icon="log-out-outline"
@@ -254,6 +306,17 @@ const createStyles = (theme: AppTheme) =>
       fontSize: 15,
       color: theme.colors.textPrimary,
       fontWeight: "500",
+      flexShrink: 1,
+    },
+
+    restoreLabelWrap: {
+      flex: 1,
+      gap: 2,
+    },
+
+    restoreHint: {
+      fontSize: 12,
+      color: theme.colors.textSecondary,
       flexShrink: 1,
     },
   });

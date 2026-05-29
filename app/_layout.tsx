@@ -1,6 +1,9 @@
 import { useAuth } from "@/src/features/auth/auth.hooks";
-import { initializeSessionSeed } from "@/src/lib/seed.store";
+import { configureForegroundNotificationHandler } from "@/src/features/push/foreground-notification-handler";
+import { useActiveChatRouteSync } from "@/src/hooks/use-active-chat-route-sync";
+import { useNotificationDeepLink } from "@/src/hooks/use-notification-deep-link";
 import { asyncStoragePersister } from "@/src/lib/persister";
+import { initializeSessionSeed } from "@/src/lib/seed.store";
 import { ThemeProvider, useTheme } from "@/src/theme/ThemeProvider";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 
@@ -8,14 +11,12 @@ import NetworkListener from "@/src/components/toast/NetworkListener";
 import { ToastProvider } from "@/src/components/toast/ToastProvider";
 import { queryClient } from "@/src/lib/query-client";
 import { startSystemVolumeUnmuteSync } from "@/src/lib/system-volume-unmute-sync";
-import { registerForPushNotificationsAsync } from "@/src/utils/notifications";
 import { ActionSheetProvider } from "@expo/react-native-action-sheet";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
-import * as Notifications from "expo-notifications";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import "react-native-reanimated";
@@ -25,22 +26,12 @@ SplashScreen.preventAutoHideAsync();
 
 initializeSessionSeed();
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+configureForegroundNotificationHandler();
 
 // Inner layout that can use theme hooks
 function RootLayoutInner() {
   const { restoreSession, isLoading: authLoading } = useAuth();
   const { theme } = useTheme();
-  const notificationListener =
-    useRef<Notifications.EventSubscription | null>(null);
-  const responseListener = useRef<Notifications.EventSubscription | null>(null);
 
   // Determine if dark mode
   const isDark = theme.colors.background === "#0B0F14";
@@ -53,26 +44,10 @@ function RootLayoutInner() {
     return startSystemVolumeUnmuteSync();
   }, []);
 
-  useEffect(() => {
-    void registerForPushNotificationsAsync().then((token) => {
-      console.log("Expo Push Token:", token);
-    });
+  useActiveChatRouteSync();
 
-    notificationListener.current =
-      Notifications.addNotificationReceivedListener((notification) => {
-        console.log("Notification received:", notification);
-      });
-
-    responseListener.current =
-      Notifications.addNotificationResponseReceivedListener((response) => {
-        console.log("Notification tapped:", response);
-      });
-
-    return () => {
-      notificationListener.current?.remove();
-      responseListener.current?.remove();
-    };
-  }, []);
+  // Notification tap → rewrite data.url → router.push (cold start + foreground/background).
+  useNotificationDeepLink({ enabled: !authLoading });
 
   // Hide splash for every entry route (including cold-start universal links that skip app/index.tsx).
   useEffect(() => {

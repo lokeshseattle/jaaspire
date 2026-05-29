@@ -10,6 +10,7 @@ interface Props {
   createdAt: string;
   onClose?: () => void;
   onDelete?: () => void;
+  onReport?: () => void;
   ownStory: boolean;
 }
 
@@ -19,6 +20,7 @@ const StoryHeader = ({
   createdAt,
   onClose,
   onDelete,
+  onReport,
   ownStory,
 }: Props) => {
   const insets = useSafeAreaInsets();
@@ -42,6 +44,14 @@ const StoryHeader = ({
         {ownStory && (
           <Pressable onPress={onDelete}>
             <Ionicons name="trash" size={24} color="white" />
+          </Pressable>
+        )}
+        {!ownStory && (
+          <Pressable
+            onPress={onReport}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Ionicons name="flag-outline" size={24} color="white" />
           </Pressable>
         )}
         <Pressable

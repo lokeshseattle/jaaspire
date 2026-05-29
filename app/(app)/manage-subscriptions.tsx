@@ -1,8 +1,5 @@
 import { AnimatedTabBar } from "@/src/components/ui/animated-tabbar";
-import {
-  useCancelSubscriptionMutation,
-  useSubscriptionsQuery,
-} from "@/src/features/settings/settings.hooks";
+import { useSubscriptionsQuery } from "@/src/features/settings/settings.hooks";
 import { Subscription, SubscriptionActiveTab } from "@/src/services/api/api.types";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
@@ -12,8 +9,8 @@ import { router, useNavigation } from "expo-router";
 import { useCallback, useLayoutEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
+  Linking,
   Platform,
   Pressable,
   RefreshControl,
@@ -21,6 +18,11 @@ import {
   Text,
   View,
 } from "react-native";
+
+const STORE_SUBSCRIPTIONS_URL =
+  Platform.OS === "ios"
+    ? "https://apps.apple.com/account/subscriptions"
+    : "https://play.google.com/store/account/subscriptions?package=com.convoia.jaaspire";
 
 const TABS: Record<SubscriptionActiveTab, { label: string }> = {
   subscriptions: { label: "Subscriptions" },
@@ -82,8 +84,6 @@ export default function ManageSubscriptionsScreen() {
     isFetchingNextPage,
   } = useSubscriptionsQuery(activeTab);
 
-  const cancelMutation = useCancelSubscriptionMutation();
-
   const list = useMemo(
     () => data?.pages.flatMap((page) => page.data.subscriptions ?? []) ?? [],
     [data?.pages],
@@ -97,37 +97,10 @@ export default function ManageSubscriptionsScreen() {
     }
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  const askCancelSubscription = useCallback(
-    (item: Subscription) => {
-      Alert.alert(
-        "Cancel subscription",
-        `Cancel your subscription to @${item.user.username}?`,
-        [
-          { text: "Keep", style: "cancel" },
-          {
-            text: "Cancel subscription",
-            style: "destructive",
-            onPress: () =>
-              cancelMutation.mutate(item.id, {
-                onError: () => {
-                  Alert.alert("Error", "Couldn't cancel subscription. Please try again.");
-                },
-              }),
-          },
-        ],
-        { cancelable: true },
-      );
-    },
-    [cancelMutation],
-  );
-
   const renderItem = useCallback(
     ({ item }: { item: Subscription }) => {
       const statusTone = getStatusTone(theme, item.status);
       const statusLabel = item.status.charAt(0).toUpperCase() + item.status.slice(1);
-      const isCanceled = item.status.toLowerCase() === "canceled";
-      const canCancel = activeTab === "subscriptions" && !isCanceled;
-      const isCanceling = cancelMutation.isPending && cancelMutation.variables === item.id;
 
       return (
         <View style={styles.row}>
@@ -155,36 +128,11 @@ export default function ManageSubscriptionsScreen() {
                 {statusLabel}
               </Text>
             </View>
-            {canCancel ? (
-              <Pressable
-                onPress={() => askCancelSubscription(item)}
-                disabled={isCanceling}
-                style={({ pressed }) => [
-                  styles.cancelButton,
-                  { borderColor: theme.colors.border },
-                  pressed && styles.cancelButtonPressed,
-                  isCanceling && styles.cancelButtonDisabled,
-                ]}
-              >
-                {isCanceling ? (
-                  <ActivityIndicator size="small" color={theme.colors.primary} />
-                ) : (
-                  <Text style={styles.cancelText}>Cancel</Text>
-                )}
-              </Pressable>
-            ) : null}
           </View>
         </View>
       );
     },
-    [
-      activeTab,
-      askCancelSubscription,
-      cancelMutation.isPending,
-      cancelMutation.variables,
-      styles,
-      theme,
-    ],
+    [styles, theme],
   );
 
   const refreshControl = (
@@ -226,6 +174,40 @@ export default function ManageSubscriptionsScreen() {
     [isLoading, list.length, styles.listContent, styles.listContentEmpty],
   );
 
+  const handleOpenStoreSubscriptions = useCallback(() => {
+    void Linking.openURL(STORE_SUBSCRIPTIONS_URL);
+  }, []);
+
+  const listFooter = useMemo(
+    () => (
+      <View style={styles.storeManageSection}>
+        <Text style={styles.storeManageTitle}>Manage in store</Text>
+        <Text style={styles.storeManageBody}>
+          Cancel or change billing for App Store / Play Store subscriptions.
+        </Text>
+        <Pressable
+          onPress={handleOpenStoreSubscriptions}
+          style={({ pressed }) => [
+            styles.storeManageButton,
+            pressed && styles.storeManageButtonPressed,
+          ]}
+        >
+          <Ionicons
+            name="open-outline"
+            size={16}
+            color={theme.colors.primary}
+          />
+          <Text style={styles.storeManageButtonLabel}>
+            {Platform.OS === "ios"
+              ? "Open App Store subscriptions"
+              : "Open Play Store subscriptions"}
+          </Text>
+        </Pressable>
+      </View>
+    ),
+    [handleOpenStoreSubscriptions, styles, theme.colors.primary],
+  );
+
   return (
     <View style={styles.root}>
       <View style={styles.headerInfo}>
@@ -252,11 +234,14 @@ export default function ManageSubscriptionsScreen() {
           contentContainerStyle={listContentStyle}
           ListEmptyComponent={renderEmpty}
           ListFooterComponent={
-            isFetchingNextPage ? (
-              <View style={styles.footerLoader}>
-                <ActivityIndicator color={theme.colors.textSecondary} />
-              </View>
-            ) : null
+            <>
+              {isFetchingNextPage ? (
+                <View style={styles.footerLoader}>
+                  <ActivityIndicator color={theme.colors.textSecondary} />
+                </View>
+              ) : null}
+              {listFooter}
+            </>
           }
           showsVerticalScrollIndicator={false}
         />
@@ -344,27 +329,6 @@ const createStyles = (theme: AppTheme) =>
       fontWeight: "700",
       textTransform: "uppercase",
     },
-    cancelButton: {
-      borderWidth: StyleSheet.hairlineWidth,
-      borderRadius: theme.radius.sm,
-      minWidth: 72,
-      alignItems: "center",
-      justifyContent: "center",
-      paddingHorizontal: theme.spacing.sm,
-      paddingVertical: 6,
-      backgroundColor: theme.colors.surface,
-    },
-    cancelButtonPressed: {
-      opacity: 0.88,
-    },
-    cancelButtonDisabled: {
-      opacity: 0.6,
-    },
-    cancelText: {
-      fontSize: 12,
-      fontWeight: "600",
-      color: theme.colors.primary,
-    },
     centered: {
       flex: 1,
       alignItems: "center",
@@ -393,5 +357,40 @@ const createStyles = (theme: AppTheme) =>
     },
     footerLoader: {
       paddingVertical: theme.spacing.md,
+    },
+    storeManageSection: {
+      marginTop: theme.spacing.lg,
+      marginHorizontal: theme.spacing.lg,
+      padding: theme.spacing.lg,
+      borderRadius: theme.radius.md,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+    },
+    storeManageTitle: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.xs,
+    },
+    storeManageBody: {
+      fontSize: 13,
+      lineHeight: 18,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.md,
+    },
+    storeManageButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.xs,
+      alignSelf: "flex-start",
+    },
+    storeManageButtonPressed: {
+      opacity: 0.7,
+    },
+    storeManageButtonLabel: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: theme.colors.primary,
     },
   });

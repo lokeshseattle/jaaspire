@@ -137,7 +137,7 @@ export const useSetEnable2faFlagMutation = (): UseMutationResult<
   });
 };
 
-/** POST /settings/rates — sets `profile_access_price` (e.g. monthly access). */
+/** POST /settings/rates — sets creator subscription tier (`subscription_sku_key`, e.g. `t3`). */
 export const useSetSettingsRatesMutation = (): UseMutationResult<
   SettingsRatesResponse,
   PossibleErrorResponse,
@@ -376,6 +376,8 @@ export const useBlockUserMutation = () => {
       queryClient.invalidateQueries({ queryKey: ["profile", username] });
       queryClient.invalidateQueries({ queryKey: ["user_feed", username] });
       queryClient.invalidateQueries({ queryKey: ["blocked-users"] });
+      queryClient.invalidateQueries({ queryKey: ["messenger", "contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["messenger", "messages"] });
     },
   });
 };
@@ -425,6 +427,8 @@ export const useUnblockUserMutation = () => {
       queryClient.invalidateQueries({ queryKey: ["profile", username] });
       queryClient.invalidateQueries({ queryKey: ["user_feed", username] });
       queryClient.invalidateQueries({ queryKey: ["blocked-users"] });
+      queryClient.invalidateQueries({ queryKey: ["messenger", "contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["messenger", "messages"] });
     },
   });
 };

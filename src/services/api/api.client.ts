@@ -19,9 +19,9 @@ const baseURL = API_BASE_URL;
 
 // Logger helper
 
-const LOG_REQUEST = true;
+const LOG_REQUEST = false;
 const LOG_RESPONSE = false;
-const LOG_ERROR = true;
+const LOG_ERROR = false;
 
 const buildFullUrl = (config: InternalAxiosRequestConfig) => {
   if (!config.params) return config.url;

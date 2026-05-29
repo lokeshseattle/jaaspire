@@ -31,6 +31,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MentionSuggestionsList from "./MentionSuggestionList";
+import ReportModal from "../home/posts/ReportModal";
+import type { ReportTarget } from "@/src/services/api/api.types";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const LIKED_COLOR = "#FF3B30";
@@ -45,6 +47,7 @@ const ReplyItem = ({
     isDeleting,
     currentUserId,
     onLike,
+    onReport,
 }: {
     item: TComment["replies"][0];
     onReply: (commentId: number, username: string) => void;
@@ -53,6 +56,7 @@ const ReplyItem = ({
     isDeleting: boolean;
     currentUserId: number | null;
     onLike: (commentId: number) => void;
+    onReport: (commentId: number, userId: number) => void;
 }) => {
     const { theme } = useTheme();
     const styles = createStyles(theme);
@@ -105,6 +109,18 @@ const ReplyItem = ({
                                 )}
                             </Pressable>
                         )}
+                        {!isOwner && (
+                            <Pressable
+                                style={styles.actionButton}
+                                onPress={() => onReport(item.id, item.user.id)}
+                            >
+                                <Ionicons
+                                    name="flag-outline"
+                                    size={14}
+                                    color={theme.colors.textSecondary}
+                                />
+                            </Pressable>
+                        )}
                     </View>
                 )}
             </View>
@@ -120,6 +136,7 @@ const CommentItem = ({
     deletingId,
     currentUserId,
     onLike,
+    onReport,
 }: {
     item: TComment;
     onReply: (commentId: number, username: string) => void;
@@ -127,6 +144,7 @@ const CommentItem = ({
     deletingId: number | null;
     currentUserId: number | null;
     onLike: (commentId: number) => void;
+    onReport: (commentId: number, userId: number) => void;
 }) => {
     const { theme } = useTheme();
     const styles = createStyles(theme);
@@ -184,6 +202,18 @@ const CommentItem = ({
                                     )}
                                 </Pressable>
                             )}
+                            {!isOwner && (
+                                <Pressable
+                                    style={styles.actionButton}
+                                    onPress={() => onReport(item.id, item.user.id)}
+                                >
+                                    <Ionicons
+                                        name="flag-outline"
+                                        size={16}
+                                        color={theme.colors.textSecondary}
+                                    />
+                                </Pressable>
+                            )}
                         </View>
                     )}
 
@@ -212,9 +242,10 @@ const CommentItem = ({
                             onReply={onReply}
                             parentCommentId={item.id}
                             onDelete={onDelete}
-                            isDeleting={isDeleting}
+                            isDeleting={deletingId === reply.id}
                             currentUserId={currentUserId}
                             onLike={onLike}
+                            onReport={onReport}
                         />
                     ))}
                 </View>
@@ -364,6 +395,7 @@ interface CommentsListProps {
     deletingId: number | null;
     currentUserId: number | null;
     onLike: (commentId: number) => void;
+    onReport: (commentId: number, userId: number) => void;
 }
 
 const CommentsList = ({
@@ -372,7 +404,8 @@ const CommentsList = ({
     onDelete,
     deletingId,
     currentUserId,
-    onLike
+    onLike,
+    onReport,
 }: CommentsListProps) => {
     const { theme } = useTheme();
     const styles = createStyles(theme);
@@ -401,9 +434,10 @@ const CommentsList = ({
                 onDelete={onDelete}
                 deletingId={deletingId}
                 currentUserId={currentUserId}
+                onReport={onReport}
             />
         ),
-        [onReply, onDelete, deletingId, currentUserId, onLike]
+        [onReply, onDelete, deletingId, currentUserId, onLike, onReport]
     );
 
     const ListHeader = () => (
@@ -495,6 +529,12 @@ export const CommentsBottomSheet = ({
     // Delete state
     const [deletingId, setDeletingId] = useState<number | null>(null);
     const deleteComment = useDeleteComment();
+
+    const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
+    const handleReport = useCallback((commentId: number, userId: number) => {
+        setReportTarget({ kind: "comment", commentId, userId });
+    }, []);
+    const handleCloseReport = useCallback(() => setReportTarget(null), []);
 
     // Current user
     const profileData = queryClient.getQueryData<ProfileResponse>(["profile"]);
@@ -617,6 +657,7 @@ export const CommentsBottomSheet = ({
     );
 
     return (
+        <>
         <BottomSheetModal
             ref={bottomSheetRef}
             snapPoints={snapPoints}
@@ -646,9 +687,16 @@ export const CommentsBottomSheet = ({
                     postId={postId}
                     onReply={handleReply}
                     onLike={handleLike}
+                    onReport={handleReport}
                 />
             )}
         </BottomSheetModal>
+        <ReportModal
+            visible={reportTarget !== null}
+            onClose={handleCloseReport}
+            target={reportTarget}
+        />
+        </>
     );
 };
 

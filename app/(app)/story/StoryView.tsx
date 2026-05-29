@@ -20,6 +20,7 @@ import StoryMedia, { StoryMediaHandle } from "./components/StoryMedia";
 import StoryProgress from "./components/StoryProgress";
 import StoryTouchOverlay from "./components/StoryTouchOverlay";
 import Viewers from "./components/Viewers";
+import ReportModal from "@/src/components/home/posts/ReportModal";
 
 const STORY_DURATION = 5000;
 
@@ -40,6 +41,7 @@ const StoryView = ({ username, onClose, isPanning = false }: TProps) => {
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
 
   const progress = useSharedValue(0);
   const callbackRef = useRef(onClose);
@@ -155,6 +157,18 @@ const StoryView = ({ username, onClose, isPanning = false }: TProps) => {
     }
   }, [isPaused, isPanning, currentMediaType]);
 
+  const ownStory = user?.username === loggedInUser;
+
+  const handleOpenReport = useCallback(() => {
+    setIsPaused(true);
+    setReportOpen(true);
+  }, []);
+
+  const handleCloseReport = useCallback(() => {
+    setReportOpen(false);
+    setIsPaused(false);
+  }, []);
+
   const handleDeleteStory = () => {
     if (!currentStory?.id) return;
 
@@ -241,11 +255,12 @@ const StoryView = ({ username, onClose, isPanning = false }: TProps) => {
       {/* User header */}
       <StoryHeader
         avatar={user?.avatar ?? ""}
-        ownStory={user?.username === loggedInUser}
+        ownStory={ownStory}
         username={user?.username ?? username}
         createdAt={currentStory.created_at}
         onClose={onClose}
         onDelete={handleDeleteStory}
+        onReport={handleOpenReport}
       />
 
       {/* {user?.name === "You" && <StoryViews />} */}
@@ -260,6 +275,19 @@ const StoryView = ({ username, onClose, isPanning = false }: TProps) => {
         onFastForwardEnd={handleFastForwardEnd}
       />
       <Viewers id={currentStory.id} setIsPaused={setIsPaused} />
+      <ReportModal
+        visible={reportOpen}
+        onClose={handleCloseReport}
+        target={
+          reportOpen && user?.id
+            ? {
+                kind: "story",
+                storyId: currentStory.id,
+                userId: user.id,
+              }
+            : null
+        }
+      />
     </View>
   );
 };

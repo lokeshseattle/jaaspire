@@ -1,6 +1,6 @@
 // src/components/profile/ProfileGridView.tsx
 import { usePostStore } from "@/src/features/post/post.store";
-import { Post } from "@/src/services/api/api.types";
+import { canViewPostMedia } from "@/src/features/post/post.utils";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { getMediaType } from "@/src/utils/helpers";
@@ -24,7 +24,6 @@ import {
 const { width } = Dimensions.get("window");
 const ITEM_SIZE = width / 3;
 const NUM_COLUMNS = 3;
-export type PostMediaViewer = Post["viewer"];
 
 /** Appends alpha to a 6-digit `#RRGGBB` hex (React Native 8-digit hex). */
 function hexWithAlpha(hex: string, alpha: number): string {
@@ -125,7 +124,7 @@ export function ProfileGridView({
           image: mediaType === "image" ? att.path : att.thumbnail,
           type: mediaType as "image" | "video",
           status: post.attachments[0].status,
-          isLocked: !viewerCanViewPostMedia(
+          isLocked: !canViewPostMedia(
             post.viewer,
             post.price,
             post.is_exclusive,
@@ -160,17 +159,6 @@ export function ProfileGridView({
     },
     [postRouteUsername, posts],
   );
-
-  function viewerCanViewPostMedia(
-    viewer: PostMediaViewer | undefined,
-    price: number,
-    isExclusive: boolean,
-  ): boolean {
-    if (viewer?.is_owner === true) return true;
-    if (price > 0 && !viewer?.has_purchased) return false;
-    if (isExclusive && !viewer?.has_subscription) return false;
-    return true;
-  }
 
   const renderItem = useCallback(
     ({ item }: { item: GridItem }) => {

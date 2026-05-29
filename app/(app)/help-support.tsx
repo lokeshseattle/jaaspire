@@ -1,11 +1,9 @@
+import { LEGAL_LINKS } from "@/src/constants/legal-links";
 import { WEB_ORIGIN } from "@/src/constants/app-env";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
+import { openWebUrl } from "@/src/utils/open-web-url";
 import { Ionicons } from "@expo/vector-icons";
-import {
-  openBrowserAsync,
-  WebBrowserPresentationStyle,
-} from "expo-web-browser";
 import { useMemo } from "react";
 import {
   Linking,
@@ -17,18 +15,12 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const POLICY_LINKS: { label: string; path: string }[] = [
-  { label: "Terms of Service", path: "/pages/terms-of-service" },
-  { label: "Privacy Policy", path: "/pages/privacy-policy" },
-  { label: "Acceptable Use Policy", path: "/pages/acceptable-use-policy" },
-  { label: "Complaints Policy", path: "/pages/complaint-policy" },
+const POLICY_LINKS: { label: string; url: string }[] = [
+  { label: "Terms of Service", url: LEGAL_LINKS.termsOfService },
+  { label: "Privacy Policy", url: LEGAL_LINKS.privacyPolicy },
+  { label: "Acceptable Use Policy", url: LEGAL_LINKS.acceptableUsePolicy },
+  { label: "Complaints Policy", url: LEGAL_LINKS.complaintsPolicy },
 ];
-
-async function openWebUrl(url: string) {
-  await openBrowserAsync(url, {
-    presentationStyle: WebBrowserPresentationStyle.AUTOMATIC,
-  });
-}
 
 export default function HelpSupportScreen() {
   const { theme } = useTheme();
@@ -70,13 +62,13 @@ export default function HelpSupportScreen() {
       <View style={styles.section}>
         {POLICY_LINKS.map((item, index) => (
           <Pressable
-            key={item.path}
+            key={item.url}
             style={({ pressed }) => [
               styles.linkRow,
               index < POLICY_LINKS.length - 1 && styles.linkRowBorder,
               pressed && { opacity: 0.7 },
             ]}
-            onPress={() => openWebUrl(`${WEB_ORIGIN}${item.path}`)}
+            onPress={() => openWebUrl(item.url)}
           >
             <Text style={styles.linkLabel}>{item.label}</Text>
             <Ionicons

@@ -1,6 +1,5 @@
-import { useCommentsSheet } from "@/hooks/use-comment-sheet";
-import { useShareSheet } from "@/hooks/use-share-sheet";
 import { CommentsBottomSheet } from "@/src/components/comments/CommentsBottomSheet";
+import { useFeedController } from "@/src/components/feed/use-feed-controller";
 import FlickItem from "@/src/components/flicks/FlickItem";
 import { SharePostBottomSheet } from "@/src/components/share/SharePostBottomSheet";
 import {
@@ -12,6 +11,7 @@ import {
   useTrackPostView,
 } from "@/src/features/post/post.hooks";
 import { usePostStore } from "@/src/features/post/post.store";
+import { canViewPostMedia } from "@/src/features/post/post.utils";
 import { videoManager } from "@/src/lib/video-manager";
 import type { Post, PossibleErrorResponse } from "@/src/services/api/api.types";
 import { isAxiosError } from "axios";
@@ -52,6 +52,10 @@ const VIEWABILITY_CONFIG: ViewabilityConfig = {
   itemVisiblePercentThreshold: 80,
   minimumViewTime: 200,
 };
+const STRICT_OFFSCREEN_VIEWABILITY: ViewabilityConfig = {
+  itemVisiblePercentThreshold: 1,
+  minimumViewTime: 0,
+};
 
 const PRELOAD_RADIUS = 1;
 
@@ -65,17 +69,6 @@ const FLICKS_ON_DARK_TEXT = "rgba(255,255,255,0.72)";
 const FEED_TABS_ROW_HEIGHT = 44;
 const FEED_TABS_CHROME_HEIGHT = FEED_TABS_ROW_HEIGHT + 10;
 
-function viewerCanViewPostMedia(
-  viewer: Post["viewer"] | undefined,
-  price: number,
-  isExclusive: boolean,
-): boolean {
-  if (viewer?.is_owner === true) return true;
-  if (price > 0 && !viewer?.has_purchased) return false;
-  if (isExclusive && !viewer?.has_subscription) return false;
-  return true;
-}
-
 /** URL eligible for decoder preload (full access or timed preview). */
 function flickPreloadTarget(post: Post | undefined): {
   postId: number;
@@ -86,7 +79,7 @@ function flickPreloadTarget(post: Post | undefined): {
   if (getMediaType(a.type) !== "video" || !a.path) return null;
   const price = post.price ?? 0;
   const isExclusive = post.is_exclusive ?? false;
-  const canView = viewerCanViewPostMedia(post.viewer, price, isExclusive);
+  const canView = canViewPostMedia(post.viewer, price, isExclusive);
   const isPaidVideo = !canView && (price > 0 || isExclusive);
   if (canView || isPaidVideo) return { postId: post.id, url: a.path };
   return null;
@@ -189,15 +182,6 @@ export default function FlicksScreen() {
 
   const postsMap = usePostStore((s) => s.posts);
 
-  const { bottomSheetRef, selectedPostId, openComments, onDismiss } =
-    useCommentsSheet();
-  const {
-    bottomSheetRef: shareBottomSheetRef,
-    selectedPostId: selectedSharePostId,
-    openShare,
-    onDismiss: onShareDismiss,
-  } = useShareSheet();
-
   const trackPostView = useTrackPostView();
   const trackPostViewRef = useRef(trackPostView);
   trackPostViewRef.current = trackPostView;
@@ -216,6 +200,13 @@ export default function FlicksScreen() {
     () => data?.pages.flatMap((page) => page.data.posts) ?? [],
     [data?.pages],
   );
+
+  const controller = useFeedController({
+    postIds,
+    viewabilityConfig: VIEWABILITY_CONFIG,
+  });
+  const openComments = controller.commentsSheet.openComments;
+  const openShare = controller.shareSheet.openShare;
 
   const postIdsRef = useRef(postIds);
   postIdsRef.current = postIds;
@@ -359,10 +350,26 @@ export default function FlicksScreen() {
     [],
   );
 
+  const onStrictVisibilityChanged = useCallback(
+    ({ changed }: { changed: ViewToken[] }) => {
+      for (const token of changed) {
+        if (token.isViewable) continue;
+        const id = typeof token.item === "number" ? token.item : null;
+        if (id == null) continue;
+        videoManager.seekToStart(id);
+      }
+    },
+    [],
+  );
+
   const viewabilityConfigCallbackPairs = useRef([
     {
       viewabilityConfig: VIEWABILITY_CONFIG,
       onViewableItemsChanged,
+    },
+    {
+      viewabilityConfig: STRICT_OFFSCREEN_VIEWABILITY,
+      onViewableItemsChanged: onStrictVisibilityChanged,
     },
   ]);
 
@@ -570,14 +577,14 @@ export default function FlicksScreen() {
         </View>
         {feedTabsHeader}
         <CommentsBottomSheet
-          bottomSheetRef={bottomSheetRef}
-          postId={selectedPostId}
-          onDismiss={onDismiss}
+          bottomSheetRef={controller.commentsSheet.bottomSheetRef}
+          postId={controller.commentsSheet.selectedPostId}
+          onDismiss={controller.commentsSheet.onDismiss}
         />
         <SharePostBottomSheet
-          bottomSheetRef={shareBottomSheetRef}
-          postId={selectedSharePostId}
-          onDismiss={onShareDismiss}
+          bottomSheetRef={controller.shareSheet.bottomSheetRef}
+          postId={controller.shareSheet.selectedPostId}
+          onDismiss={controller.shareSheet.onDismiss}
         />
       </View>
     );
@@ -631,14 +638,14 @@ export default function FlicksScreen() {
       {feedTabsHeader}
 
       <CommentsBottomSheet
-        bottomSheetRef={bottomSheetRef}
-        postId={selectedPostId}
-        onDismiss={onDismiss}
+        bottomSheetRef={controller.commentsSheet.bottomSheetRef}
+        postId={controller.commentsSheet.selectedPostId}
+        onDismiss={controller.commentsSheet.onDismiss}
       />
       <SharePostBottomSheet
-        bottomSheetRef={shareBottomSheetRef}
-        postId={selectedSharePostId}
-        onDismiss={onShareDismiss}
+        bottomSheetRef={controller.shareSheet.bottomSheetRef}
+        postId={controller.shareSheet.selectedPostId}
+        onDismiss={controller.shareSheet.onDismiss}
       />
     </View>
   );

@@ -1,5 +1,13 @@
+import JaasiStar from "@/assets/svg/JaasiStar";
+import IapLegalFooter from "@/src/components/wallet/IapLegalFooter";
 import { useNotificationCounts } from "@/src/features/profile/notification.hooks";
-import { useTipUser } from "@/src/features/wallet/wallet.hooks";
+import { storeProductIdFromIapSku } from "@/src/features/wallet/iap.constants";
+import { useIap } from "@/src/features/wallet/iap.context";
+import {
+  useIapSkus,
+  useTipUser,
+} from "@/src/features/wallet/wallet.hooks";
+import type { IapSkuListItem } from "@/src/services/api/api.types";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
@@ -15,13 +23,12 @@ import React, {
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import {
@@ -39,6 +46,11 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import Button from "../ui/button";
+
+function formatStars(amount: number): string {
+  if (Number.isInteger(amount)) return amount.toLocaleString();
+  return amount.toFixed(2);
+}
 
 export interface TipBottomSheetProps {
   visible: boolean;
@@ -63,12 +75,8 @@ function parseWalletBalance(raw: number | string | undefined): number {
   return n;
 }
 
-function formatAmount(value: number): string {
-  return `$${value.toFixed(2)}`;
-}
-
 interface SlideToConfirmProps {
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
   loading: boolean;
   theme: AppTheme;
   disabled?: boolean;
@@ -84,20 +92,33 @@ function SlideToConfirm({
   const startX = useSharedValue(0);
   const trackWidth = useSharedValue(0);
   const confirmed = useSharedValue(false);
+  const [pending, setPending] = useState(false);
+  const wasBusyRef = useRef(false);
+  const isBusy = loading || pending;
 
   useEffect(() => {
-    if (!loading) {
+    if (wasBusyRef.current && !isBusy) {
       translateX.value = withSpring(0, { damping: 20, stiffness: 200 });
       confirmed.value = false;
     }
-  }, [loading]);
+    wasBusyRef.current = isBusy;
+  }, [isBusy]);
+
+  useEffect(() => {
+    if (pending && loading) {
+      setPending(false);
+    }
+  }, [pending, loading]);
 
   const triggerConfirm = useCallback(() => {
-    onConfirm();
+    setPending(true);
+    void Promise.resolve(onConfirm()).finally(() => {
+      setPending(false);
+    });
   }, [onConfirm]);
 
   const pan = Gesture.Pan()
-    .enabled(!loading && !disabled)
+    .enabled(!isBusy && !disabled)
     .activeOffsetX([-8, 8])
     .onBegin(() => {
       "worklet";
@@ -138,7 +159,7 @@ function SlideToConfirm({
       <Text style={styles.trackLabel}>Slide to send tip</Text>
       <GestureDetector gesture={pan}>
         <Animated.View style={[styles.thumb, thumbStyle]}>
-          {loading ? (
+          {isBusy ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
             <Ionicons name="chevron-forward" size={22} color="#fff" />
@@ -198,12 +219,18 @@ export default function TipBottomSheet({
   const sheetSlidePadding = theme.spacing.md;
 
   const [modalMounted, setModalMounted] = useState(false);
-  const [amountText, setAmountText] = useState("");
+  const [selectedSku, setSelectedSku] = useState<string | null>(null);
+  const [selectedMethod, setSelectedMethod] = useState<"wallet" | "iap">("iap");
   const hasOpenedRef = useRef(false);
   const openProgress = useSharedValue(0);
   const sheetHeightSv = useSharedValue(SHEET_SLIDE_FALLBACK);
 
   const { mutateAsync: tipUser, isPending: isTipping } = useTipUser();
+  const {
+    data: iapSkusResponse,
+    isPending: iapSkusPending,
+    isError: iapSkusError,
+  } = useIapSkus("consumable");
 
   const {
     data: countsData,
@@ -211,26 +238,115 @@ export default function TipBottomSheet({
     isError: balanceError,
   } = useNotificationCounts();
 
+  const tipProductOptions = useMemo(() => {
+    const list = iapSkusResponse?.skus ?? [];
+    const consumables = list.filter(
+      (s): s is IapSkuListItem & { category: "consumable"; stars: number } =>
+        s.category === "consumable" && typeof s.stars === "number",
+    );
+    return consumables
+      .map((s) => ({
+        product_id: storeProductIdFromIapSku(s),
+        stars: s.stars,
+        sku_key: s.sku_key,
+      }))
+      .sort((a, b) => a.stars - b.stars);
+  }, [iapSkusResponse?.skus]);
+
   const walletBalance = useMemo(
     () => parseWalletBalance(countsData?.data?.wallet_balance),
     [countsData?.data?.wallet_balance],
   );
 
-  const parsedAmount = useMemo(() => {
-    const n = parseFloat(amountText);
-    return Number.isFinite(n) && n > 0 ? n : 0;
-  }, [amountText]);
+  const selectedProduct = useMemo(() => {
+    if (!selectedSku) return null;
+    return tipProductOptions.find((p) => p.product_id === selectedSku) ?? null;
+  }, [selectedSku, tipProductOptions]);
+
+  const selectedStars = selectedProduct?.stars ?? 0;
 
   const balanceKnown = !balancePending && !balanceError;
-  const insufficientFunds =
-    balanceKnown && parsedAmount > 0 && parsedAmount > walletBalance;
-  const canConfirm =
-    balanceKnown && parsedAmount > 0 && !insufficientFunds && !isTipping;
+  const walletSufficient =
+    balanceKnown &&
+    selectedStars > 0 &&
+    walletBalance + Number.EPSILON >= selectedStars;
+  const showIapRow = selectedStars > 0 && Boolean(selectedProduct);
+  const canUseIap = Boolean(selectedProduct && selectedSku);
+
+  const {
+    connected: isIapConnected,
+    fetchProducts,
+    products,
+    startPurchase,
+    isProcessing: isIapProcessing,
+  } = useIap();
+
+  const tipStoreProductIds = useMemo(
+    () => tipProductOptions.map((p) => p.product_id),
+    [tipProductOptions],
+  );
+
+  useEffect(() => {
+    if (!visible || !isIapConnected || tipStoreProductIds.length === 0) return;
+    void fetchProducts({
+      skus: tipStoreProductIds,
+      type: "in-app",
+    });
+  }, [visible, isIapConnected, fetchProducts, tipStoreProductIds]);
+
+  const storeDisplayPriceByProductId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const product of products) {
+      if (product.displayPrice) {
+        map.set(product.id, product.displayPrice);
+      }
+    }
+    return map;
+  }, [products]);
+
+  const selectedStorePrice = selectedSku
+    ? (storeDisplayPriceByProductId.get(selectedSku) ?? null)
+    : null;
+
+  const canConfirmWallet =
+    selectedMethod === "wallet" &&
+    walletSufficient &&
+    Boolean(selectedProduct) &&
+    !isTipping &&
+    !isIapProcessing;
+
+  const canConfirmIap =
+    selectedMethod === "iap" &&
+    canUseIap &&
+    isIapConnected &&
+    !isIapProcessing &&
+    !isTipping;
+
+  const canConfirm = canConfirmWallet || canConfirmIap;
 
   const markFullyClosed = useCallback(() => {
     setModalMounted(false);
     hasOpenedRef.current = false;
   }, []);
+
+  useEffect(() => {
+    if (!visible) return;
+    if (tipProductOptions.length === 0) return;
+    setSelectedSku((prev) =>
+      prev && tipProductOptions.some((p) => p.product_id === prev)
+        ? prev
+        : tipProductOptions[0].product_id,
+    );
+  }, [visible, tipProductOptions]);
+
+  useEffect(() => {
+    if (!visible || selectedStars <= 0) return;
+    if (walletSufficient) {
+      setSelectedMethod("wallet");
+      return;
+    }
+    setSelectedMethod("iap");
+  }, [visible, walletSufficient, selectedStars]);
 
   useLayoutEffect(() => {
     if (visible) {
@@ -238,7 +354,6 @@ export default function TipBottomSheet({
       cancelAnimation(openProgress);
       openProgress.value = 0;
       setModalMounted(true);
-      setAmountText("");
 
       const raf = requestAnimationFrame(() => {
         openProgress.value = withTiming(1, {
@@ -283,22 +398,78 @@ export default function TipBottomSheet({
   }));
 
   const handleConfirm = useCallback(async () => {
-    if (!canConfirm) return;
+    if (!selectedProduct) return;
+
+    if (selectedMethod === "wallet") {
+      if (!canConfirmWallet) return;
+      try {
+        await tipUser({
+          username,
+          sku_key: selectedProduct.sku_key,
+        });
+        onClose();
+        onSuccess?.();
+        Alert.alert(
+          "Tip sent!",
+          `You sent ${formatStars(selectedStars)} Jaasi Stars to @${username}.`,
+        );
+      } catch (e) {
+        Alert.alert(
+          "Tip failed",
+          e instanceof Error ? e.message : "Could not send tip. Try again.",
+        );
+      }
+      return;
+    }
+
+    if (!canConfirmIap || !selectedSku || !selectedProduct) return;
+    if (!isIapConnected) {
+      Alert.alert("Store unavailable", "Please try again in a moment.");
+      return;
+    }
+
+    const stars = selectedStars;
+    const sku_key = selectedProduct.sku_key;
+
     try {
-      await tipUser({ username, amount: parsedAmount });
-      onClose();
-      onSuccess?.();
-      Alert.alert(
-        "Tip sent!",
-        `You sent ${formatAmount(parsedAmount)} to @${username}.`,
-      );
+      await startPurchase({
+        intent: {
+          kind: "tip",
+          username,
+          sku_key,
+          stars,
+        },
+        storeProductId: selectedSku,
+        purchaseType: "in-app",
+        onSuccess: () => {
+          onClose();
+          onSuccess?.();
+          Alert.alert(
+            "Tip sent!",
+            `You sent ${formatStars(stars)} Jaasi Stars to @${username}.`,
+          );
+        },
+      });
     } catch (e) {
       Alert.alert(
-        "Tip failed",
-        e instanceof Error ? e.message : "Could not send tip. Try again.",
+        "Could not start purchase",
+        e instanceof Error ? e.message : "Try again in a moment.",
       );
     }
-  }, [canConfirm, tipUser, username, parsedAmount, onClose, onSuccess]);
+  }, [
+    selectedMethod,
+    selectedProduct,
+    selectedSku,
+    canConfirmWallet,
+    canConfirmIap,
+    tipUser,
+    username,
+    selectedStars,
+    onClose,
+    onSuccess,
+    isIapConnected,
+    startPurchase,
+  ]);
 
   const handleGoToWallet = useCallback(() => {
     onClose();
@@ -315,155 +486,304 @@ export default function TipBottomSheet({
       hardwareAccelerated
       onRequestClose={onClose}
     >
-      <GestureHandlerRootView style={styles.modalRoot}>
-        <KeyboardAvoidingView
-          style={styles.modalRoot}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          keyboardVerticalOffset={0}
-        >
-          <Pressable style={styles.overlayHitTarget} onPress={onClose}>
-            <Animated.View
-              pointerEvents="none"
-              style={[styles.overlayFill, overlayAnimatedStyle]}
-            />
-          </Pressable>
-
+      <GestureHandlerRootView style={styles.modalRoot} collapsable={false}>
+        <Pressable style={styles.overlayHitTarget} onPress={onClose}>
           <Animated.View
-            collapsable={false}
-            style={[styles.sheet, sheetAnimatedStyle]}
-            onLayout={(e) => {
-              const h = e.nativeEvent.layout.height;
-              if (h > 0) sheetHeightSv.value = h;
-            }}
-          >
-            <View style={styles.handle} />
+            pointerEvents="none"
+            style={[styles.overlayFill, overlayAnimatedStyle]}
+          />
+        </Pressable>
 
-          <View style={styles.titleRow}>
-            <View style={styles.iconBadge}>
-              <Ionicons
-                name="gift-outline"
-                size={20}
-                color={theme.colors.primary}
-              />
+        <Animated.View
+          collapsable={false}
+          style={[styles.sheet, sheetAnimatedStyle]}
+          onLayout={(e) => {
+            const h = e.nativeEvent.layout.height;
+            if (h > 0) sheetHeightSv.value = h;
+          }}
+        >
+          <View style={styles.handle} />
+
+          <View style={styles.headerRow}>
+            <View style={styles.titleRow}>
+              <View style={styles.iconBadge}>
+                <Ionicons
+                  name="gift-outline"
+                  size={20}
+                  color={theme.colors.primary}
+                />
+              </View>
+              <Text style={styles.title} numberOfLines={1}>
+                Send Tip
+              </Text>
             </View>
-            <Text style={styles.title}>Send Tip</Text>
-          </View>
-
-          <View style={styles.detailCard}>
-            <View style={styles.detailRow}>
+            <Pressable
+              onPress={onClose}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              style={styles.closeButton}
+              disabled={isTipping || isIapProcessing}
+            >
               <Ionicons
-                name="person-outline"
-                size={16}
+                name="close"
+                size={26}
                 color={theme.colors.textSecondary}
               />
-              <Text style={styles.detailLabel}>Recipient</Text>
-              <Text style={styles.detailValue}>@{username}</Text>
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.detailRow}>
-              <Ionicons
-                name="cash-outline"
-                size={16}
-                color={theme.colors.textSecondary}
-              />
-              <Text style={styles.detailLabel}>Your balance</Text>
-              {balancePending ? (
-                <ActivityIndicator size="small" color={theme.colors.primary} />
-              ) : balanceError ? (
-                <Text style={styles.balanceUnavailable}>Unavailable</Text>
-              ) : (
-                <Text style={styles.balanceValue}>
-                  {formatAmount(walletBalance)}
-                </Text>
-              )}
-            </View>
+            </Pressable>
           </View>
 
-          <View style={styles.amountInputContainer}>
-            <Text style={styles.amountPrefix}>$</Text>
-            <TextInput
-              style={styles.amountInput}
-              value={amountText}
-              onChangeText={setAmountText}
-              placeholder="0.00"
-              placeholderTextColor={theme.colors.textSecondary}
-              keyboardType="decimal-pad"
-              maxLength={10}
-              editable={!isTipping}
-            />
-          </View>
+          <Text style={styles.recipient}>@{username}</Text>
 
-          {parsedAmount > 0 && (
-            <Text style={styles.description}>
-              This will send {formatAmount(parsedAmount)} as a gift to @
-              {username} from your wallet.
-            </Text>
+          {iapSkusPending ? (
+            <View style={styles.loadingRow}>
+              <ActivityIndicator size="small" color={theme.colors.primary} />
+              <Text style={styles.loadingText}>Loading tip options…</Text>
+            </View>
+          ) : iapSkusError ? (
+            <View style={styles.unavailableCard}>
+              <Text style={styles.unavailableTitle}>
+                Could not load tip options
+              </Text>
+              <Text style={styles.unavailableBody}>
+                Check your connection and try opening this tip again.
+              </Text>
+            </View>
+          ) : tipProductOptions.length === 0 ? (
+            <View style={styles.unavailableCard}>
+              <Text style={styles.unavailableTitle}>
+                No tip amounts available
+              </Text>
+              <Text style={styles.unavailableBody}>
+                We could not load star bundles. Try again later.
+              </Text>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.sectionLabel}>Choose an amount</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.chipRow}
+                keyboardShouldPersistTaps="handled"
+              >
+                {tipProductOptions.map((p) => {
+                  const selected = p.product_id === selectedSku;
+                  const storePrice =
+                    storeDisplayPriceByProductId.get(p.product_id) ?? null;
+                  return (
+                    <Pressable
+                      key={p.product_id}
+                      onPress={() => setSelectedSku(p.product_id)}
+                      disabled={isTipping}
+                      style={[styles.chip, selected && styles.chipSelected]}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected }}
+                    >
+                      <View style={styles.chipTopRow}>
+                        <JaasiStar width={16} height={16} />
+                        <Text
+                          style={[
+                            styles.chipAmount,
+                            selected && styles.chipAmountSelected,
+                          ]}
+                        >
+                          {formatStars(p.stars)}
+                        </Text>
+                      </View>
+                      {storePrice ? (
+                        <Text
+                          style={[
+                            styles.chipHint,
+                            selected && styles.chipHintSelected,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {storePrice}
+                        </Text>
+                      ) : isIapConnected ? (
+                        <Text
+                          style={[
+                            styles.chipHint,
+                            selected && styles.chipHintSelected,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          …
+                        </Text>
+                      ) : null}
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+
+              {selectedStars > 0 ? (
+                <View style={styles.amountPreview}>
+                  <Text style={styles.amountPreviewLabel}>Tip amount</Text>
+                  <View style={styles.amountPreviewRow}>
+                    <JaasiStar width={28} height={28} />
+                    <Text style={styles.amountPreviewValue}>
+                      {formatStars(selectedStars)}
+                    </Text>
+                    {/* <Text style={styles.amountPreviewSuffix}>Jaasi Stars</Text> */}
+                  </View>
+                </View>
+              ) : null}
+
+              {selectedStars > 0 ? (
+                <>
+                  <Text style={styles.sectionLabel}>Pay with</Text>
+                  <View style={styles.methodCard}>
+                    <Pressable
+                      onPress={() =>
+                        walletSufficient && setSelectedMethod("wallet")
+                      }
+                      disabled={
+                        isTipping || isIapProcessing || !walletSufficient
+                      }
+                      style={[
+                        styles.methodRow,
+                        showIapRow && styles.methodRowDividerBottom,
+                        selectedMethod === "wallet" && styles.methodRowActive,
+                        !walletSufficient && styles.methodRowDisabled,
+                      ]}
+                    >
+                      <View style={styles.radioOuter}>
+                        {selectedMethod === "wallet" && (
+                          <View style={styles.radioInner} />
+                        )}
+                      </View>
+                      <Ionicons
+                        name="wallet-outline"
+                        size={18}
+                        color={theme.colors.textPrimary}
+                      />
+                      <View style={styles.methodTextWrap}>
+                        <Text style={styles.methodLabel}>Wallet</Text>
+                        {/* {balanceError ? (
+                          <Text style={styles.methodHint}>
+                            Balance unavailable
+                          </Text>
+                        ) : balancePending ? (
+                          <Text style={styles.methodHint}>
+                            Checking balance…
+                          </Text>
+                        ) : balanceKnown && !walletSufficient ? (
+                          <Text style={styles.methodHint}>
+                            Not enough stars
+                          </Text>
+                        ) : null} */}
+                      </View>
+                    </Pressable>
+
+                    {showIapRow && (
+                      <Pressable
+                        onPress={() => canUseIap && setSelectedMethod("iap")}
+                        disabled={!canUseIap || isTipping || isIapProcessing}
+                        style={[
+                          styles.methodRow,
+                          selectedMethod === "iap" && styles.methodRowActive,
+                          !canUseIap && styles.methodRowDisabled,
+                        ]}
+                      >
+                        <View style={styles.radioOuter}>
+                          {selectedMethod === "iap" && (
+                            <View style={styles.radioInner} />
+                          )}
+                        </View>
+                        <Ionicons
+                          name={
+                            Platform.OS === "ios" ? "logo-apple" : "logo-google"
+                          }
+                          size={18}
+                          color={theme.colors.textPrimary}
+                        />
+                        <View style={styles.methodTextWrap}>
+                          <Text style={styles.methodLabel}>
+                            {Platform.OS === "ios" ? "App Store" : "Google Play"}
+                          </Text>
+                          {selectedStorePrice ? (
+                            <Text style={styles.methodHint}>
+                              Buy {formatStars(selectedStars)} stars (
+                              {selectedStorePrice})
+                            </Text>
+                          ) : (
+                            <Text style={styles.methodHint}>
+                              Buy {formatStars(selectedStars)} stars
+                              {isIapConnected ? " (loading price…)" : ""}
+                            </Text>
+                          )}
+                          {!canUseIap && (
+                            <Text style={styles.methodHint}>
+                              Temporarily unavailable
+                            </Text>
+                          )}
+                          {!isIapConnected && canUseIap && (
+                            <Text style={styles.methodHint}>
+                              Store connecting…
+                            </Text>
+                          )}
+                        </View>
+                      </Pressable>
+                    )}
+                  </View>
+                </>
+              ) : null}
+            </>
           )}
 
-          {insufficientFunds && (
+          {balanceError ? (
             <View style={styles.insufficientCard}>
               <View style={styles.insufficientHeading}>
                 <Ionicons
-                  name="wallet-outline"
+                  name="alert-circle-outline"
                   size={22}
                   color={theme.colors.tint}
                 />
                 <Text style={styles.insufficientTitle}>
-                  Insufficient balance
+                  Could not verify balance
                 </Text>
               </View>
               <Text style={styles.insufficientBody}>
-                You have {formatAmount(walletBalance)} but this costs{" "}
-                {formatAmount(parsedAmount)}. Top up your wallet first.
+                Open your wallet to top up, then try again.
               </Text>
             </View>
-          )}
+          ) : null}
+
+          {selectedStars > 0 &&
+          showIapRow &&
+          canUseIap &&
+          selectedMethod === "iap" ? (
+            <IapLegalFooter
+              theme={theme}
+              variant="consumable"
+              style={styles.legalFooter}
+            />
+          ) : null}
 
           {balancePending ? (
             <View style={styles.sliderPlaceholder}>
               <ActivityIndicator size="small" color={theme.colors.primary} />
-              <Text style={styles.sliderPlaceholderText}>
-                Checking wallet…
-              </Text>
+              <Text style={styles.sliderPlaceholderText}>Checking wallet…</Text>
             </View>
-          ) : (
+          ) : tipProductOptions.length > 0 ? (
             <SlideToConfirm
               onConfirm={handleConfirm}
-              loading={isTipping}
+              loading={isTipping || isIapProcessing}
               theme={theme}
               disabled={!canConfirm}
             />
-          )}
+          ) : null}
 
-          {insufficientFunds || balanceError ? (
-            <>
-              <Button
-                title="Go to wallet"
-                variant="primary"
-                onPress={handleGoToWallet}
-                disabled={isTipping}
-              />
-              <Button
-                title="Cancel"
-                variant="outline"
-                onPress={onClose}
-                style={styles.cancelButton}
-                disabled={isTipping}
-              />
-            </>
-          ) : (
+          {balanceError ? (
             <Button
-              title="Cancel"
-              variant="outline"
-              onPress={onClose}
-              style={styles.cancelButton}
-              disabled={isTipping}
+              title="Go to wallet"
+              variant="primary"
+              onPress={handleGoToWallet}
+              disabled={isTipping || isIapProcessing}
             />
-          )}
-          </Animated.View>
-        </KeyboardAvoidingView>
+          ) : null}
+        </Animated.View>
       </GestureHandlerRootView>
     </Modal>
   );
@@ -498,10 +818,22 @@ const createStyles = (theme: AppTheme) =>
       alignSelf: "center",
       marginBottom: theme.spacing.xs,
     },
+    headerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: theme.spacing.sm,
+    },
     titleRow: {
+      flex: 1,
+      minWidth: 0,
       flexDirection: "row",
       alignItems: "center",
       gap: theme.spacing.sm,
+    },
+    closeButton: {
+      padding: theme.spacing.xs,
+      marginRight: -theme.spacing.xs,
     },
     iconBadge: {
       width: 36,
@@ -514,75 +846,174 @@ const createStyles = (theme: AppTheme) =>
       borderColor: theme.colors.border,
     },
     title: {
+      flex: 1,
       fontSize: 18,
       fontWeight: "700",
       color: theme.colors.textPrimary,
     },
-    detailCard: {
+    recipient: {
+      fontSize: 15,
+      color: theme.colors.textSecondary,
+      textAlign: "center",
+    },
+    sectionLabel: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: theme.colors.textSecondary,
+      letterSpacing: 0.5,
+      textTransform: "uppercase",
+    },
+    chipRow: {
+      flexDirection: "row",
+      alignItems: "stretch",
+      gap: theme.spacing.sm,
+      paddingVertical: theme.spacing.xs,
+    },
+    chip: {
+      minWidth: 88,
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.md,
+      borderRadius: theme.radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.colors.border,
       backgroundColor: theme.colors.surface,
+      alignItems: "center",
+      gap: 4,
+    },
+    chipSelected: {
+      borderColor: theme.colors.primary,
+      borderWidth: 2,
+      backgroundColor: theme.colors.card,
+    },
+    chipTopRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+    },
+    chipAmount: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: theme.colors.textPrimary,
+    },
+    chipAmountSelected: {
+      color: theme.colors.primary,
+    },
+    chipHint: {
+      fontSize: 11,
+      fontWeight: "500",
+      color: theme.colors.textSecondary,
+    },
+    chipHintSelected: {
+      color: theme.colors.textSecondary,
+    },
+    amountPreview: {
+      alignItems: "center",
+      gap: theme.spacing.xs,
+      paddingVertical: theme.spacing.sm,
+    },
+    amountPreviewLabel: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: theme.colors.textSecondary,
+      letterSpacing: 0.4,
+      textTransform: "uppercase",
+    },
+    amountPreviewRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+    },
+    amountPreviewValue: {
+      fontSize: 28,
+      fontWeight: "800",
+      color: theme.colors.textPrimary,
+    },
+    amountPreviewSuffix: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: theme.colors.textSecondary,
+    },
+    methodCard: {
       borderRadius: theme.radius.md,
       borderWidth: 1,
       borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
       overflow: "hidden",
     },
-    detailRow: {
+    methodRow: {
       flexDirection: "row",
       alignItems: "center",
+      gap: theme.spacing.sm,
       paddingHorizontal: theme.spacing.md,
       paddingVertical: theme.spacing.md,
-      gap: theme.spacing.sm,
     },
-    detailLabel: {
+    methodRowDividerBottom: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.colors.border,
+    },
+    methodRowActive: {
+      backgroundColor: theme.colors.card,
+    },
+    methodRowDisabled: {
+      opacity: 0.5,
+    },
+    methodTextWrap: {
       flex: 1,
-      fontSize: 14,
-      color: theme.colors.textSecondary,
+      gap: 2,
     },
-    detailValue: {
+    methodLabel: {
       fontSize: 14,
       fontWeight: "600",
       color: theme.colors.textPrimary,
     },
-    divider: {
-      height: 1,
-      backgroundColor: theme.colors.border,
-      marginHorizontal: theme.spacing.md,
+    methodHint: {
+      fontSize: 12,
+      color: theme.colors.textSecondary,
     },
-    balanceValue: {
+    radioOuter: {
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      borderWidth: 2,
+      borderColor: theme.colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    radioInner: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: theme.colors.primary,
+    },
+    loadingRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: theme.spacing.sm,
+      paddingVertical: theme.spacing.lg,
+    },
+    loadingText: {
+      fontSize: 14,
+      color: theme.colors.textSecondary,
+    },
+    unavailableCard: {
+      gap: theme.spacing.sm,
+      padding: theme.spacing.md,
+      borderRadius: theme.radius.md,
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    unavailableTitle: {
       fontSize: 15,
       fontWeight: "700",
       color: theme.colors.textPrimary,
+      textAlign: "center",
     },
-    balanceUnavailable: {
+    unavailableBody: {
       fontSize: 13,
+      lineHeight: 19,
       color: theme.colors.textSecondary,
-    },
-    amountInputContainer: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: theme.colors.surface,
-      borderRadius: theme.radius.md,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.spacing.sm,
-      gap: theme.spacing.xs,
-    },
-    amountPrefix: {
-      fontSize: 28,
-      fontWeight: "700",
-      color: theme.colors.primary,
-    },
-    amountInput: {
-      flex: 1,
-      fontSize: 28,
-      fontWeight: "700",
-      color: theme.colors.textPrimary,
-      padding: 0,
-    },
-    description: {
-      fontSize: 13,
-      color: theme.colors.textSecondary,
-      lineHeight: 20,
       textAlign: "center",
     },
     insufficientCard: {
@@ -609,6 +1040,10 @@ const createStyles = (theme: AppTheme) =>
       lineHeight: 19,
       color: theme.colors.textSecondary,
     },
+    legalFooter: {
+      marginTop: theme.spacing.sm,
+      marginBottom: theme.spacing.xs,
+    },
     sliderPlaceholder: {
       height: TRACK_HEIGHT + theme.spacing.sm,
       alignItems: "center",
@@ -619,8 +1054,5 @@ const createStyles = (theme: AppTheme) =>
     sliderPlaceholderText: {
       fontSize: 14,
       color: theme.colors.textSecondary,
-    },
-    cancelButton: {
-      marginTop: theme.spacing.xs,
     },
   });

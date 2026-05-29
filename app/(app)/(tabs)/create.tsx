@@ -34,8 +34,10 @@ import {
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 
 import { PickedFile, useMediaPicker } from "@/hooks/use-media-picker";
+import JaasiStar from "@/assets/svg/JaasiStar";
 import MentionSuggestionsList from "@/src/components/mentions/MentionSuggestionsList";
 import { useToast } from "@/src/components/toast/ToastProvider";
+import SelectPickerSheet from "@/src/components/ui/selectpicker-sheet";
 import { useImageEditStore } from "@/src/features/post-editor/store/useImageEditorStore";
 import { useVideoPostDraftStore } from "@/src/features/post-editor/store/useVideoPostDraftStore";
 import { useGetProfile } from "@/src/features/profile/profile.hooks";
@@ -43,8 +45,12 @@ import {
   useUploadAndCreatePost,
   useUploadImageAndCreatePost,
 } from "@/src/features/upload/upload.hooks";
+import {
+  storeProductIdFromIapSku,
+} from "@/src/features/wallet/iap.constants";
+import { useIapSkus } from "@/src/features/wallet/wallet.hooks";
 import { queryClient } from "@/src/lib/query-client";
-import { MentionUser } from "@/src/services/api/api.types";
+import type { IapSkuListItem, MentionUser } from "@/src/services/api/api.types";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { debounce } from "@/src/utils/helpers";
@@ -92,11 +98,19 @@ function CreateContent() {
   } = useVideoPostDraftStore();
   const uploadAndCreatePost = useUploadAndCreatePost();
   const uploadImageAndCreatePost = useUploadImageAndCreatePost();
+  const {
+    data: iapSkusResponse,
+    isPending: iapSkusPending,
+    isFetching: iapSkusFetching,
+    isError: iapSkusError,
+    refetch: refetchIapSkus,
+  } = useIapSkus("consumable");
 
   const [postType, setPostType] = useState<PostType>("regular");
   const [caption, setCaption] = useState("");
   const [html, setHtml] = useState("");
-  const [price, setPrice] = useState("");
+  const [selectedPriceSku, setSelectedPriceSku] = useState("");
+  const [pricePickerOpen, setPricePickerOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState<PickedFile | null>(null);
   const [stylesState, setStylesState] = useState<OnChangeStateEvent | null>(
     null,
@@ -233,10 +247,33 @@ function CreateContent() {
     });
   };
 
-  const isPriceValid = (val: string) => {
-    const num = parseFloat(val);
-    return !isNaN(num) && num >= 1 && num <= 200;
-  };
+  const sortedIapProducts = useMemo(() => {
+    const skus = iapSkusResponse?.skus ?? [];
+    const consumables = skus.filter(
+      (s): s is IapSkuListItem & { category: "consumable"; stars: number } =>
+        s.category === "consumable" && typeof s.stars === "number",
+    );
+    return [...consumables]
+      .sort((a, b) => a.stars - b.stars)
+      .map((row) => ({
+        product_id: storeProductIdFromIapSku(row),
+        stars: row.stars,
+      }));
+  }, [iapSkusResponse?.skus]);
+
+  const selectedPriceProduct = useMemo(
+    () => sortedIapProducts.find((product) => product.product_id === selectedPriceSku),
+    [selectedPriceSku, sortedIapProducts],
+  );
+
+  const priceOptions = useMemo(
+    () =>
+      sortedIapProducts.map((product) => ({
+        label: `${product.stars}`,
+        value: product.product_id,
+      })),
+    [sortedIapProducts],
+  );
 
   const handleChangeText = (e: NativeSyntheticEvent<OnChangeTextEvent>) => {
     setCaption(e.nativeEvent.value);
@@ -246,13 +283,22 @@ function CreateContent() {
     setHtml(e.nativeEvent.value);
   };
 
-  const canPost =
-    (!!selectedImage || (!!selectedVideo && !!selectedVideoThumbnail)) &&
-    (postType !== "paid" || isPriceValid(price));
-
   const computedIsExclusive = postType === "subscription";
   const computedPrice =
-    postType === "paid" ? Math.max(0, Number.parseFloat(price || "0")) : 0;
+    postType === "paid" ? selectedPriceProduct?.stars ?? 0 : 0;
+
+  const canPost =
+    (!!selectedImage || (!!selectedVideo && !!selectedVideoThumbnail)) &&
+    (postType !== "paid" || computedPrice > 0);
+
+  useEffect(() => {
+    if (postType !== "paid") return;
+    if (selectedPriceSku) return;
+    const first = sortedIapProducts[0];
+    if (first) {
+      setSelectedPriceSku(first.product_id);
+    }
+  }, [postType, selectedPriceSku, sortedIapProducts]);
 
   const handlePostPress = useCallback(async () => {
     try {
@@ -399,7 +445,15 @@ function CreateContent() {
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+          keyboardShouldPersistTaps="never"
+          onTouchStart={() => {
+            if (isFocused && mentionIndicator !== "@") {
+              // EnrichedTextInput keeps first responder; blur resigns it.
+              inputRef.current?.blur();
+              Keyboard.dismiss();
+            }
+          }}
         >
           {/* Enriched Caption Input */}
           <View style={styles.section}>
@@ -511,19 +565,46 @@ function CreateContent() {
 
           {postType === "paid" && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Price (USD)</Text>
-              <View style={styles.inputWrapper}>
-                <Text style={styles.currencyPrefix}>$</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="0.00"
-                  placeholderTextColor={theme.colors.textSecondary}
-                  keyboardType="decimal-pad"
-                  value={price}
-                  onChangeText={setPrice}
+              <Text style={styles.sectionTitle}>Price</Text>
+              <Pressable
+                onPress={() => {
+                  setPricePickerOpen(true);
+                  void refetchIapSkus();
+                }}
+                style={({ pressed }) => [
+                  styles.inputWrapper,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <View style={styles.inputValueRow}>
+                  <JaasiStar
+                    width={selectedPriceProduct ? 18 : 16}
+                    height={selectedPriceProduct ? 18 : 16}
+                  />
+                  <Text
+                    style={[
+                      styles.input,
+                      !selectedPriceProduct && styles.inputPlaceholder,
+                    ]}
+                  >
+                    {selectedPriceProduct
+                      ? `${selectedPriceProduct.stars}`
+                      : "Select"}
+                  </Text>
+                </View>
+                <Ionicons
+                  name="chevron-down"
+                  size={18}
+                  color={theme.colors.textSecondary}
                 />
-              </View>
-              <Text style={styles.hint}>Set a price between $1 and $200</Text>
+              </Pressable>
+              <Text style={styles.hint}>
+                {iapSkusError
+                  ? "Could not load price options. Tap to retry."
+                  : iapSkusPending || iapSkusFetching
+                    ? "Loading price options..."
+                    : "Choose a price value for this paid post."}
+              </Text>
             </View>
           )}
 
@@ -570,6 +651,14 @@ function CreateContent() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <SelectPickerSheet
+        visible={pricePickerOpen}
+        value={selectedPriceSku}
+        options={priceOptions}
+        onChange={(value) => setSelectedPriceSku(value)}
+        onClose={() => setPricePickerOpen(false)}
+      />
 
       <Modal
         visible={mentionIndicator === "@"}
@@ -821,17 +910,21 @@ const createStyles = (theme: AppTheme) =>
       paddingHorizontal: theme.spacing.md,
       height: 56,
     },
-    currencyPrefix: {
-      fontSize: 18,
-      fontWeight: "600",
-      color: theme.colors.textPrimary,
-      marginRight: theme.spacing.xs,
-    },
     input: {
       flex: 1,
       fontSize: 18,
       color: theme.colors.textPrimary,
       fontWeight: "600",
+    },
+    inputValueRow: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.xs,
+    },
+    inputPlaceholder: {
+      color: theme.colors.textSecondary,
+      fontWeight: "500",
     },
     uploadPlaceholder: {
       height: 200,

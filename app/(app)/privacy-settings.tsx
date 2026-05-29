@@ -1,11 +1,17 @@
+import SelectPickerSheet from "@/src/components/ui/selectpicker-sheet";
 import { useToast } from "@/src/components/toast/ToastProvider";
 import {
   useGetProfile,
   useSetEnable2faFlagMutation,
   useSetOpenProfileFlagMutation,
   useSetSettingsRatesMutation,
-  useUpdateProfile,
 } from "@/src/features/profile/profile.hooks";
+import {
+  findTierKeyForMonthlyPrice,
+  uniqueSubscriptionTiersByTierKey,
+} from "@/src/features/wallet/iap.constants";
+import { useIapSkus } from "@/src/features/wallet/wallet.hooks";
+import type { IapSkuListItem } from "@/src/services/api/api.types";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { profileVisibilityLabel } from "@/src/utils/profile-visibility";
@@ -14,17 +20,21 @@ import { useNavigation } from "expo-router";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Switch,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+function formatSubscriptionLabel(row: IapSkuListItem): string {
+  const amount = Number.parseFloat(row.usd_amount);
+  if (Number.isNaN(amount)) return row.sku_key;
+  return `$${amount.toFixed(2)} / month`;
+}
 
 type Visibility = "public" | "private";
 
@@ -57,19 +67,45 @@ export default function PrivacySettingsScreen() {
 
   const { data, isLoading } = useGetProfile();
   const profile = data?.data;
-  const updateProfile = useUpdateProfile();
   const setSettingsRates = useSetSettingsRatesMutation();
   const openProfileFlag = useSetOpenProfileFlagMutation();
   const enable2faFlag = useSetEnable2faFlagMutation();
 
+  const {
+    data: iapSkusResponse,
+    isPending: iapSkusPending,
+    isError: iapSkusError,
+    refetch: refetchIapSkus,
+  } = useIapSkus("subscription");
+
+  const subscriptionTiers = useMemo(
+    () => uniqueSubscriptionTiersByTierKey(iapSkusResponse?.skus ?? []),
+    [iapSkusResponse?.skus],
+  );
+
+  const subscriptionOptions = useMemo(
+    () =>
+      subscriptionTiers.map((row) => ({
+        label: formatSubscriptionLabel(row),
+        value: row.tier_key!,
+      })),
+    [subscriptionTiers],
+  );
+
   const [visibility, setVisibility] = useState<Visibility>("public");
   const [email2fa, setEmail2fa] = useState(false);
-  const [monthlyPrice, setMonthlyPrice] = useState("");
+  const [selectedTierKey, setSelectedTierKey] = useState("");
+  const [pricePickerOpen, setPricePickerOpen] = useState(false);
   const [baseline, setBaseline] = useState<{
     visibility: Visibility;
     email2fa: boolean;
-    monthlyPrice: string;
+    selectedTierKey: string;
   } | null>(null);
+
+  const selectedSubscriptionTier = useMemo(
+    () => subscriptionTiers.find((row) => row.tier_key === selectedTierKey),
+    [selectedTierKey, subscriptionTiers],
+  );
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -87,51 +123,51 @@ export default function PrivacySettingsScreen() {
   useEffect(() => {
     if (!profile) return;
     const v = profileVisibilityLabel(profile);
-    const price =
-      profile.subscription?.price_1_month != null
-        ? String(profile.subscription.price_1_month)
-        : "";
+    const tierKey = findTierKeyForMonthlyPrice(
+      profile.subscription?.price_1_month,
+      subscriptionTiers,
+    );
     setVisibility(v);
     setEmail2fa(Boolean(profile.enable_2fa));
-    setMonthlyPrice(price);
+    setSelectedTierKey(tierKey);
     setBaseline({
       visibility: v,
       email2fa: Boolean(profile.enable_2fa),
-      monthlyPrice: price,
+      selectedTierKey: tierKey,
     });
-  }, [profile?.id]);
+  }, [profile?.id, subscriptionTiers]);
 
   const isDirty = useMemo(() => {
     if (!baseline) return false;
     return (
       visibility !== baseline.visibility ||
       email2fa !== baseline.email2fa ||
-      monthlyPrice.trim() !== baseline.monthlyPrice.trim()
+      selectedTierKey !== baseline.selectedTierKey
     );
-  }, [baseline, visibility, email2fa, monthlyPrice]);
-
-  const parsePrice = useCallback((): number | null => {
-    const t = monthlyPrice.trim();
-    if (t === "") return null;
-    const n = Number.parseFloat(t.replace(/,/g, ""));
-    if (Number.isNaN(n) || n < 0) return null;
-    return n;
-  }, [monthlyPrice]);
+  }, [baseline, visibility, email2fa, selectedTierKey]);
 
   const handleSave = useCallback(async () => {
     if (!baseline) return;
 
-    const price = parsePrice();
-    if (monthlyPrice.trim() !== "" && price === null) {
-      trigger("Enter a valid subscription price.", "error");
-      return;
-    }
-
     const visibilityDirty = visibility !== baseline.visibility;
     const twoFaDirty = email2fa !== baseline.email2fa;
-    const priceDirty = monthlyPrice.trim() !== baseline.monthlyPrice.trim();
+    const priceDirty = selectedTierKey !== baseline.selectedTierKey;
 
     if (!visibilityDirty && !twoFaDirty && !priceDirty) return;
+
+    if (priceDirty) {
+      if (!selectedTierKey) {
+        trigger("Select a subscription tier.", "error");
+        return;
+      }
+      const tier = subscriptionTiers.find(
+        (row) => row.tier_key === selectedTierKey,
+      );
+      if (!tier) {
+        trigger("Selected subscription tier is invalid.", "error");
+        return;
+      }
+    }
 
     try {
       if (visibilityDirty) {
@@ -141,19 +177,15 @@ export default function PrivacySettingsScreen() {
         await enable2faFlag.mutateAsync(email2fa);
       }
       if (priceDirty) {
-        if (price != null) {
-          await setSettingsRates.mutateAsync({
-            profile_access_price: price,
-          });
-        } else {
-          await updateProfile.mutateAsync({});
-        }
+        await setSettingsRates.mutateAsync({
+          subscription_sku_key: selectedTierKey,
+        });
       }
 
       setBaseline({
         visibility,
         email2fa,
-        monthlyPrice: monthlyPrice.trim(),
+        selectedTierKey,
       });
       trigger("Privacy settings saved.", "success");
     } catch {
@@ -161,14 +193,13 @@ export default function PrivacySettingsScreen() {
     }
   }, [
     baseline,
-    parsePrice,
-    monthlyPrice,
+    selectedTierKey,
+    subscriptionTiers,
     visibility,
     email2fa,
     openProfileFlag,
     enable2faFlag,
     setSettingsRates,
-    updateProfile,
     trigger,
   ]);
 
@@ -183,20 +214,18 @@ export default function PrivacySettingsScreen() {
   const savePending =
     openProfileFlag.isPending ||
     enable2faFlag.isPending ||
-    setSettingsRates.isPending ||
-    updateProfile.isPending;
+    setSettingsRates.isPending;
+
+  const priceDirty =
+    baseline != null && selectedTierKey !== baseline.selectedTierKey;
 
   const saveDisabled =
     !isDirty ||
     savePending ||
-    (monthlyPrice.trim() !== "" && parsePrice() === null);
+    (priceDirty && !selectedTierKey);
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
-    >
+    <View style={styles.flex}>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[
@@ -280,32 +309,65 @@ export default function PrivacySettingsScreen() {
 
         <Text style={styles.sectionLabel}>Monetization</Text>
         <View style={styles.section}>
-          <Text style={styles.fieldLabel}>Monthly subscription price</Text>
-          <View
-            style={[
-              styles.inputShell,
-              {
-                borderColor: theme.colors.border,
-                backgroundColor: theme.colors.surface,
-              },
-            ]}
-          >
-            <Text style={styles.currencyPrefix}>$</Text>
-            <TextInput
-              style={[styles.input, { color: theme.colors.textPrimary }]}
-              value={monthlyPrice}
-              onChangeText={setMonthlyPrice}
-              placeholder="0.00"
-              placeholderTextColor={theme.colors.textSecondary}
-              keyboardType={Platform.OS === "ios" ? "decimal-pad" : "numeric"}
-              accessibilityLabel="Monthly subscription price"
-            />
-          </View>
-          <Text style={styles.fieldHint}>
-            Amount fans pay per month. Leave empty to keep your current price.
-          </Text>
+          <Text style={styles.fieldLabel}>Monthly subscription tier</Text>
+          {iapSkusPending && subscriptionTiers.length === 0 ? (
+            <View style={styles.priceLoading}>
+              <ActivityIndicator color={theme.colors.primary} />
+            </View>
+          ) : iapSkusError || subscriptionTiers.length === 0 ? (
+            <Text style={styles.fieldHint}>
+              Subscription tiers are unavailable right now. Try again later.
+            </Text>
+          ) : (
+            <>
+              <Pressable
+                onPress={() => {
+                  setPricePickerOpen(true);
+                  void refetchIapSkus();
+                }}
+                style={({ pressed }) => [
+                  styles.pickerTrigger,
+                  {
+                    borderColor: theme.colors.border,
+                    backgroundColor: theme.colors.surface,
+                  },
+                  pressed && { opacity: 0.88 },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Monthly subscription tier"
+              >
+                <Text
+                  style={[
+                    styles.pickerTriggerText,
+                    !selectedSubscriptionTier && styles.pickerPlaceholder,
+                  ]}
+                >
+                  {selectedSubscriptionTier
+                    ? formatSubscriptionLabel(selectedSubscriptionTier)
+                    : "Select tier"}
+                </Text>
+                <Ionicons
+                  name="chevron-down"
+                  size={20}
+                  color={theme.colors.textSecondary}
+                />
+              </Pressable>
+              <Text style={styles.fieldHint}>
+                Choose the monthly tier fans pay when subscribing. Prices come
+                from the App Store.
+              </Text>
+            </>
+          )}
         </View>
       </ScrollView>
+
+      <SelectPickerSheet
+        visible={pricePickerOpen}
+        value={selectedTierKey}
+        options={subscriptionOptions}
+        onChange={setSelectedTierKey}
+        onClose={() => setPricePickerOpen(false)}
+      />
 
       <View
         style={[
@@ -334,7 +396,7 @@ export default function PrivacySettingsScreen() {
           )}
         </Pressable>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -441,25 +503,29 @@ const createStyles = (theme: AppTheme) =>
       paddingTop: theme.spacing.lg,
       paddingBottom: theme.spacing.sm,
     },
-    inputShell: {
+    priceLoading: {
+      paddingVertical: theme.spacing.lg,
+      alignItems: "center",
+    },
+    pickerTrigger: {
       flexDirection: "row",
       alignItems: "center",
+      justifyContent: "space-between",
       marginHorizontal: theme.spacing.lg,
       borderRadius: theme.radius.sm,
       borderWidth: 1,
       paddingHorizontal: theme.spacing.md,
       minHeight: 48,
     },
-    currencyPrefix: {
-      fontSize: 17,
-      fontWeight: "600",
-      color: theme.colors.textSecondary,
-      marginRight: 4,
-    },
-    input: {
+    pickerTriggerText: {
       flex: 1,
       fontSize: 17,
+      color: theme.colors.textPrimary,
       paddingVertical: theme.spacing.sm,
+    },
+    pickerPlaceholder: {
+      color: theme.colors.textSecondary,
+      fontWeight: "500",
     },
     fieldHint: {
       fontSize: 12,

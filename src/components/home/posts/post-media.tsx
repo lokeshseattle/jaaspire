@@ -1,5 +1,11 @@
+import JaasiStar from "@/assets/svg/JaasiStar";
 import { useManagedVideoPlayer } from "@/hooks/use-video-player";
+import { PostHeartOverlay } from "@/src/components/home/posts/media/PostHeartOverlay";
 import { Colors } from "@/src/constants/theme";
+import {
+  canViewPostMedia,
+  parseDuration,
+} from "@/src/features/post/post.utils";
 import type { Post } from "@/src/services/api/api.types";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -74,28 +80,6 @@ const MIN_MEDIA_HEIGHT = Math.min(440, Math.max(450, SCREEN_HEIGHT * 0.42));
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
-
-function viewerCanViewPostMedia(
-  viewer: PostMediaViewer | undefined,
-  price: number,
-  isExclusive: boolean,
-): boolean {
-  if (viewer?.is_owner === true) return true;
-  if (price > 0 && !viewer?.has_purchased) return false;
-  if (isExclusive && !viewer?.has_subscription) return false;
-  return true;
-}
-
-/** Normalizes API duration (number, numeric string, or "20s") to seconds. */
-function parseDuration(value: unknown): number | null {
-  if (value == null) return null;
-  if (typeof value === "number") return value > 0 ? value : null;
-  if (typeof value === "string") {
-    const n = Number.parseFloat(value.replace(/[^\d.]/g, ""));
-    return n > 0 ? n : null;
-  }
-  return null;
-}
 
 // ─── Error Boundary ───────────────────────────────────────────────────────────
 
@@ -172,8 +156,8 @@ function PaywallContent({
 
       {price > 0 && (
         <View style={styles.priceBadge}>
-          <Ionicons name="pricetag" size={14} color={Colors.gradient[2]} />
-          <Text style={styles.priceText}>${price.toFixed(2)}</Text>
+          <JaasiStar width={16} height={16} />
+          <Text style={styles.priceText}>{price} Jaasi Stars</Text>
         </View>
       )}
 
@@ -357,7 +341,7 @@ function PostMediaInnerMain({
 
   // ── Access control ─────────────────────────────────────────────────────────
   const canView = useMemo(
-    () => viewerCanViewPostMedia(viewer, price, isExclusive),
+    () => canViewPostMedia(viewer, price, isExclusive),
     [
       viewer?.is_owner,
       viewer?.has_subscription,
@@ -723,6 +707,7 @@ function PostMediaInnerMain({
   }, [toggleMute, showMuteIcon]);
 
   const handlePayPress = useCallback(() => {
+    // console.log("handlePayPress");
     if (onRequestPurchase) {
       onRequestPurchase();
       return;
@@ -932,17 +917,7 @@ function PostMediaInnerMain({
       )}
 
       {/* Heart animation overlay */}
-      <Animated.View
-        style={[styles.heartContainer, heartAnimatedStyle]}
-        pointerEvents="none"
-      >
-        <Ionicons
-          name="heart"
-          size={120}
-          color="#ff3040"
-          style={styles.heartIcon}
-        />
-      </Animated.View>
+      <PostHeartOverlay animatedStyle={heartAnimatedStyle} showShadow />
 
       {showPremiumBadge && (
         <View
@@ -982,7 +957,7 @@ const PostMediaImage = memo(function PostMediaImage({
   const singleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const canView = useMemo(
-    () => viewerCanViewPostMedia(viewer, price, isExclusive),
+    () => canViewPostMedia(viewer, price, isExclusive),
     [viewer, price, isExclusive],
   );
 
@@ -1056,12 +1031,7 @@ const PostMediaImage = memo(function PostMediaImage({
         </Pressable>
       )}
 
-      <Animated.View
-        style={[styles.heartContainer, heartAnimatedStyle]}
-        pointerEvents="none"
-      >
-        <Ionicons name="heart" size={120} color="#ff3040" />
-      </Animated.View>
+      <PostHeartOverlay animatedStyle={heartAnimatedStyle} />
     </View>
   );
 });
@@ -1119,7 +1089,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.3)",
+    // backgroundColor: "rgba(0, 0, 0, 0.3)",
   },
   thumb: {
     position: "absolute",
@@ -1142,20 +1112,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 0, 0, 0.6)",
     padding: 8,
     borderRadius: 20,
-  },
-  heartContainer: {
-    position: "absolute",
-    top: "50%",
-    left: "50%",
-    marginLeft: -60,
-    marginTop: -60,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  heartIcon: {
-    textShadowColor: "rgba(0, 0, 0, 0.3)",
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
   },
   progressContainer: {
     position: "absolute",

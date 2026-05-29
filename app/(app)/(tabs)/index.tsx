@@ -1,15 +1,9 @@
 // Android home feed: viewability picks a single primary post; FlatList tuned for smooth scroll.
-import { useCommentsSheet } from "@/hooks/use-comment-sheet";
-import { useShareSheet } from "@/hooks/use-share-sheet";
-import { CommentsBottomSheet } from "@/src/components/comments/CommentsBottomSheet";
-import PostItem from "@/src/components/home/posts/PostWrapper";
+import { FeedContainer } from "@/src/components/feed/FeedContainer";
+import { useFeedController } from "@/src/components/feed/use-feed-controller";
 import Stories from "@/src/components/home/story";
-import { SharePostBottomSheet } from "@/src/components/share/SharePostBottomSheet";
 import { useNotificationBadgeStore } from "@/src/features/notifications/notification-badge.store";
-import {
-  useGetFeedQuery,
-  useTrackPostView,
-} from "@/src/features/post/post.hooks";
+import { useGetFeedQuery } from "@/src/features/post/post.hooks";
 import { useUnreadMessengerCount } from "@/src/features/profile/notification.hooks";
 import { useGetAllStories } from "@/src/features/story/story.hooks";
 import { useUnreadMessengerBadgeRealtime } from "@/src/lib/pusher";
@@ -18,9 +12,8 @@ import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { router, useFocusEffect, useNavigation } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
-  ActivityIndicator,
   FlatList,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -29,7 +22,6 @@ import {
   Text,
   View,
   ViewabilityConfig,
-  ViewToken,
 } from "react-native";
 import Animated, {
   useAnimatedStyle,
@@ -48,15 +40,9 @@ export default function Home() {
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
-  const [visiblePostId, setVisiblePostId] = useState<number | null>(null);
-  const [isScreenFocused, setIsScreenFocused] = useState(true);
-  const flatListRef = useRef<FlatList>(null);
+  const flatListRef = useRef<FlatList<number>>(null);
   const scrollOffsetRef = useRef(0);
   const lastScrollY = useRef(0);
-
-  const visiblePostIdRef = useRef<number | null>(null);
-  const visibleFeedIndexRef = useRef<number>(-1);
-  const isScreenFocusedRef = useRef(true);
 
   // ✅ Use Reanimated shared value — all header animation math runs on the UI
   // thread via worklets, eliminating JS bridge calls every scroll frame.
@@ -93,19 +79,6 @@ export default function Home() {
     transform: [{ translateY: headerTranslateY.value }],
   }));
 
-  const trackPostView = useTrackPostView();
-  const trackPostViewRef = useRef(trackPostView);
-  trackPostViewRef.current = trackPostView;
-
-  const { bottomSheetRef, selectedPostId, openComments, onDismiss } =
-    useCommentsSheet();
-  const {
-    bottomSheetRef: shareBottomSheetRef,
-    selectedPostId: selectedSharePostId,
-    openShare,
-    onDismiss: onShareDismiss,
-  } = useShareSheet();
-
   const {
     data,
     fetchNextPage,
@@ -120,30 +93,24 @@ export default function Home() {
     [data?.pages],
   );
 
-  const visibleFeedIndex = useMemo(() => {
-    if (visiblePostId == null) return -1;
-    return postIds.indexOf(visiblePostId);
-  }, [visiblePostId, postIds]);
-
-  visiblePostIdRef.current = visiblePostId;
-  visibleFeedIndexRef.current = visibleFeedIndex;
-  isScreenFocusedRef.current = isScreenFocused;
+  const controller = useFeedController({
+    postIds,
+    viewabilityConfig: VIEWABILITY_CONFIG,
+  });
 
   const { refetch: storyRefetch } = useGetAllStories();
 
   useFocusEffect(
     useCallback(() => {
       videoManager.setPinnedFeedPostId(null);
-      setIsScreenFocused(true);
       return () => {
-        const visibleId = visiblePostIdRef.current;
+        const visibleId = controller.visiblePostIdRef.current;
         if (typeof visibleId === "number") {
           videoManager.setPinnedFeedPostId(visibleId);
           videoManager.pause(visibleId);
         }
-        setIsScreenFocused(false);
       };
-    }, []),
+    }, [controller.visiblePostIdRef]),
   );
 
   const handleRefresh = useCallback(async () => {
@@ -168,86 +135,11 @@ export default function Home() {
     return unsubscribe;
   }, [navigation, handleRefresh]);
 
-  const onViewableItemsChanged = useCallback(
-    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-      if (viewableItems.length === 0) return;
-
-      let mostVisibleItem = viewableItems[0];
-
-      for (const item of viewableItems) {
-        if (item.isViewable) {
-          mostVisibleItem = item;
-          break;
-        }
-      }
-
-      const newVisibleId = mostVisibleItem.item as number;
-
-      setVisiblePostId((prevId) => {
-        if (prevId === newVisibleId) return prevId;
-        trackPostViewRef.current.mutate(newVisibleId);
-        return newVisibleId;
-      });
-    },
-    [],
-  );
-
-  const viewabilityConfigCallbackPairs = useRef([
-    {
-      viewabilityConfig: VIEWABILITY_CONFIG,
-      onViewableItemsChanged,
-    },
-  ]);
-
-  const getNextPostId = useCallback(
-    (currentId: number): number | undefined => {
-      const currentIndex = postIds.indexOf(currentId);
-      if (currentIndex === -1 || currentIndex >= postIds.length - 1) {
-        return undefined;
-      }
-      return postIds[currentIndex + 1];
-    },
-    [postIds],
-  );
-
-  const renderItem = useCallback(
-    ({ item: id, index: feedIndex }: { item: number; index: number }) => {
-      const nextId = getNextPostId(id);
-
-      return (
-        <PostItem
-          id={id}
-          feedIndex={feedIndex}
-          visibleFeedIndex={visibleFeedIndexRef.current}
-          nextId={nextId}
-          visiblePostId={visiblePostIdRef.current}
-          isScreenFocused={isScreenFocused}
-          openComments={openComments}
-          openShare={openShare}
-        />
-      );
-    },
-    [openComments, openShare, getNextPostId, isScreenFocused],
-  );
-
-  const keyExtractor = useCallback((item: number) => item.toString(), []);
-
   const handleEndReached = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) {
       fetchNextPage();
     }
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
-
-  const ListFooter = useMemo(
-    () =>
-      isFetchingNextPage ? (
-        <ActivityIndicator
-          style={styles.loader}
-          color={theme.colors.textSecondary}
-        />
-      ) : null,
-    [isFetchingNextPage, styles.loader, theme.colors.textSecondary],
-  );
 
   const ListHeader = useMemo(() => <Stories />, []);
 
@@ -308,40 +200,23 @@ export default function Home() {
         <Text style={styles.headerTitle}>Jaaspire</Text>
         {HeaderRight}
       </Animated.View>
-      <FlatList
-        ref={flatListRef}
-        onScroll={handleScroll}
-        scrollEventThrottle={32}
-        contentContainerStyle={styles.listContent}
-        data={postIds}
-        keyExtractor={keyExtractor}
-        renderItem={renderItem}
+      <FeedContainer
+        controller={controller}
+        flatListRef={flatListRef}
+        postIds={postIds}
         ListHeaderComponent={ListHeader}
-        ListFooterComponent={ListFooter}
-        viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs.current}
-        onEndReached={handleEndReached}
-        onEndReachedThreshold={0.5}
         onRefresh={handleRefresh}
-        refreshing={isRefetching}
-        removeClippedSubviews={true}
-        windowSize={5}
-        maxToRenderPerBatch={2}
-        initialNumToRender={2}
-        updateCellsBatchingPeriod={100}
-        maintainVisibleContentPosition={{
-          minIndexForVisible: 0,
+        isRefreshing={isRefetching}
+        onEndReached={handleEndReached}
+        isFetchingNextPage={isFetchingNextPage}
+        flatListProps={{
+          onScroll: handleScroll,
+          scrollEventThrottle: 32,
+          contentContainerStyle: styles.listContent,
+          maxToRenderPerBatch: 2,
+          initialNumToRender: 2,
+          updateCellsBatchingPeriod: 100,
         }}
-      />
-
-      <CommentsBottomSheet
-        bottomSheetRef={bottomSheetRef}
-        postId={selectedPostId}
-        onDismiss={onDismiss}
-      />
-      <SharePostBottomSheet
-        bottomSheetRef={shareBottomSheetRef}
-        postId={selectedSharePostId}
-        onDismiss={onShareDismiss}
       />
     </View>
   );
@@ -414,8 +289,5 @@ const createStyles = (theme: AppTheme) =>
       fontSize: 11,
       fontWeight: "700",
       color: "#FFFFFF",
-    },
-    loader: {
-      padding: theme.spacing.xl,
     },
   });

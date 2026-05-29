@@ -22,6 +22,8 @@ import {
 } from "@tanstack/react-query";
 import type { AxiosResponse } from "axios";
 import { useLayoutEffect } from "react";
+import { useHydratedInfiniteFeed } from "./internals/use-hydrated-infinite-feed";
+import { postKeys } from "./post.query-keys";
 import { usePostStore } from "./post.store";
 
 /** Feed-like infinite queries whose `pages[].data.posts` should drop a deleted post id. */
@@ -81,8 +83,8 @@ function stripDeletedPostFromInfiniteCaches(postId: number) {
 }
 
 export const useGetFeedQuery = () => {
-  const query = useInfiniteQuery({
-    queryKey: ["feed"],
+  return useHydratedInfiniteFeed({
+    queryKey: postKeys.feed(),
     queryFn: ({ pageParam }) =>
       apiClient
         .get<FeedResponse>("/feed", {
@@ -93,29 +95,15 @@ export const useGetFeedQuery = () => {
       lastPage.data.pagination.has_more
         ? lastPage.data.pagination.current_page + 1
         : undefined,
-
-    initialPageParam: 1,
-
-    select: (data) => ({
-      ...data,
-      pages: data.pages.map((page) => ({
-        ...page,
-        data: {
-          ...page.data,
-          posts: page.data.posts.map((post) => post.id),
-        },
-      })),
+    extractPostsFromRawPage: (page) => page.data.posts,
+    selectPage: (page) => ({
+      ...page,
+      data: {
+        ...page.data,
+        posts: page.data.posts.map((post) => post.id),
+      },
     }),
   });
-
-  useLayoutEffect(() => {
-    const raw = queryClient.getQueryData<InfiniteData<FeedResponse>>(["feed"]);
-    if (!raw?.pages?.length) return;
-    const allPosts = raw.pages.flatMap((page) => page.data.posts);
-    usePostStore.getState().upsertPosts(allPosts);
-  }, [query.dataUpdatedAt]);
-
-  return query;
 };
 
 export const useGetUserFeedQuery = (
@@ -125,8 +113,8 @@ export const useGetUserFeedQuery = (
 ) => {
   const enabledByOption = options?.enabled ?? true;
 
-  const query = useInfiniteQuery({
-    queryKey: ["user_feed", username, type],
+  return useHydratedInfiniteFeed({
+    queryKey: postKeys.userFeed(username, type),
     queryFn: ({ pageParam }) =>
       apiClient
         .get<FeedResponse>(`/users/${username}/posts`, {
@@ -137,132 +125,17 @@ export const useGetUserFeedQuery = (
       lastPage.data.pagination.has_more
         ? lastPage.data.pagination.current_page + 1
         : undefined,
-
-    initialPageParam: 1,
     enabled: enabledByOption && !!username,
-
-    select: (data) => ({
-      ...data,
-      pages: data.pages.map((page) => ({
-        ...page,
-        data: {
-          ...page.data,
-          posts: page.data.posts.map((post) => post.id),
-        },
-      })),
+    extractPostsFromRawPage: (page) => page.data.posts,
+    selectPage: (page) => ({
+      ...page,
+      data: {
+        ...page.data,
+        posts: page.data.posts.map((post) => post.id),
+      },
     }),
   });
-
-  useLayoutEffect(() => {
-    if (!username) return;
-    const raw = queryClient.getQueryData<InfiniteData<FeedResponse>>([
-      "user_feed",
-      username,
-      type,
-    ]);
-    if (!raw?.pages?.length) return;
-    const allPosts = raw.pages.flatMap((page) => page.data.posts);
-    usePostStore.getState().upsertPosts(allPosts);
-  }, [query.dataUpdatedAt, username, type]);
-
-  return query;
 };
-
-// export const useToggleLikeMutation = () => {
-//   // const queryClient = useQueryClient();
-
-//   const updateInfiniteFeed = (oldData: any, postId: number) => {
-//     if (!oldData) return oldData;
-
-//     return {
-//       ...oldData,
-//       pages: oldData.pages.map((page: any) => ({
-//         ...page,
-//         data: {
-//           ...page.data,
-//           posts: page.data.posts.map((post: any) => {
-//             if (post.id !== postId) return post;
-
-//             const isLiked = post.user_reaction === "love";
-
-//             let updatedReactions;
-
-//             if (isLiked) {
-//               // UNLIKE
-//               updatedReactions = post.reactions
-//                 .map((r: any) =>
-//                   r.name === "love"
-//                     ? { ...r, count: Math.max(r.count - 1, 0) }
-//                     : r
-//                 )
-//                 .filter((r: any) => r.count > 0);
-//             } else {
-//               // LIKE
-//               const hasLove = post.reactions.some(
-//                 (r: any) => r.name === "love"
-//               );
-
-//               updatedReactions = hasLove
-//                 ? post.reactions.map((r: any) =>
-//                   r.name === "love"
-//                     ? { ...r, count: r.count + 1 }
-//                     : r
-//                 )
-//                 : [...post.reactions, { name: "love", count: 1 }];
-//             }
-
-//             return {
-//               ...post,
-//               user_reaction: isLiked ? null : "love",
-//               reactions: updatedReactions,
-//             };
-//           }),
-//         },
-//       })),
-//     };
-//   };
-
-//   return useMutation({
-//     mutationFn: (postId: number) =>
-//       apiClient.post(`/posts/${postId}/react`, {
-//         reaction_type: "love",
-//       }),
-
-//     onMutate: async (postId) => {
-//       await queryClient.cancelQueries({ queryKey: ["feed"] });
-
-//       const previousFeed = queryClient.getQueryData(["feed"]);
-//       const previousUserFeeds = queryClient.getQueriesData({
-//         queryKey: ["user_feed"],
-//       });
-
-//       // Update home feed
-//       queryClient.setQueryData(["feed"], (old: any) =>
-//         updateInfiniteFeed(old, postId)
-//       );
-
-//       // Update all user_feed variations
-//       previousUserFeeds.forEach(([key]) => {
-//         queryClient.setQueryData(key, (old: any) =>
-//           updateInfiniteFeed(old, postId)
-//         );
-//       });
-
-//       return { previousFeed, previousUserFeeds };
-//     },
-
-//     onError: (_err, _postId, context) => {
-//       if (!context) return;
-
-//       queryClient.setQueryData(["feed"], context.previousFeed);
-
-//       context.previousUserFeeds.forEach(([key, data]: any) => {
-//         queryClient.setQueryData(key, data);
-//       });
-//     },
-
-//   });
-// };
 
 export const useToggleLikeMutation = () => {
   return useMutation({
@@ -273,7 +146,7 @@ export const useToggleLikeMutation = () => {
 
     onMutate: async (postId) => {
       // 1️⃣ Cancel running feed queries
-      await queryClient.cancelQueries({ queryKey: ["feed"] });
+      await queryClient.cancelQueries({ queryKey: postKeys.feed() });
 
       const { posts, updatePost } = usePostStore.getState();
       const previousPost = posts[postId];
@@ -304,7 +177,7 @@ export const useToggleLikeMutation = () => {
             ...post,
             user_reaction: null,
             reactions: updatedReactions,
-            reactions_count: updatedTotal === 0 ? null : updatedTotal,
+            reactions_count: Math.max(updatedTotal, 0),
           };
         }
 
@@ -351,7 +224,7 @@ export const useGetSinglePost = (
   mode: "explore" | "user" = "explore",
 ) => {
   const query = useInfiniteQuery({
-    queryKey: ["single-post", postId, mode],
+    queryKey: postKeys.single(postId, mode),
     queryFn: ({ pageParam }) =>
       apiClient.get<SinglePostResponse>(`/posts/${postId}`, {
         params: { page: pageParam, mode },
@@ -386,7 +259,7 @@ export const useGetSinglePost = (
   useLayoutEffect(() => {
     const raw = queryClient.getQueryData<
       InfiniteData<AxiosResponse<SinglePostResponse>>
-    >(["single-post", postId, mode]);
+    >(postKeys.single(postId, mode));
     if (!raw?.pages?.length) return;
 
     for (const page of raw.pages) {
@@ -416,7 +289,7 @@ export const useBookmarkPostMutation = (): UseMutationResult<
         .post<BookmarkPostResponse>(`/posts/${postId}/bookmark`, { action })
         .then((d) => d.data),
     onMutate: async ({ postId, action }) => {
-      await queryClient.cancelQueries({ queryKey: ["feed"] });
+      await queryClient.cancelQueries({ queryKey: postKeys.feed() });
       const { posts, updatePost } = usePostStore.getState();
       const previousPost = posts[postId];
 
@@ -464,7 +337,7 @@ export const useDeletePostMutation = (): UseMutationResult<
         predicate: (q) =>
           q.queryKey[0] === "single-post" && q.queryKey[1] === postId,
       });
-      queryClient.removeQueries({ queryKey: ["post-comments", postId] });
+      queryClient.removeQueries({ queryKey: postKeys.comments(postId) });
       // queryClient.invalidateQueries({ queryKey: ["profile"] });
     },
   });
@@ -487,7 +360,7 @@ export const usePinPostMutation = (): UseMutationResult<
         .post<PinPostResponse>(`/posts/${postId}/pin`, { action })
         .then((d) => d.data),
     onMutate: async ({ postId, action }) => {
-      await queryClient.cancelQueries({ queryKey: ["feed"] });
+      await queryClient.cancelQueries({ queryKey: postKeys.feed() });
       const { posts, updatePost } = usePostStore.getState();
       const previousPost = posts[postId];
 
@@ -524,8 +397,8 @@ export const usePinPostMutation = (): UseMutationResult<
 };
 
 export const useGetBookmarksQuery = (type?: "all" | "photos" | "videos") => {
-  const query = useInfiniteQuery({
-    queryKey: ["bookmarks", type],
+  return useHydratedInfiniteFeed({
+    queryKey: postKeys.bookmarks(type),
     queryFn: ({ pageParam }) =>
       apiClient
         .get<BookmarksResponse>("/bookmarks", {
@@ -536,32 +409,15 @@ export const useGetBookmarksQuery = (type?: "all" | "photos" | "videos") => {
       lastPage.data.pagination.has_more
         ? lastPage.data.pagination.current_page + 1
         : undefined,
-
-    initialPageParam: 1,
-
-    select: (data) => ({
-      ...data,
-      pages: data.pages.map((page) => ({
-        ...page,
-        data: {
-          ...page.data,
-          posts: page.data.posts.map((post) => post.id),
-        },
-      })),
+    extractPostsFromRawPage: (page) => page.data.posts,
+    selectPage: (page) => ({
+      ...page,
+      data: {
+        ...page.data,
+        posts: page.data.posts.map((post) => post.id),
+      },
     }),
   });
-
-  useLayoutEffect(() => {
-    const raw = queryClient.getQueryData<InfiniteData<BookmarksResponse>>([
-      "bookmarks",
-      type,
-    ]);
-    if (!raw?.pages?.length) return;
-    const allPosts = raw.pages.flatMap((page) => page.data.posts);
-    usePostStore.getState().upsertPosts(allPosts);
-  }, [query.dataUpdatedAt, type]);
-
-  return query;
 };
 
 export const useGetReport = (): UseQueryResult<
@@ -569,7 +425,7 @@ export const useGetReport = (): UseQueryResult<
   PossibleErrorResponse
 > => {
   return useQuery({
-    queryKey: ["report"],
+    queryKey: postKeys.report(),
     queryFn: () =>
       apiClient
         .get<ReportTypesResponse>("/report/types")

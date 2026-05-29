@@ -1,10 +1,16 @@
 import PaymentConfirmSheet from "@/src/components/payment/PaymentConfirmSheet";
+import SubscribePaymentConfirmSheet from "@/src/components/payment/SubscribePaymentConfirmSheet";
 import TipBottomSheet from "@/src/components/payment/TipBottomSheet";
 import PostContext from "@/src/context/post-context";
 import { useToggleLikeMutation } from "@/src/features/post/post.hooks";
 import { useGetProfileByUsername } from "@/src/features/profile/profile.hooks";
 import {
-  useSubscribeUser,
+  getStarsForWalletSku,
+  skuForStarAmount,
+} from "@/src/features/wallet/iap.constants";
+import { useIap } from "@/src/features/wallet/iap.context";
+import {
+  useIapSkus,
   useUnlockPost,
 } from "@/src/features/wallet/wallet.hooks";
 import type { Post as PostItem } from "@/src/services/api/api.types";
@@ -52,62 +58,97 @@ function Post({
   }, [post.id]);
 
   const [paymentSheetOpen, setPaymentSheetOpen] = useState(false);
+  const [subscribeSheetOpen, setSubscribeSheetOpen] = useState(false);
   const [tipSheetOpen, setTipSheetOpen] = useState(false);
-
-  // For exclusive posts: fetch the creator's subscription price (likely cached)
-  const { data: creatorProfile } = useGetProfileByUsername(
-    post.is_exclusive ? post.user.username : "",
-  );
-  const subscriptionPrice =
-    creatorProfile?.data?.subscription?.price_1_month ?? 0;
 
   const isExclusivePost = post.is_exclusive && !post.viewer?.has_subscription;
 
+  const { data: creatorProfile } = useGetProfileByUsername(
+    subscribeSheetOpen ? post.user.username : "",
+  );
+  const subscriptionAmount =
+    creatorProfile?.data?.subscription?.price_1_month ?? 0;
+
   const { mutateAsync: unlockPost, isPending: isUnlocking } = useUnlockPost();
-  const { mutateAsync: subscribeUser, isPending: isSubscribing } =
-    useSubscribeUser();
+  const { data: iapSkusResponse } = useIapSkus("consumable");
+  const { connected: isIapConnected, startPurchase, isProcessing: isIapProcessing } =
+    useIap();
+
+  const postIapSku = useMemo(() => {
+    if (isExclusivePost) return null;
+    const skus = iapSkusResponse?.skus ?? [];
+    if (!skus.length) return null;
+    return skuForStarAmount(post.price, skus);
+  }, [isExclusivePost, post.price, iapSkusResponse?.skus]);
+
+  const postIapStars = useMemo(() => {
+    if (!postIapSku) return null;
+    return getStarsForWalletSku(postIapSku, iapSkusResponse?.skus ?? []);
+  }, [iapSkusResponse?.skus, postIapSku]);
+
+  const handleConfirmIap = useCallback(
+    async (sku: string) => {
+      if (!isIapConnected) {
+        Alert.alert("Store unavailable", "Please try again in a moment.");
+        return;
+      }
+
+      try {
+        await startPurchase({
+          intent: { kind: "unlock_post", postId: post.id },
+          storeProductId: sku,
+          purchaseType: "in-app",
+          onSuccess: () => setPaymentSheetOpen(false),
+        });
+      } catch (e) {
+        Alert.alert(
+          "Could not start purchase",
+          e instanceof Error ? e.message : "Try again in a moment.",
+        );
+      }
+    },
+    [isIapConnected, post.id, startPurchase],
+  );
 
   const handleRequestPurchase = useCallback(() => {
+    if (isExclusivePost) {
+      setSubscribeSheetOpen(true);
+      return;
+    }
     setPaymentSheetOpen(true);
+  }, [isExclusivePost]);
+
+  const handleCloseSubscribeSheet = useCallback(() => {
+    setSubscribeSheetOpen(false);
   }, []);
+
+  const handleSubscribeSuccess = useCallback(() => {
+    setSubscribeSheetOpen(false);
+    router.replace({
+      pathname: "/user/[username]",
+      params: {
+        username: post.user.username,
+        tab: "premium",
+        subscribed: String(Date.now()),
+      },
+    });
+  }, [post.user.username]);
 
   const handleClosePaymentSheet = useCallback(() => {
     setPaymentSheetOpen(false);
   }, []);
 
   const handleConfirmPurchase = useCallback(async () => {
-    if (isExclusivePost) {
-      // Subscribe flow for exclusive posts
-      try {
-        await subscribeUser({ username: post.user.username });
-        setPaymentSheetOpen(false);
-        router.push({
-          pathname: "/user/[username]",
-          params: {
-            username: post.user.username,
-            tab: "premium",
-            subscribed: String(Date.now()),
-          },
-        });
-      } catch (e) {
-        Alert.alert(
-          "Subscription failed",
-          e instanceof Error ? e.message : "Could not subscribe. Try again.",
-        );
-      }
-    } else {
-      // Unlock post flow for paid posts
-      try {
-        await unlockPost(post.id);
-        setPaymentSheetOpen(false);
-      } catch (e) {
-        Alert.alert(
-          "Unlock failed",
-          e instanceof Error ? e.message : "Could not unlock post. Try again.",
-        );
-      }
+    try {
+      await unlockPost(post.id);
+      setPaymentSheetOpen(false);
+    } catch (e) {
+      Alert.alert(
+        "Unlock failed",
+        e instanceof Error ? e.message : "Could not unlock post. Try again.",
+      );
     }
-  }, [post.id, post.user.username, isExclusivePost, unlockPost, subscribeUser]);
+  }, [post.id, unlockPost]);
 
   const handleOpenTip = useCallback(() => {
     setTipSheetOpen(true);
@@ -118,7 +159,8 @@ function Post({
   }, []);
 
   // Pause video when any payment sheet is open
-  const anySheetOpen = paymentSheetOpen || tipSheetOpen;
+  const anySheetOpen =
+    paymentSheetOpen || subscribeSheetOpen || tipSheetOpen;
   const effectiveIsFocused = isFocused && !anySheetOpen;
 
   const currentMedia = attachments[0];
@@ -191,15 +233,29 @@ function Post({
         onRequestPurchase={handleRequestPurchase}
       />
       <PostFooter />
-      <PaymentConfirmSheet
-        visible={paymentSheetOpen}
-        onClose={handleClosePaymentSheet}
-        onConfirm={handleConfirmPurchase}
-        action={isExclusivePost ? "subscribe" : "buy_post"}
-        username={post.user.username}
-        amount={isExclusivePost ? subscriptionPrice : post.price}
-        loading={isUnlocking || isSubscribing}
-      />
+      {!isExclusivePost ? (
+        <PaymentConfirmSheet
+          visible={paymentSheetOpen}
+          onClose={handleClosePaymentSheet}
+          onConfirm={handleConfirmPurchase}
+          onConfirmIap={handleConfirmIap}
+          action="buy_post"
+          username={post.user.username}
+          amount={post.price}
+          iapSku={postIapSku}
+          starsPerUsd={iapSkusResponse?.currency?.stars_per_usd}
+          iapStarsAmount={postIapStars}
+          loading={isUnlocking || isIapProcessing}
+        />
+      ) : subscribeSheetOpen ? (
+        <SubscribePaymentConfirmSheet
+          visible
+          onClose={handleCloseSubscribeSheet}
+          username={post.user.username}
+          amount={subscriptionAmount}
+          onSuccess={handleSubscribeSuccess}
+        />
+      ) : null}
       <TipBottomSheet
         visible={tipSheetOpen}
         onClose={handleCloseTip}

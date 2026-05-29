@@ -1,32 +1,34 @@
 import {
-    useCreateReportMutation,
-    useGetReport,
+  useCreateReportMutation,
+  useGetReport,
 } from "@/src/features/post/post.hooks";
-import { CreateReportPayload } from "@/src/services/api/api.types";
+import {
+  CreateReportPayload,
+  ReportTarget,
+} from "@/src/services/api/api.types";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { useForm } from "react-hook-form";
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    Pressable,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import FormInput from "../../ui/input";
 
 interface ReportModalProps {
   visible: boolean;
   onClose: () => void;
-  postId: number;
-  userId: number;
+  target: ReportTarget | null;
 }
 
 interface ReportFormData {
@@ -34,11 +36,66 @@ interface ReportFormData {
   message: string;
 }
 
+const TARGET_LABELS: Record<
+  ReportTarget["kind"],
+  { title: string; success: string }
+> = {
+  post: {
+    title: "Report Post",
+    success:
+      "The post has been reported successfully. Thank you for helping keep our community safe.",
+  },
+  comment: {
+    title: "Report Comment",
+    success:
+      "The comment has been reported successfully. Thank you for helping keep our community safe.",
+  },
+  story: {
+    title: "Report Story",
+    success:
+      "The story has been reported successfully. Thank you for helping keep our community safe.",
+  },
+  user: {
+    title: "Report User",
+    success:
+      "This user has been reported successfully. Thank you for helping keep our community safe.",
+  },
+  message: {
+    title: "Report Message",
+    success:
+      "This message has been reported successfully. Thank you for helping keep our community safe.",
+  },
+};
+
+function buildPayload(
+  target: ReportTarget,
+  reason: string,
+  message: string,
+): CreateReportPayload {
+  const base = {
+    type: reason,
+    user_id: target.userId,
+    ...(message.trim() ? { details: message.trim() } : {}),
+  };
+
+  switch (target.kind) {
+    case "post":
+      return { ...base, post_id: target.postId };
+    case "comment":
+      return { ...base, comment_id: target.commentId };
+    case "story":
+      return { ...base, story_id: target.storyId };
+    case "message":
+      return { ...base, message_id: target.messageId };
+    case "user":
+      return base;
+  }
+}
+
 const ReportModal: React.FC<ReportModalProps> = ({
   visible,
   onClose,
-  postId,
-  userId,
+  target,
 }) => {
   const { theme } = useTheme();
   const styles = createStyles(theme);
@@ -53,44 +110,34 @@ const ReportModal: React.FC<ReportModalProps> = ({
   });
 
   const onSubmit = async (data: ReportFormData) => {
+    if (!target) return;
+
     if (!data.reason) {
       Alert.alert("Error", "Please select a reason for reporting.");
       return;
     }
 
-    const payload: CreateReportPayload = {
-      post_id: postId,
-      details: data.message,
-      type: data.reason,
-      user_id: userId,
-      message_id: "",
-      stream_id: "",
-    };
+    const payload = buildPayload(target, data.reason, data.message);
 
     try {
       await mutation.mutateAsync(payload);
       Alert.alert(
         "Reported Successfully",
-        "The post has been reported successfully. Thank you for helping keep our community safe.",
+        TARGET_LABELS[target.kind].success,
       );
       reset();
       onClose();
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "Failed to submit report. Please try again later.");
     }
   };
-
-  // Convert reasons to options format.
-  // Assuming reports is the object returned from useGetReport which is d.data.data from /report/types
-  // We'll try to find the reasons array.
-  const reasonsArray = Array.isArray(reports)
-    ? reports
-    : (reports as any)?.reasons || [];
 
   const reportOptions = reports?.types.map((r: string) => ({
     label: r,
     value: r,
   }));
+
+  const title = target ? TARGET_LABELS[target.kind].title : "Report";
 
   return (
     <Modal
@@ -108,7 +155,7 @@ const ReportModal: React.FC<ReportModalProps> = ({
         >
           <View style={styles.container}>
             <View style={styles.header}>
-              <Text style={styles.title}>Report Post</Text>
+              <Text style={styles.title}>{title}</Text>
               <TouchableOpacity onPress={onClose}>
                 <Ionicons name="close" size={24} color={theme.colors.icon} />
               </TouchableOpacity>
@@ -148,7 +195,7 @@ const ReportModal: React.FC<ReportModalProps> = ({
                       mutation.isPending && styles.submitButtonDisabled,
                     ]}
                     onPress={handleSubmit(onSubmit)}
-                    disabled={mutation.isPending}
+                    disabled={mutation.isPending || !target}
                   >
                     {mutation.isPending ? (
                       <ActivityIndicator color={theme.colors.background} />

@@ -1,8 +1,6 @@
-// One feed index is "primary" (viewable) for video focus; neighbors within `PRELOAD_RADIUS` pre-buffer.
 import Post from "@/src/components/home/posts/post";
 import { usePostStore } from "@/src/features/post/post.store";
 import { memo, useCallback, useRef } from "react";
-import { useShallow } from "zustand/react/shallow";
 
 const PRELOAD_RADIUS = 1;
 
@@ -17,7 +15,7 @@ type PostItemProps = {
   openShare: (id: number) => void;
 };
 
-const PostItem = ({
+function PostItem({
   id,
   feedIndex,
   visibleFeedIndex,
@@ -26,24 +24,19 @@ const PostItem = ({
   isScreenFocused,
   openComments,
   openShare,
-}: PostItemProps) => {
-  const post = usePostStore(useShallow((state) => state.posts[id]));
-
-  const nextPost = usePostStore(
-    useShallow((state) => (nextId != null ? state.posts[nextId] : undefined)),
+}: PostItemProps) {
+  const post = usePostStore((state) => state.posts[id]);
+  const nextPost = usePostStore((state) =>
+    nextId != null ? state.posts[nextId] : undefined,
   );
 
-  // Stabilize callback identity — `id` rarely changes for a mounted cell.
   const idRef = useRef(id);
   idRef.current = id;
   const stableOpenComments = useCallback(
     () => openComments(idRef.current),
     [openComments],
   );
-  const stableOpenShare = useCallback(
-    () => openShare(idRef.current),
-    [openShare],
-  );
+  const stableOpenShare = useCallback(() => openShare(idRef.current), [openShare]);
 
   if (!post) return null;
 
@@ -65,17 +58,15 @@ const PostItem = ({
       nextPost={nextPost}
     />
   );
-};
+}
 
 export default memo(PostItem, (prevProps, nextProps) => {
   const prevInWindow =
     prevProps.visibleFeedIndex >= 0 &&
-    Math.abs(prevProps.feedIndex - prevProps.visibleFeedIndex) <=
-      PRELOAD_RADIUS;
+    Math.abs(prevProps.feedIndex - prevProps.visibleFeedIndex) <= PRELOAD_RADIUS;
   const nextInWindow =
     nextProps.visibleFeedIndex >= 0 &&
-    Math.abs(nextProps.feedIndex - nextProps.visibleFeedIndex) <=
-      PRELOAD_RADIUS;
+    Math.abs(nextProps.feedIndex - nextProps.visibleFeedIndex) <= PRELOAD_RADIUS;
 
   return (
     prevProps.id === nextProps.id &&
@@ -84,6 +75,8 @@ export default memo(PostItem, (prevProps, nextProps) => {
     prevProps.isScreenFocused === nextProps.isScreenFocused &&
     (prevProps.visiblePostId === prevProps.id) ===
       (nextProps.visiblePostId === nextProps.id) &&
-    prevInWindow === nextInWindow
+    prevInWindow === nextInWindow &&
+    prevProps.openComments === nextProps.openComments &&
+    prevProps.openShare === nextProps.openShare
   );
 });

@@ -1,4 +1,6 @@
 import { usePostStore } from "@/src/features/post/post.store";
+import { useHydratedInfiniteFeed } from "@/src/features/post/internals/use-hydrated-infinite-feed";
+import { postKeys } from "@/src/features/post/post.query-keys";
 import { queryClient } from "@/src/lib/query-client";
 import { useSeedStore } from "@/src/lib/seed.store";
 import { apiClient } from "@/src/services/api/api.client";
@@ -8,8 +10,7 @@ import type {
   SingleFlickApiResponse,
 } from "@/src/services/api/api.types";
 import type { InfiniteData } from "@tanstack/react-query";
-import { useInfiniteQuery } from "@tanstack/react-query";
-import { useLayoutEffect, useMemo } from "react";
+import { useMemo } from "react";
 
 export type FlicksFeed = "following" | "explore";
 
@@ -70,13 +71,13 @@ export const useGetFlicksQuery = (
   const enabled = options?.enabled ?? true;
 
   const queryKey = useMemo(
-    () => ["flicks", feed, instanceKey] as const,
+    () => postKeys.flicks(feed, instanceKey),
     [feed, instanceKey],
   );
 
   const { seed } = useSeedStore();
 
-  const query = useInfiniteQuery({
+  return useHydratedInfiniteFeed({
     queryKey,
     enabled,
     queryFn: ({ pageParam }) => {
@@ -94,27 +95,15 @@ export const useGetFlicksQuery = (
       lastPage.data.pagination.has_more
         ? lastPage.data.pagination.current_page + 1
         : undefined,
-    initialPageParam: 1,
-    select: (data) => ({
-      ...data,
-      pages: data.pages.map((page) => ({
-        ...page,
-        data: {
-          ...page.data,
-          posts: page.data.posts.map((post) => post.id),
-        },
-      })),
+    extractPostsFromRawPage: (page) => page.data.posts,
+    selectPage: (page) => ({
+      ...page,
+      data: {
+        ...page.data,
+        posts: page.data.posts.map((post) => post.id),
+      },
     }),
   });
-
-  useLayoutEffect(() => {
-    const raw = queryClient.getQueryData<InfiniteData<FeedResponse>>(queryKey);
-    if (!raw?.pages?.length) return;
-    const allPosts = raw.pages.flatMap((page) => page.data.posts);
-    usePostStore.getState().upsertPosts(allPosts);
-  }, [query.dataUpdatedAt, queryKey]);
-
-  return query;
 };
 
 /** User-scoped flicks feed — same response shape; hits `/flicks/user/{userId}`. */
@@ -127,13 +116,13 @@ export const useGetUserFlicksQuery = (
   const enabled = (options?.enabled ?? true) && userId != null;
 
   const queryKey = useMemo(
-    () => ["flicks", "user", userId, instanceKey] as const,
+    () => postKeys.flicks("user", instanceKey, userId),
     [userId, instanceKey],
   );
 
   const { seed } = useSeedStore();
 
-  const query = useInfiniteQuery({
+  return useHydratedInfiniteFeed({
     queryKey,
     enabled,
     queryFn: ({ pageParam }) => {
@@ -151,25 +140,13 @@ export const useGetUserFlicksQuery = (
       lastPage.data.pagination.has_more
         ? lastPage.data.pagination.current_page + 1
         : undefined,
-    initialPageParam: 1,
-    select: (data) => ({
-      ...data,
-      pages: data.pages.map((page) => ({
-        ...page,
-        data: {
-          ...page.data,
-          posts: page.data.posts.map((post) => post.id),
-        },
-      })),
+    extractPostsFromRawPage: (page) => page.data.posts,
+    selectPage: (page) => ({
+      ...page,
+      data: {
+        ...page.data,
+        posts: page.data.posts.map((post) => post.id),
+      },
     }),
   });
-
-  useLayoutEffect(() => {
-    const raw = queryClient.getQueryData<InfiniteData<FeedResponse>>(queryKey);
-    if (!raw?.pages?.length) return;
-    const allPosts = raw.pages.flatMap((page) => page.data.posts);
-    usePostStore.getState().upsertPosts(allPosts);
-  }, [query.dataUpdatedAt, queryKey]);
-
-  return query;
 };

@@ -207,13 +207,15 @@ const PostHeader: React.FC = React.memo(() => {
               onPress={() => handleAction("save")}
               theme={theme}
             />
-            <MenuItem
-              icon="flag"
-              label="Report"
-              danger
-              onPress={() => handleAction("report")}
-              theme={theme}
-            />
+            {!isOwnPost && (
+              <MenuItem
+                icon="flag"
+                label="Report"
+                danger
+                onPress={() => handleAction("report")}
+                theme={theme}
+              />
+            )}
             {me?.username === user.username && (
               <MenuItem
                 icon={post.is_pinned ? "pin" : "pin-outline"}
@@ -238,8 +240,11 @@ const PostHeader: React.FC = React.memo(() => {
       <ReportModal
         visible={reportModalVisible}
         onClose={() => setReportModalVisible(false)}
-        postId={post.id}
-        userId={user.id}
+        target={
+          reportModalVisible
+            ? { kind: "post", postId: post.id, userId: user.id }
+            : null
+        }
       />
     </>
   );

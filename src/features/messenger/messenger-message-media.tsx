@@ -1,3 +1,4 @@
+import JaasiStar from "@/assets/svg/JaasiStar";
 import type { MessengerMediaAttachment } from "@/src/services/api/api.types";
 import type { AppTheme } from "@/src/theme";
 import { Ionicons } from "@expo/vector-icons";
@@ -5,13 +6,13 @@ import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Dimensions,
-  Modal,
-  Pressable,
-  StatusBar,
-  StyleSheet,
-  Text,
-  View,
+    Dimensions,
+    Modal,
+    Pressable,
+    StatusBar,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -367,8 +368,6 @@ export function MessageMediaStack({
   if (isLocked && !isSender) {
     const firstAttachment = mediaAttachments[0];
     const thumbnailUri = getBubbleThumbnailUri(firstAttachment);
-    const formattedPrice =
-      price != null ? `$${price} to unlock` : "Tap to unlock";
 
     return (
       <View style={stackStyles.container}>
@@ -379,6 +378,7 @@ export function MessageMediaStack({
               style={lockedStyles.blurredThumb}
               contentFit="cover"
               transition={150}
+              blurRadius={24}
             />
           ) : (
             <View
@@ -397,7 +397,16 @@ export function MessageMediaStack({
             >
               <Ionicons name="lock-closed" size={28} color="#fff" />
             </View>
-            <Text style={lockedStyles.priceLabel}>{formattedPrice}</Text>
+            {price != null && price > 0 ? (
+              <View style={lockedStyles.priceRow}>
+                <JaasiStar width={16} height={16} />
+                <Text style={lockedStyles.priceLabel}>
+                  {price.toLocaleString()} to unlock
+                </Text>
+              </View>
+            ) : (
+              <Text style={lockedStyles.priceLabel}>Tap to unlock</Text>
+            )}
           </View>
         </Pressable>
       </View>
@@ -467,6 +476,11 @@ const lockedStyles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     letterSpacing: 0.2,
+  },
+  priceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   senderBadge: {
     position: "absolute",

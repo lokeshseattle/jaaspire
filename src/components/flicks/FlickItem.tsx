@@ -7,6 +7,7 @@ import {
     useDeletePostMutation,
     useToggleLikeMutation,
 } from "@/src/features/post/post.hooks";
+import { canViewPostMedia, parseDuration } from "@/src/features/post/post.utils";
 import { useGetProfile } from "@/src/features/profile/profile.hooks";
 import type { PossibleErrorResponse, Post } from "@/src/services/api/api.types";
 import { getMediaType } from "@/src/utils/helpers";
@@ -104,27 +105,6 @@ function chooseContentFit(
 
 type PostMediaViewer = Post["viewer"];
 
-function viewerCanViewPostMedia(
-  viewer: PostMediaViewer | undefined,
-  price: number,
-  isExclusive: boolean,
-): boolean {
-  if (viewer?.is_owner === true) return true;
-  if (price > 0 && !viewer?.has_purchased) return false;
-  if (isExclusive && !viewer?.has_subscription) return false;
-  return true;
-}
-
-function parseDuration(value: unknown): number | null {
-  if (value == null) return null;
-  if (typeof value === "number") return value > 0 ? value : null;
-  if (typeof value === "string") {
-    const n = Number.parseFloat(value.replace(/[^\d.]/g, ""));
-    return n > 0 ? n : null;
-  }
-  return null;
-}
-
 /** Display mm:ss (or h:mm:ss for long clips). */
 function formatPlaybackTime(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
@@ -196,7 +176,7 @@ function FlickItemInner({
   const viewer = post.viewer;
 
   const canView = useMemo(
-    () => viewerCanViewPostMedia(viewer, price, isExclusive),
+    () => canViewPostMedia(viewer, price, isExclusive),
     [viewer, price, isExclusive],
   );
 
@@ -1123,19 +1103,23 @@ function FlickItemInner({
                 </TouchableOpacity>
               </>
             )}
-            <View style={styles.flickMenuDivider} />
-            <TouchableOpacity
-              style={styles.flickMenuRow}
-              onPress={onReportFromMenu}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="flag-outline" size={20} color="#FF8A80" />
-              <Text
-                style={[styles.flickMenuLabel, styles.flickMenuLabelDanger]}
-              >
-                Report
-              </Text>
-            </TouchableOpacity>
+            {me?.id !== user.id && (
+              <>
+                <View style={styles.flickMenuDivider} />
+                <TouchableOpacity
+                  style={styles.flickMenuRow}
+                  onPress={onReportFromMenu}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="flag-outline" size={20} color="#FF8A80" />
+                  <Text
+                    style={[styles.flickMenuLabel, styles.flickMenuLabelDanger]}
+                  >
+                    Report
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -1143,8 +1127,11 @@ function FlickItemInner({
       <ReportModal
         visible={flickReportOpen}
         onClose={() => setFlickReportOpen(false)}
-        postId={post.id}
-        userId={user.id}
+        target={
+          flickReportOpen
+            ? { kind: "post", postId: post.id, userId: user.id }
+            : null
+        }
       />
 
       {/* Bottom: profile + caption (inset from action rail); full-width seek bar with horizontal padding */}

@@ -1,11 +1,10 @@
 import { apiClient } from "@/src/services/api/api.client";
 import {
-  CancelSubscriptionResponse,
   PaymentsResponse,
   SubscriptionsResponse,
   SubscriptionActiveTab,
 } from "@/src/services/api/api.types";
-import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 
 export const useSubscriptionsQuery = (active: SubscriptionActiveTab) => {
   return useInfiniteQuery({
@@ -25,23 +24,6 @@ export const useSubscriptionsQuery = (active: SubscriptionActiveTab) => {
       lastPage.data.pagination.has_more
         ? lastPage.data.pagination.current_page + 1
         : undefined,
-  });
-};
-
-export const useCancelSubscriptionMutation = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (subscriptionId: number) => {
-      const { data } = await apiClient.post<CancelSubscriptionResponse>(
-        `/settings/subscriptions/${subscriptionId}/cancel`,
-      );
-
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["settings", "subscriptions"] });
-    },
   });
 };
 

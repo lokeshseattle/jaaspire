@@ -1,14 +1,19 @@
+import JaasiStar from "@/assets/svg/JaasiStar";
+import IapLegalFooter, {
+  VirtualCurrencyDisclaimer,
+} from "@/src/components/wallet/IapLegalFooter";
 import { useNotificationCounts } from "@/src/features/profile/notification.hooks";
-import { WALLET_IAP_PRODUCT_IDS } from "@/src/features/wallet/iap.constants";
+import { getStarsForWalletSku } from "@/src/features/wallet/iap.constants";
+import { useIap } from "@/src/features/wallet/iap.context";
 import {
   useCreatorDashboardStartLink,
-  useVerifyWalletIapPurchase,
+  useIapSkus,
 } from "@/src/features/wallet/wallet.hooks";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
-import { ErrorCode, useIAP, type Product, type Purchase } from "expo-iap";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import type { Product } from "expo-iap";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -25,14 +30,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 function parseWalletBalance(raw: number | string | undefined): number {
   const n = typeof raw === "string" ? parseFloat(raw) : Number(raw ?? 0);
   if (!Number.isFinite(n) || n < 0) return 0;
-  return n;
+  return Math.floor(n);
 }
 
 function formatBalance(value: number): string {
   return new Intl.NumberFormat(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
+    maximumFractionDigits: 0,
+  }).format(Math.floor(value));
 }
 
 export default function WalletScreen() {
@@ -41,15 +45,16 @@ export default function WalletScreen() {
   const insets = useSafeAreaInsets();
 
   const [purchasingSku, setPurchasingSku] = useState<string | null>(null);
-  const finishTransactionRef = useRef<
-    | ((args: { purchase: Purchase; isConsumable?: boolean }) => Promise<void>)
-    | null
-  >(null);
 
   const { data, isLoading, isError, refetch, isRefetching } =
     useNotificationCounts();
+  const {
+    data: iapSkusResponse,
+    isPending: iapSkusPending,
+    isError: iapSkusError,
+    refetch: refetchIapSkus,
+  } = useIapSkus("consumable");
 
-  const { mutateAsync: verifyWalletIapPurchase } = useVerifyWalletIapPurchase();
   const {
     mutateAsync: createDashboardStartLink,
     isPending: isOpeningDashboard,
@@ -60,88 +65,63 @@ export default function WalletScreen() {
     reconnect,
     fetchProducts,
     products,
-    requestPurchase,
-    finishTransaction,
-  } = useIAP({
-    onError: (error) => {
-      if (__DEV__) {
-        console.warn("[wallet iap]", error.message);
-      }
-    },
-    onPurchaseSuccess: async (purchase: Purchase) => {
-      if (__DEV__) {
-        console.log("[wallet iap] purchase success", purchase.productId);
-      }
-      try {
-        if (Platform.OS === "ios" || Platform.OS === "android") {
-          await verifyWalletIapPurchase(purchase);
-        }
-        await finishTransactionRef.current?.({
-          purchase,
-          isConsumable: true,
-        });
-      } catch (e) {
-        const message =
-          e instanceof Error
-            ? e.message
-            : "We could not confirm this purchase with the server.";
-        Alert.alert("Verification failed", message);
-        if (__DEV__) {
-          console.warn("[wallet iap] verify or finish failed", e);
-        }
-      } finally {
-        setPurchasingSku(null);
-      }
-    },
-    onPurchaseError: (error) => {
-      setPurchasingSku(null);
-      if (error.code === ErrorCode.UserCancelled) return;
-      Alert.alert(
-        "Purchase failed",
-        error.message ?? "Could not complete purchase. Try again later.",
-      );
-    },
-  });
+    startPurchase,
+    isProcessing,
+  } = useIap();
 
   useEffect(() => {
-    finishTransactionRef.current = finishTransaction;
-  }, [finishTransaction]);
+    if (purchasingSku != null && !isProcessing) {
+      setPurchasingSku(null);
+    }
+  }, [isProcessing, purchasingSku]);
 
   useEffect(() => {
     if (!isConnected) return;
+    const productIds =
+      iapSkusResponse?.skus.map((sku) =>
+        Platform.OS === "ios" ? sku.apple_sku : sku.google_product_id,
+      ) ?? [];
+    if (!productIds.length) return;
     void fetchProducts({
-      skus: WALLET_IAP_PRODUCT_IDS,
+      skus: productIds,
       type: "in-app",
     });
-  }, [isConnected, fetchProducts]);
+  }, [isConnected, fetchProducts, iapSkusResponse?.skus]);
 
   const orderedProducts = useMemo(() => {
+    const sourceProductIds =
+      iapSkusResponse?.skus.map((sku) =>
+        Platform.OS === "ios" ? sku.apple_sku : sku.google_product_id,
+      ) ?? [];
     const byId = new Map(products.map((p) => [p.id, p]));
-    return WALLET_IAP_PRODUCT_IDS.map((id) => byId.get(id)).filter(
-      (p): p is Product => p != null,
-    );
-  }, [products]);
+    return sourceProductIds
+      .map((id) => byId.get(id))
+      .filter((p): p is Product => p != null);
+  }, [products, iapSkusResponse?.skus]);
 
   const balance = parseWalletBalance(data?.data?.wallet_balance);
 
   const purchaseDisabled =
-    !isConnected || purchasingSku != null || orderedProducts.length === 0;
+    !isConnected ||
+    purchasingSku != null ||
+    isProcessing ||
+    orderedProducts.length === 0 ||
+    iapSkusError;
 
   const handlePurchaseProduct = async (sku: string) => {
-    if (!isConnected || purchasingSku != null) return;
+    if (!isConnected || purchasingSku != null || isProcessing) return;
     setPurchasingSku(sku);
     try {
-      await requestPurchase({
-        type: "in-app",
-        request: {
-          apple: { sku },
-          google: { skus: [sku] },
-        },
+      await startPurchase({
+        intent: { kind: "wallet_topup" },
+        storeProductId: sku,
+        purchaseType: "in-app",
+        onSuccess: () => setPurchasingSku(null),
       });
     } catch (e) {
       setPurchasingSku(null);
       if (__DEV__) {
-        console.warn("[wallet iap] requestPurchase failed", e);
+        console.warn("[wallet iap] startPurchase failed", e);
       }
       Alert.alert(
         "Could not start purchase",
@@ -178,9 +158,9 @@ export default function WalletScreen() {
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
     >
-      <Text style={styles.screenTitle}>Wallet</Text>
+      <Text style={styles.screenTitle}>Balance</Text>
       <Text style={styles.screenSubtitle}>
-        Use your balance across the app. Top up when you need more.
+        Your balance across the app. Top up when needed.
       </Text>
 
       <View style={styles.balanceCard}>
@@ -212,7 +192,10 @@ export default function WalletScreen() {
             style={styles.balanceLoader}
           />
         ) : (
-          <Text style={styles.balanceValue}>${formatBalance(balance)}</Text>
+          <View style={styles.balanceValueRow}>
+            <JaasiStar width={48} height={48} />
+            <Text style={styles.balanceValue}>{formatBalance(balance)}</Text>
+          </View>
         )}
         {isError ? (
           <Pressable onPress={() => refetch()} hitSlop={12}>
@@ -266,8 +249,32 @@ export default function WalletScreen() {
         </View>
       ) : (
         <>
-          <Text style={styles.sectionLabel}>Add credit</Text>
-          {orderedProducts.length === 0 ? (
+          <Text style={styles.sectionLabel}>
+            Choose a pack to add Jaasi Stars
+          </Text>
+          <VirtualCurrencyDisclaimer
+            theme={theme}
+            style={styles.virtualCurrencyDisclaimer}
+          />
+          {iapSkusError ? (
+            <View style={styles.noticeCard}>
+              <Text style={styles.noticeTitle}>
+                Could not load purchase options
+              </Text>
+              <Text style={styles.noticeBody}>
+                We could not load products right now. Please try again.
+              </Text>
+              <Pressable
+                onPress={() => refetchIapSkus()}
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  pressed && styles.primaryButtonPressed,
+                ]}
+              >
+                <Text style={styles.primaryButtonLabel}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : iapSkusPending || orderedProducts.length === 0 ? (
             <View style={styles.productsLoading}>
               <ActivityIndicator color={theme.colors.primary} />
               <Text style={styles.productsLoadingLabel}>Loading options…</Text>
@@ -278,34 +285,40 @@ export default function WalletScreen() {
                 const busy = purchasingSku === product.id;
                 const disabled = purchaseDisabled || busy;
                 const title = product.displayName ?? product.title;
+                const starsAmount = getStarsForWalletSku(
+                  product.id,
+                  iapSkusResponse?.skus ?? [],
+                );
                 return (
                   <Pressable
                     key={product.id}
                     onPress={() => void handlePurchaseProduct(product.id)}
                     disabled={disabled}
                     style={({ pressed }) => [
-                      styles.productRow,
-                      disabled && styles.productRowDisabled,
-                      pressed && !disabled && styles.productRowPressed,
+                      styles.productChip,
+                      disabled && styles.productChipDisabled,
+                      pressed && !disabled && styles.productChipPressed,
                     ]}
                   >
-                    <View style={styles.productRowMain}>
-                      <Text style={styles.productTitle} numberOfLines={2}>
-                        {title}
-                      </Text>
-                      {busy ? (
-                        <ActivityIndicator
-                          size="small"
-                          color={theme.colors.primary}
-                          style={styles.productBusy}
-                        />
-                      ) : (
+                    {busy ? (
+                      <ActivityIndicator
+                        size="small"
+                        color={theme.colors.primary}
+                        style={styles.productBusy}
+                      />
+                    ) : (
+                      <View style={styles.productChipRow}>
+                        <View style={styles.productStarsRow}>
+                          <JaasiStar width={18} height={18} />
+                          <Text style={styles.productStarsText}>
+                            {starsAmount ?? title}
+                          </Text>
+                        </View>
                         <Text style={styles.productPrice}>
                           {product.displayPrice}
                         </Text>
-                      )}
-                    </View>
-                    <Text style={styles.productChevron}>›</Text>
+                      </View>
+                    )}
                   </Pressable>
                 );
               })}
@@ -313,6 +326,14 @@ export default function WalletScreen() {
           )}
         </>
       )}
+
+      {Platform.OS === "ios" || Platform.OS === "android" ? (
+        <IapLegalFooter
+          theme={theme}
+          variant="consumable"
+          style={styles.legalFooter}
+        />
+      ) : null}
     </ScrollView>
   );
 }
@@ -368,6 +389,12 @@ const createStyles = (theme: AppTheme) =>
       fontWeight: "700",
       color: theme.colors.textPrimary,
       letterSpacing: -1,
+    },
+    balanceValueRow: {
+      flexDirection: "row",
+      gap: theme.spacing.sm,
+      flexWrap: "wrap",
+      alignItems: "center",
     },
     balanceLoader: {
       marginVertical: theme.spacing.md,
@@ -444,6 +471,9 @@ const createStyles = (theme: AppTheme) =>
       letterSpacing: 0.6,
       marginBottom: theme.spacing.sm,
     },
+    virtualCurrencyDisclaimer: {
+      marginBottom: theme.spacing.md,
+    },
     productsLoading: {
       flexDirection: "row",
       alignItems: "center",
@@ -455,49 +485,52 @@ const createStyles = (theme: AppTheme) =>
       color: theme.colors.textSecondary,
     },
     productList: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      justifyContent: "space-between",
       gap: theme.spacing.sm,
     },
-    productRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingVertical: theme.spacing.lg,
-      paddingHorizontal: theme.spacing.lg,
+    productChip: {
+      width: "48%",
+      minHeight: 46,
+      paddingVertical: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.md,
       borderRadius: theme.radius.md,
-      backgroundColor: theme.colors.card,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: theme.colors.border,
+      backgroundColor: "#FFFFFF",
+      borderWidth: 1,
+      borderColor: "#D8EEFF",
+      justifyContent: "center",
     },
-    productRowPressed: {
+    productChipPressed: {
       opacity: 0.92,
     },
-    productRowDisabled: {
+    productChipDisabled: {
       opacity: 0.5,
     },
-    productRowMain: {
-      flex: 1,
+    productChipRow: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
-      gap: theme.spacing.md,
-    },
-    productTitle: {
-      flex: 1,
-      fontSize: 16,
-      fontWeight: "600",
-      color: theme.colors.textPrimary,
     },
     productPrice: {
-      fontSize: 17,
+      fontSize: 18,
+      fontWeight: "600",
+      color: theme.colors.textSecondary,
+    },
+    productStarsRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+    },
+    productStarsText: {
+      fontSize: 16,
       fontWeight: "700",
-      color: theme.colors.primary,
+      color: theme.colors.textPrimary,
     },
     productBusy: {
-      marginRight: theme.spacing.xs,
+      alignSelf: "center",
     },
-    productChevron: {
-      marginLeft: theme.spacing.sm,
-      fontSize: 22,
-      fontWeight: "300",
-      color: theme.colors.textSecondary,
+    legalFooter: {
+      marginTop: theme.spacing.lg,
     },
   });

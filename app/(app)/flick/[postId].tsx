@@ -10,6 +10,7 @@ import {
 } from "@/src/features/flicks/flicks.hooks";
 import { useTrackPostView } from "@/src/features/post/post.hooks";
 import { usePostStore } from "@/src/features/post/post.store";
+import { canViewPostMedia } from "@/src/features/post/post.utils";
 import { videoManager } from "@/src/lib/video-manager";
 import type { Post } from "@/src/services/api/api.types";
 import { useTheme } from "@/src/theme/ThemeProvider";
@@ -51,6 +52,10 @@ const VIEWABILITY_CONFIG: ViewabilityConfig = {
   itemVisiblePercentThreshold: 80,
   minimumViewTime: 200,
 };
+const STRICT_OFFSCREEN_VIEWABILITY: ViewabilityConfig = {
+  itemVisiblePercentThreshold: 1,
+  minimumViewTime: 0,
+};
 
 const PRELOAD_RADIUS = 1;
 
@@ -70,17 +75,6 @@ const COMMENT_BAR_PLACEHOLDER = "rgba(255,255,255,0.42)";
 /** Top band for overlay chrome — matches previous stack header row (~44pt) + touch target. */
 const FLICK_TOP_CHROME = 44;
 
-function viewerCanViewPostMedia(
-  viewer: Post["viewer"] | undefined,
-  price: number,
-  isExclusive: boolean,
-): boolean {
-  if (viewer?.is_owner === true) return true;
-  if (price > 0 && !viewer?.has_purchased) return false;
-  if (isExclusive && !viewer?.has_subscription) return false;
-  return true;
-}
-
 function flickPreloadTarget(post: Post | undefined): {
   postId: number;
   url: string;
@@ -90,7 +84,7 @@ function flickPreloadTarget(post: Post | undefined): {
   if (getMediaType(a.type) !== "video" || !a.path) return null;
   const price = post.price ?? 0;
   const isExclusive = post.is_exclusive ?? false;
-  const canView = viewerCanViewPostMedia(post.viewer, price, isExclusive);
+  const canView = canViewPostMedia(post.viewer, price, isExclusive);
   const isPaidVideo = !canView && (price > 0 || isExclusive);
   if (canView || isPaidVideo) return { postId: post.id, url: a.path };
   return null;
@@ -456,10 +450,26 @@ export default function FeedFlickScreen() {
     [],
   );
 
+  const onStrictVisibilityChanged = useCallback(
+    ({ changed }: { changed: ViewToken[] }) => {
+      for (const token of changed) {
+        if (token.isViewable) continue;
+        const id = typeof token.item === "number" ? token.item : null;
+        if (id == null) continue;
+        videoManager.seekToStart(id);
+      }
+    },
+    [],
+  );
+
   const viewabilityConfigCallbackPairs = useRef([
     {
       viewabilityConfig: VIEWABILITY_CONFIG,
       onViewableItemsChanged,
+    },
+    {
+      viewabilityConfig: STRICT_OFFSCREEN_VIEWABILITY,
+      onViewableItemsChanged: onStrictVisibilityChanged,
     },
   ]);
 

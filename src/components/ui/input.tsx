@@ -35,6 +35,7 @@ interface BaseFormInputProps<T extends FieldValues> {
   label: string;
   rules?: RegisterOptions<T, Path<T>>;
   Left?: React.ReactNode;
+  Right?: React.ReactNode;
 }
 
 // Props for normal text input (no pickerType)
@@ -72,7 +73,7 @@ type FormInputProps<T extends FieldValues> =
   | SelectFormInputProps<T>;
 
 function FormInput<T extends FieldValues>(props: FormInputProps<T>) {
-  const { control, name, label, rules, Left, pickerType, placeholder } = props;
+  const { control, name, label, rules, Left, Right, pickerType, placeholder } = props;
 
   const { theme } = useTheme();
   const styles = createStyles(theme);
@@ -245,6 +246,8 @@ function FormInput<T extends FieldValues>(props: FormInputProps<T>) {
                     color={theme.colors.icon}
                   />
                 </Pressable>
+              ) : Right ? (
+                <View style={styles.iconWrapperRight}>{Right}</View>
               ) : null}
             </View>
           );

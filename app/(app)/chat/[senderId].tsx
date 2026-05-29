@@ -1,30 +1,48 @@
+import JaasiStar from "@/assets/svg/JaasiStar";
 import { PickedFile, useMediaPicker } from "@/hooks/use-media-picker";
 import PaymentConfirmSheet from "@/src/components/payment/PaymentConfirmSheet";
+import ReportModal from "@/src/components/home/posts/ReportModal";
 import {
-  appendGiftedMessages,
-  GiftedChat,
-  type GiftedIMessage,
+    appendGiftedMessages,
+    GiftedChat,
+    type GiftedIMessage,
 } from "@/src/features/messenger/gifted-chat-bridge";
 import { MessageMediaStack } from "@/src/features/messenger/messenger-message-media";
 import { messengerMessagesQueryKey } from "@/src/features/messenger/messenger-query-keys";
 import {
-  useGetMessengerContacts,
-  useInfiniteMessengerMessages,
-  useMarkMessageAsRead,
-  useSendAiChatMessage,
-  useSendMessengerMessage,
+    useGetMessengerContacts,
+    useInfiniteMessengerMessages,
+    useMarkMessageAsRead,
+    useSendAiChatMessage,
+    useSendMessengerMessage,
 } from "@/src/features/messenger/messenger.hooks";
-import { useGetProfile } from "@/src/features/profile/profile.hooks";
 import {
-  uploadAndProcessMessageAttachment,
-  uploadImageAttachment,
+  useBlockUserMutation,
+  useGetProfile,
+  useGetProfileByUsername,
+  useUnblockUserMutation,
+} from "@/src/features/profile/profile.hooks";
+import {
+    uploadAndProcessMessageAttachment,
+    uploadImageAttachment,
 } from "@/src/features/upload/upload.hooks";
-import { useUnlockMessage } from "@/src/features/wallet/wallet.hooks";
+import {
+  formatIapUsdAmount,
+  getStarsForWalletSku,
+  skuForStarAmount,
+} from "@/src/features/wallet/iap.constants";
+import { useIap } from "@/src/features/wallet/iap.context";
+import {
+  useIapSkus,
+  useUnlockMessage,
+} from "@/src/features/wallet/wallet.hooks";
 import { useChatRealtime } from "@/src/lib/pusher";
 import type {
-  MessengerMessage,
-  MessengerMessagesResponse,
-  MessengerUser,
+    IapSkuListItem,
+    MessengerMessage,
+    MessengerMessagesResponse,
+    MessengerUser,
+    ReportTarget,
 } from "@/src/services/api/api.types";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
@@ -36,40 +54,158 @@ import type { InfiniteData } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import {
-  router,
-  useFocusEffect,
-  useLocalSearchParams,
-  useNavigation,
+    router,
+    useFocusEffect,
+    useLocalSearchParams,
+    useNavigation,
 } from "expo-router";
 import React, {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useState,
-  type ComponentProps,
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useState,
+    type ComponentProps,
 } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  useColorScheme,
-  View,
+    ActivityIndicator,
+    Alert,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    useColorScheme,
+    View,
 } from "react-native";
 import {
-  Bubble,
-  InputToolbar,
-  Send,
-  type BubbleProps,
-  type SendProps,
+    Bubble,
+    InputToolbar,
+    Send,
+    type BubbleProps,
+    type SendProps,
 } from "react-native-gifted-chat";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 /** WhatsApp-style blue for “read” double-ticks (outgoing bubble). */
 const READ_RECEIPT_BLUE = "#34B7F1";
+
+function formatLockStars(amount: number): string {
+  if (Number.isInteger(amount)) return amount.toLocaleString();
+  return amount.toFixed(2);
+}
+
+type LockPriceOption = {
+  sku_key: string;
+  stars: number;
+  usdLabel: string | null;
+};
+
+function AttachmentLockPricePicker({
+  options,
+  selectedSkuKey,
+  onSelectSkuKey,
+  isPending,
+  isError,
+  onRetry,
+  theme,
+  styles,
+}: {
+  options: LockPriceOption[];
+  selectedSkuKey: string;
+  onSelectSkuKey: (skuKey: string) => void;
+  isPending: boolean;
+  isError: boolean;
+  onRetry: () => void;
+  theme: AppTheme;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  if (isPending) {
+    return (
+      <View style={styles.lockPriceLoadingRow}>
+        <ActivityIndicator size="small" color={theme.colors.primary} />
+        <Text style={styles.lockPriceLoadingText}>Loading price options…</Text>
+      </View>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Pressable onPress={onRetry} style={styles.lockPriceUnavailableCard}>
+        <Text style={styles.lockPriceUnavailableTitle}>
+          Could not load price options
+        </Text>
+        <Text style={styles.lockPriceUnavailableBody}>Tap to retry</Text>
+      </Pressable>
+    );
+  }
+
+  if (options.length === 0) {
+    return (
+      <View style={styles.lockPriceUnavailableCard}>
+        <Text style={styles.lockPriceUnavailableTitle}>
+          No price options available
+        </Text>
+        <Text style={styles.lockPriceUnavailableBody}>
+          Try again later.
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <>
+      <Text style={styles.lockPriceSectionLabel}>Choose unlock price</Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.lockPriceChipRow}
+        keyboardShouldPersistTaps="handled"
+      >
+        {options.map((option) => {
+          const selected = option.sku_key === selectedSkuKey;
+          return (
+            <Pressable
+              key={option.sku_key}
+              onPress={() => onSelectSkuKey(option.sku_key)}
+              style={[
+                styles.lockPriceChip,
+                selected && styles.lockPriceChipSelected,
+              ]}
+              accessibilityRole="radio"
+              accessibilityState={{ selected }}
+            >
+              <View style={styles.lockPriceChipTopRow}>
+                <JaasiStar width={16} height={16} />
+                <Text
+                  style={[
+                    styles.lockPriceChipAmount,
+                    selected && styles.lockPriceChipAmountSelected,
+                  ]}
+                >
+                  {formatLockStars(option.stars)}
+                </Text>
+              </View>
+              {option.usdLabel ? (
+                <Text
+                  style={[
+                    styles.lockPriceChipHint,
+                    selected && styles.lockPriceChipHintSelected,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {option.usdLabel}
+                </Text>
+              ) : null}
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+      <Text style={styles.lockPriceHint}>Select an unlock price for this attachment.</Text>
+    </>
+  );
+}
 
 function peerMessengerUser(
   m: MessengerMessage,
@@ -462,12 +598,14 @@ export default function MessengerChatScreen() {
   >(null);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const [isLockEnabled, setIsLockEnabled] = useState(false);
-  const [lockPrice, setLockPrice] = useState(0);
+  const [selectedLockSkuKey, setSelectedLockSkuKey] = useState("");
   const [unlockTarget, setUnlockTarget] = useState<{
     messageId: number;
     price: number;
     username: string;
   } | null>(null);
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
 
   const { senderId, name, username, avatar, isAiBot } = useLocalSearchParams<{
     senderId?: string | string[];
@@ -499,8 +637,56 @@ export default function MessengerChatScreen() {
   const sendAiChatMutation = useSendAiChatMessage();
   const markMessageAsReadMutation = useMarkMessageAsRead();
   const unlockMessageMutation = useUnlockMessage();
+  const blockMutation = useBlockUserMutation();
+  const unblockMutation = useUnblockUserMutation();
   const queryClient = useQueryClient();
   const { openMediaPicker } = useMediaPicker();
+  const {
+    connected: isIapConnected,
+    startPurchase,
+    isProcessing: isIapUnlockProcessing,
+  } = useIap();
+  const {
+    data: iapSkusResponse,
+    isPending: iapSkusPending,
+    isError: iapSkusError,
+    refetch: refetchIapSkus,
+  } = useIapSkus("consumable");
+
+  const lockPriceOptions = useMemo(() => {
+    const skus = iapSkusResponse?.skus ?? [];
+    const consumables = skus.filter(
+      (s): s is IapSkuListItem & { category: "consumable"; stars: number } =>
+        s.category === "consumable" && typeof s.stars === "number",
+    );
+    return [...consumables]
+      .sort((a, b) => a.stars - b.stars)
+      .map((row) => ({
+        sku_key: row.sku_key,
+        stars: row.stars,
+        usdLabel: formatIapUsdAmount(row.usd_amount),
+      }));
+  }, [iapSkusResponse?.skus]);
+
+  const selectedLockProduct = useMemo(
+    () =>
+      lockPriceOptions.find((product) => product.sku_key === selectedLockSkuKey),
+    [selectedLockSkuKey, lockPriceOptions],
+  );
+
+  const lockPrice = selectedLockProduct?.stars ?? 0;
+
+  const messageIapSku = useMemo(() => {
+    if (!unlockTarget) return null;
+    const skus = iapSkusResponse?.skus ?? [];
+    if (!skus.length) return null;
+    return skuForStarAmount(unlockTarget.price, skus);
+  }, [unlockTarget, iapSkusResponse?.skus]);
+
+  const messageIapStars = useMemo(() => {
+    if (!messageIapSku) return null;
+    return getStarsForWalletSku(messageIapSku, iapSkusResponse?.skus ?? []);
+  }, [iapSkusResponse?.skus, messageIapSku]);
 
   const handleAttachMedia = useCallback(() => {
     openMediaPicker({
@@ -509,6 +695,9 @@ export default function MessengerChatScreen() {
       onChange: async (file: PickedFile) => {
         setAttachments(file);
         setProcessedAttachmentId(null);
+        setIsLockEnabled(false);
+        setSelectedLockSkuKey("");
+        void refetchIapSkus();
         setIsUploadingAttachment(true);
         try {
           if (file.type.startsWith("image/")) {
@@ -538,52 +727,33 @@ export default function MessengerChatScreen() {
         }
       },
     });
-  }, [openMediaPicker]);
+  }, [openMediaPicker, refetchIapSkus]);
+
+  useEffect(() => {
+    if (!isLockEnabled || lockPriceOptions.length === 0) return;
+    setSelectedLockSkuKey((prev) =>
+      prev && lockPriceOptions.some((p) => p.sku_key === prev)
+        ? prev
+        : lockPriceOptions[0].sku_key,
+    );
+  }, [isLockEnabled, lockPriceOptions]);
+
   const removeAttachment = useCallback(() => {
     setAttachments(null);
     setProcessedAttachmentId(null);
     setIsLockEnabled(false);
-    setLockPrice(0);
+    setSelectedLockSkuKey("");
   }, []);
 
   const handleToggleLock = useCallback(() => {
     if (isLockEnabled) {
       setIsLockEnabled(false);
-      setLockPrice(0);
+      setSelectedLockSkuKey("");
       return;
     }
-    Alert.prompt(
-      "Set Price",
-      "Set a price to unlock this attachment:",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Lock",
-          onPress: (value: string | undefined) => {
-            const trimmed = (value ?? "").trim();
-            const parsed = parseInt(trimmed, 10);
-            if (
-              !Number.isFinite(parsed) ||
-              parsed <= 0 ||
-              parsed > 100 ||
-              String(parsed) !== trimmed
-            ) {
-              Alert.alert(
-                "Invalid price",
-                "Please enter a whole dollar amount from 1 to 100.",
-              );
-              return;
-            }
-            setLockPrice(parsed);
-            setIsLockEnabled(true);
-          },
-        },
-      ],
-      "plain-text",
-      "",
-      "number-pad",
-    );
-  }, [isLockEnabled]);
+    setIsLockEnabled(true);
+    void refetchIapSkus();
+  }, [isLockEnabled, refetchIapSkus]);
 
   const handleUnlockConfirm = useCallback(async () => {
     if (!unlockTarget) return;
@@ -604,6 +774,38 @@ export default function MessengerChatScreen() {
       Alert.alert("Unlock failed", msg);
     }
   }, [unlockTarget, unlockMessageMutation, peerId]);
+
+  const handleConfirmIapUnlock = useCallback(
+    async (sku: string) => {
+      if (!unlockTarget) return;
+      if (!isIapConnected) {
+        Alert.alert("Store unavailable", "Please try again in a moment.");
+        return;
+      }
+
+      const target = unlockTarget;
+
+      try {
+        await startPurchase({
+          intent: {
+            kind: "unlock_message",
+            messageId: target.messageId,
+            peerId,
+          },
+          storeProductId: sku,
+          purchaseType: "in-app",
+          onSuccess: () => setUnlockTarget(null),
+        });
+      } catch (e) {
+        Alert.alert(
+          "Could not start purchase",
+          e instanceof Error ? e.message : "Try again in a moment.",
+        );
+      }
+    },
+    [isIapConnected, peerId, startPurchase, unlockTarget],
+  );
+
   useChatRealtime(peerId, myId);
 
   useEffect(() => {
@@ -689,13 +891,131 @@ export default function MessengerChatScreen() {
     return Boolean(match?.isAiBot);
   }, [contactsData, peerId, isAiBotParam]);
 
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerTitle: () => (
-        <ChatPeerHeaderTitle peer={peerDisplay} theme={theme} />
-      ),
-    });
-  }, [navigation, peerDisplay, theme]);
+  const peerUsername = useMemo(
+    () => peerDisplay.username.replace(/^@/, "").trim(),
+    [peerDisplay.username],
+  );
+
+  const { data: peerProfile, refetch: refetchPeerProfile } =
+    useGetProfileByUsername(peerUsername);
+
+  const isBlockedByYou =
+    peerProfile?.data?.blocked_status === "blocked_by_you";
+  const isBlockedByUser =
+    peerProfile?.data?.blocked_status === "blocked_by_user";
+  const isMessagingBlocked = isBlockedByYou || isBlockedByUser;
+  const showChatMenu =
+    myId != null && Number.isFinite(peerId) && peerId > 0 && peerId !== myId;
+
+  useFocusEffect(
+    useCallback(() => {
+      if (peerUsername) void refetchPeerProfile();
+    }, [peerUsername, refetchPeerProfile]),
+  );
+
+  const closeMenu = useCallback(() => setMenuVisible(false), []);
+  const openMenu = useCallback(() => setMenuVisible(true), []);
+
+  const handleReportUser = useCallback(() => {
+    closeMenu();
+    setReportTarget({ kind: "user", userId: peerId });
+  }, [closeMenu, peerId]);
+
+  const handleBlock = useCallback(() => {
+    if (!peerUsername) {
+      Alert.alert(
+        "Not ready",
+        "Please wait until the conversation loads, then try again.",
+      );
+      return;
+    }
+    closeMenu();
+    Alert.alert(
+      "Block user",
+      `Block @${peerUsername}? You won't receive messages from this user.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Block",
+          style: "destructive",
+          onPress: () => {
+            blockMutation.mutate(peerUsername, {
+              onSuccess: () => {
+                queryClient.invalidateQueries({
+                  queryKey: messengerMessagesQueryKey(peerId),
+                });
+                Alert.alert(
+                  "Blocked",
+                  "You won't receive messages from this user.",
+                  [{ text: "OK", onPress: () => router.back() }],
+                );
+              },
+              onError: () => {
+                Alert.alert(
+                  "Couldn't block",
+                  "Something went wrong. Try again.",
+                );
+              },
+            });
+          },
+        },
+      ],
+    );
+  }, [peerUsername, closeMenu, blockMutation, queryClient, peerId]);
+
+  const handleUnblock = useCallback(() => {
+    if (!peerUsername) return;
+    closeMenu();
+    Alert.alert("Unblock user", `Unblock @${peerUsername}?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Unblock",
+        onPress: () => {
+          unblockMutation.mutate(peerUsername, {
+            onSuccess: () => {
+              void refetchPeerProfile();
+              Alert.alert("Unblocked", "You can message this user again.");
+            },
+            onError: () => {
+              Alert.alert(
+                "Couldn't unblock",
+                "Something went wrong. Try again.",
+              );
+            },
+          });
+        },
+      },
+    ]);
+  }, [peerUsername, closeMenu, unblockMutation, refetchPeerProfile]);
+
+  const openMessageReport = useCallback(
+    (messageId: number) => {
+      setReportTarget({ kind: "message", messageId, userId: peerId });
+    },
+    [peerId],
+  );
+
+  const handleLongPressMessage = useCallback(
+    (message: GiftedIMessage | undefined) => {
+      if (!message) return;
+      const messageId = message.originalMessageId;
+      const isPeerMessage =
+        myId != null && message.user._id === peerId && !message.pending;
+      const canReportMessage =
+        isPeerMessage && typeof messageId === "number" && messageId > 0;
+      if (!canReportMessage) return;
+
+      Alert.alert("Message", undefined, [
+        {
+          text: "Report message",
+          style: "destructive",
+          onPress: () => openMessageReport(messageId),
+        },
+        { text: "Cancel", style: "cancel" },
+      ]);
+    },
+    [myId, peerId, openMessageReport],
+  );
 
   const giftedServerMessages = useMemo(() => {
     if (myId == null) return [];
@@ -757,6 +1077,7 @@ export default function MessengerChatScreen() {
   const onSend = useCallback(
     async (messages: GiftedIMessage[]) => {
       if (myId == null) return;
+      if (isMessagingBlocked) return;
       if (sendMutation.isPending || sendAiChatMutation.isPending) return;
       const msg = messages[0];
       const trimmed = msg?.text?.trim() ?? "";
@@ -771,6 +1092,13 @@ export default function MessengerChatScreen() {
             "Wait for the upload to finish or remove the attachment.",
           );
         }
+        return;
+      }
+      if (picked && isLockEnabled && !selectedLockProduct) {
+        Alert.alert(
+          "Select unlock price",
+          "Choose a price before sending a locked attachment.",
+        );
         return;
       }
       const tempId = `temp-${Date.now()}`;
@@ -885,13 +1213,16 @@ export default function MessengerChatScreen() {
         } else {
           await sendMutation.mutateAsync({
             message: trimmed,
-            price: isLockEnabled ? lockPrice : 0,
+            sku_key:
+              isLockEnabled && selectedLockProduct
+                ? selectedLockProduct.sku_key
+                : "",
             attachments: processedAttachmentId ? [processedAttachmentId] : [],
           });
           setAttachments(null);
           setProcessedAttachmentId(null);
           setIsLockEnabled(false);
-          setLockPrice(0);
+          setSelectedLockSkuKey("");
         }
         /** Let React Query subscribers apply cache before dropping the temp row (prevents flicker). */
         await new Promise<void>((resolve) => queueMicrotask(() => resolve()));
@@ -915,6 +1246,8 @@ export default function MessengerChatScreen() {
       isUploadingAttachment,
       isLockEnabled,
       lockPrice,
+      selectedLockProduct,
+      isMessagingBlocked,
     ],
   );
 
@@ -928,8 +1261,85 @@ export default function MessengerChatScreen() {
 
   const styles = useMemo(() => createStyles(theme), [theme]);
 
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerTitle: () => (
+        <ChatPeerHeaderTitle peer={peerDisplay} theme={theme} />
+      ),
+      headerRight: showChatMenu
+        ? () => (
+            <Pressable onPress={openMenu} style={styles.headerRightButton}>
+              <Ionicons
+                name="ellipsis-vertical"
+                size={20}
+                color={theme.colors.textPrimary}
+              />
+            </Pressable>
+          )
+        : undefined,
+    });
+  }, [
+    navigation,
+    peerDisplay,
+    theme,
+    showChatMenu,
+    openMenu,
+    styles.headerRightButton,
+    theme.colors.textPrimary,
+  ]);
+
+  /**
+   * iOS: offset = header height (GiftedChat sits below stack header).
+   * Android: useHeaderHeight() can spike; cap to status bar + typical nav header.
+   */
+  const androidKeyboardOffset = useMemo(() => {
+    const typicalStackHeader = insets.top + 56;
+    return Math.min(headerHeight, typicalStackHeader);
+  }, [headerHeight, insets.top]);
+  const keyboardVerticalOffset = useMemo(
+    () => (Platform.OS === "ios" ? headerHeight : androidKeyboardOffset),
+    [androidKeyboardOffset, headerHeight],
+  );
+  const keyboardAvoidingViewProps = useMemo(
+    () =>
+      Platform.OS === "android"
+        ? {
+            keyboardVerticalOffset: androidKeyboardOffset,
+            enabled: true,
+            behavior: "translate-with-padding" as const,
+          }
+        : {
+            keyboardVerticalOffset,
+            enabled: true,
+          },
+    [androidKeyboardOffset, keyboardVerticalOffset],
+  );
+
   const renderInputToolbar = useCallback(
-    (toolbarProps: ComponentProps<typeof InputToolbar<GiftedIMessage>>) => (
+    (toolbarProps: ComponentProps<typeof InputToolbar<GiftedIMessage>>) => {
+      if (isMessagingBlocked) {
+        return (
+          <View
+            style={[
+              styles.blockedComposerBanner,
+              { paddingBottom: Math.min(insets.bottom, 6) },
+            ]}
+          >
+            <Ionicons
+              name="ban-outline"
+              size={18}
+              color={theme.colors.textSecondary}
+            />
+            <Text style={styles.blockedComposerText}>
+              {isBlockedByYou
+                ? "You blocked this user. Unblock from the menu to send messages."
+                : "You can't message this user."}
+            </Text>
+          </View>
+        );
+      }
+
+      return (
       <View
         style={[
           styles.inputToolbarOuter,
@@ -943,52 +1353,72 @@ export default function MessengerChatScreen() {
           theme={theme}
         />
         {attachments && !isAiConversation && (
-          <Pressable
-            onPress={handleToggleLock}
-            hitSlop={8}
-            style={[
-              styles.lockToggleBar,
-              {
-                backgroundColor: isLockEnabled
-                  ? theme.colors.primary + "18"
-                  : theme.colors.surface,
-                borderColor: isLockEnabled
-                  ? theme.colors.primary
-                  : theme.colors.border,
-              },
-            ]}
-          >
-            <Ionicons
-              name={isLockEnabled ? "lock-closed" : "lock-open-outline"}
-              size={16}
-              color={
-                isLockEnabled
-                  ? theme.colors.primary
-                  : theme.colors.textSecondary
-              }
-            />
-            <Text
+          <>
+            <Pressable
+              onPress={handleToggleLock}
+              hitSlop={8}
               style={[
-                styles.lockToggleLabel,
+                styles.lockToggleBar,
                 {
-                  color: isLockEnabled
+                  backgroundColor: isLockEnabled
+                    ? theme.colors.primary + "18"
+                    : theme.colors.surface,
+                  borderColor: isLockEnabled
                     ? theme.colors.primary
-                    : theme.colors.textSecondary,
+                    : theme.colors.border,
                 },
               ]}
             >
-              {isLockEnabled ? `Locked · $${lockPrice}` : "Lock attachment"}
-            </Text>
-            <Ionicons
-              name={isLockEnabled ? "close-circle" : "chevron-forward"}
-              size={14}
-              color={
-                isLockEnabled
-                  ? theme.colors.primary
-                  : theme.colors.textSecondary
-              }
-            />
-          </Pressable>
+              <Ionicons
+                name={isLockEnabled ? "lock-closed" : "lock-open-outline"}
+                size={16}
+                color={
+                  isLockEnabled
+                    ? theme.colors.primary
+                    : theme.colors.textSecondary
+                }
+              />
+              <Text
+                style={[
+                  styles.lockToggleLabel,
+                  {
+                    color: isLockEnabled
+                      ? theme.colors.primary
+                      : theme.colors.textSecondary,
+                  },
+                ]}
+              >
+                {isLockEnabled && selectedLockProduct
+                  ? `Locked · ${formatLockStars(lockPrice)} stars`
+                  : isLockEnabled
+                    ? "Locked · select price"
+                    : "Lock attachment"}
+              </Text>
+              <Ionicons
+                name={isLockEnabled ? "close-circle" : "chevron-forward"}
+                size={14}
+                color={
+                  isLockEnabled
+                    ? theme.colors.primary
+                    : theme.colors.textSecondary
+                }
+              />
+            </Pressable>
+            {isLockEnabled && (
+              <View style={styles.lockPriceSection}>
+                <AttachmentLockPricePicker
+                  options={lockPriceOptions}
+                  selectedSkuKey={selectedLockSkuKey}
+                  onSelectSkuKey={setSelectedLockSkuKey}
+                  isPending={iapSkusPending}
+                  isError={iapSkusError}
+                  onRetry={() => void refetchIapSkus()}
+                  theme={theme}
+                  styles={styles}
+                />
+              </View>
+            )}
+          </>
         )}
         <InputToolbar<GiftedIMessage>
           {...toolbarProps}
@@ -998,7 +1428,8 @@ export default function MessengerChatScreen() {
           ]}
         />
       </View>
-    ),
+      );
+    },
     [
       attachments,
       removeAttachment,
@@ -1006,10 +1437,18 @@ export default function MessengerChatScreen() {
       theme,
       insets.bottom,
       styles,
+      isMessagingBlocked,
+      isBlockedByYou,
+      isAiConversation,
       isLockEnabled,
       lockPrice,
+      selectedLockProduct,
       handleToggleLock,
-      isAiConversation,
+      lockPriceOptions,
+      selectedLockSkuKey,
+      iapSkusPending,
+      iapSkusError,
+      refetchIapSkus,
     ],
   );
 
@@ -1048,19 +1487,36 @@ export default function MessengerChatScreen() {
   );
 
   const renderBubble = useCallback(
-    (bubbleProps: BubbleProps<GiftedIMessage>) => (
-      <Bubble {...bubbleProps} renderTicks={renderTicks} />
-    ),
-    [renderTicks],
-  );
+    (bubbleProps: BubbleProps<GiftedIMessage>) => {
+      const msg = bubbleProps.currentMessage;
+      const messageId = msg?.originalMessageId;
+      const isPeerMessage =
+        myId != null && msg?.user._id === peerId && !msg?.pending;
+      const canReportMessage =
+        isPeerMessage && typeof messageId === "number" && messageId > 0;
 
-  /**
-   * Offset for keyboard-controller KAV (screen-top → view). Using header + full
-   * safe-top often over-pads; header-only keeps the composer tight to the keyboard.
-   */
-  const keyboardVerticalOffset = useMemo(
-    () => (Platform.OS === "ios" ? headerHeight : 0),
-    [headerHeight],
+      return (
+        <Bubble
+          {...bubbleProps}
+          renderTicks={renderTicks}
+          onLongPressMessage={
+            canReportMessage
+              ? (_context, message) =>
+                  handleLongPressMessage(message as GiftedIMessage | undefined)
+              : undefined
+          }
+          touchableProps={
+            canReportMessage
+              ? {
+                  delayLongPress: 400,
+                  accessibilityHint: "Long press to report this message",
+                }
+              : undefined
+          }
+        />
+      );
+    },
+    [myId, peerId, renderTicks, handleLongPressMessage],
   );
 
   if (!Number.isFinite(peerId) || peerId <= 0) {
@@ -1092,6 +1548,7 @@ export default function MessengerChatScreen() {
 
   // Set price row: was renderAccessory + Pressable "Set price" — restore when monetization ships.
   return (
+    <>
     <View style={styles.root}>
       <GiftedChat
         messages={displayMessages}
@@ -1130,10 +1587,15 @@ export default function MessengerChatScreen() {
         isUsernameVisible={false}
         colorScheme={colorScheme}
         isInverted
-        keyboardAvoidingViewProps={{
-          keyboardVerticalOffset,
-          enabled: Platform.OS === "ios",
-        }}
+        keyboardProviderProps={
+          Platform.OS === "android"
+            ? {
+                statusBarTranslucent: true,
+                navigationBarTranslucent: true,
+              }
+            : undefined
+        }
+        keyboardAvoidingViewProps={keyboardAvoidingViewProps}
         loadEarlierMessagesProps={{
           isAvailable: Boolean(hasNextPage),
           isLoading: isFetchingNextPage,
@@ -1209,14 +1671,101 @@ export default function MessengerChatScreen() {
         <PaymentConfirmSheet
           visible={Boolean(unlockTarget)}
           onClose={() => setUnlockTarget(null)}
-          onConfirm={() => void handleUnlockConfirm()}
+          onConfirm={handleUnlockConfirm}
+          onConfirmIap={handleConfirmIapUnlock}
           action="unlock_message"
           username={unlockTarget.username}
           amount={unlockTarget.price}
-          loading={unlockMessageMutation.isPending}
+          iapSku={messageIapSku}
+          starsPerUsd={iapSkusResponse?.currency?.stars_per_usd}
+          iapStarsAmount={messageIapStars}
+          loading={
+            unlockMessageMutation.isPending || isIapUnlockProcessing
+          }
         />
       )}
     </View>
+
+    {showChatMenu && (
+      <Modal
+        visible={menuVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeMenu}
+      >
+        <Pressable style={styles.menuOverlay} onPress={closeMenu}>
+          <View />
+        </Pressable>
+        <View
+          style={[styles.menuPanel, { top: headerHeight + 6 }]}
+          pointerEvents="box-none"
+        >
+          <Pressable
+            style={({ pressed }) => [
+              styles.menuRow,
+              pressed && styles.menuRowPressed,
+            ]}
+            onPress={handleReportUser}
+          >
+            <Ionicons name="flag-outline" size={22} color="#EF4444" />
+            <Text
+              style={[styles.menuRowLabel, styles.menuRowLabelDestructive]}
+            >
+              Report user
+            </Text>
+          </Pressable>
+          {!isAiConversation && (
+            <>
+              <View style={styles.menuDivider} />
+              {isBlockedByUser || isBlockedByYou ? (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.menuRow,
+                    pressed && styles.menuRowPressed,
+                  ]}
+                  onPress={handleUnblock}
+                  disabled={unblockMutation.isPending || !peerUsername}
+                >
+                  <Ionicons
+                    name="checkmark-circle-outline"
+                    size={22}
+                    color={theme.colors.textPrimary}
+                  />
+                  <Text style={styles.menuRowLabel}>Unblock</Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.menuRow,
+                    pressed && styles.menuRowPressed,
+                    !peerUsername && styles.menuRowDisabled,
+                  ]}
+                  onPress={handleBlock}
+                  disabled={blockMutation.isPending}
+                >
+                  <Ionicons name="ban-outline" size={22} color="#EF4444" />
+                  <Text
+                    style={[
+                      styles.menuRowLabel,
+                      styles.menuRowLabelDestructive,
+                    ]}
+                  >
+                    Block
+                  </Text>
+                </Pressable>
+              )}
+            </>
+          )}
+        </View>
+      </Modal>
+    )}
+
+    <ReportModal
+      visible={reportTarget != null}
+      onClose={() => setReportTarget(null)}
+      target={reportTarget}
+    />
+    </>
   );
 }
 
@@ -1272,6 +1821,94 @@ const createStyles = (theme: AppTheme) =>
       flex: 1,
       fontSize: 13,
       fontWeight: "500",
+    },
+    lockPriceSection: {
+      marginHorizontal: 12,
+      marginTop: 4,
+      marginBottom: 2,
+      gap: theme.spacing.xs,
+    },
+    lockPriceSectionLabel: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: theme.colors.textSecondary,
+      letterSpacing: 0.5,
+      textTransform: "uppercase",
+    },
+    lockPriceChipRow: {
+      flexDirection: "row",
+      alignItems: "stretch",
+      gap: theme.spacing.sm,
+      paddingVertical: theme.spacing.xs,
+    },
+    lockPriceChip: {
+      minWidth: 88,
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.md,
+      borderRadius: theme.radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+      alignItems: "center",
+      gap: 4,
+    },
+    lockPriceChipSelected: {
+      borderColor: theme.colors.primary,
+      borderWidth: 2,
+      backgroundColor: theme.colors.card,
+    },
+    lockPriceChipTopRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+    },
+    lockPriceChipAmount: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: theme.colors.textPrimary,
+    },
+    lockPriceChipAmountSelected: {
+      color: theme.colors.primary,
+    },
+    lockPriceChipHint: {
+      fontSize: 11,
+      fontWeight: "500",
+      color: theme.colors.textSecondary,
+    },
+    lockPriceChipHintSelected: {
+      color: theme.colors.textSecondary,
+    },
+    lockPriceHint: {
+      fontSize: 12,
+      color: theme.colors.textSecondary,
+    },
+    lockPriceLoadingRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+      paddingVertical: theme.spacing.sm,
+    },
+    lockPriceLoadingText: {
+      fontSize: 13,
+      color: theme.colors.textSecondary,
+    },
+    lockPriceUnavailableCard: {
+      paddingVertical: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.md,
+      borderRadius: theme.radius.md,
+      backgroundColor: theme.colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.colors.border,
+    },
+    lockPriceUnavailableTitle: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: theme.colors.textPrimary,
+    },
+    lockPriceUnavailableBody: {
+      fontSize: 12,
+      color: theme.colors.textSecondary,
+      marginTop: 2,
     },
     inputToolbarInner: {
       borderTopWidth: 0,
@@ -1341,5 +1978,73 @@ const createStyles = (theme: AppTheme) =>
       justifyContent: "center",
       backgroundColor: theme.colors.background,
       elevation: 2,
+    },
+    headerRightButton: {
+      width: 36,
+      height: 36,
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: -8,
+    },
+    menuOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: "rgba(0,0,0,0.45)",
+    },
+    menuPanel: {
+      position: "absolute",
+      zIndex: 1,
+      right: theme.spacing.md,
+      minWidth: 200,
+      backgroundColor: theme.colors.card,
+      borderRadius: theme.radius.md,
+      paddingVertical: theme.spacing.xs,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.colors.border,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 8,
+      elevation: 6,
+    },
+    menuRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.md,
+      paddingHorizontal: theme.spacing.lg,
+      paddingVertical: theme.spacing.md,
+    },
+    menuRowPressed: {
+      opacity: 0.65,
+    },
+    menuRowDisabled: {
+      opacity: 0.45,
+    },
+    menuRowLabel: {
+      fontSize: 16,
+      color: theme.colors.textPrimary,
+    },
+    menuRowLabelDestructive: {
+      color: "#EF4444",
+    },
+    menuDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: theme.colors.border,
+      marginHorizontal: theme.spacing.sm,
+    },
+    blockedComposerBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.lg,
+      paddingVertical: theme.spacing.md,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+    },
+    blockedComposerText: {
+      flex: 1,
+      fontSize: 14,
+      lineHeight: 20,
+      color: theme.colors.textSecondary,
     },
   });

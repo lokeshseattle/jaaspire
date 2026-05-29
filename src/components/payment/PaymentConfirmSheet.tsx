@@ -1,4 +1,9 @@
+import JaasiStar from "@/assets/svg/JaasiStar";
+import IapLegalFooter, {
+  subscriptionAutoRenewDisclosure,
+} from "@/src/components/wallet/IapLegalFooter";
 import { useNotificationCounts } from "@/src/features/profile/notification.hooks";
+import type { SubscriptionAvailabilityBlocked } from "@/src/features/wallet/wallet.hooks";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
@@ -42,10 +47,23 @@ export interface PaymentConfirmSheetProps {
   visible: boolean;
   onClose: () => void;
   onConfirm: () => void;
+  onConfirmIap?: (sku: string) => void;
   action: PaymentAction;
   username: string;
   amount: number;
+  iapSku?: string | null;
+  iapStarsAmount?: number | null;
+  iapUsdAmount?: string | null;
+  starsPerUsd?: number;
   loading?: boolean;
+  /** Subscribe flow: availability API in flight (shown instead of slider). */
+  checkingAvailability?: boolean;
+  /** Subscribe flow: `available: false` or availability request failed — replaces slider. */
+  availabilityUnavailable?: SubscriptionAvailabilityBlocked | null;
+  /** When true, only show Apple/Google Pay (no wallet option). */
+  iapOnly?: boolean;
+  /** __DEV__ only: availability `sku_key` shown under price for subscribe debugging. */
+  devAvailabilitySkuKey?: string | null;
 }
 
 const THUMB_SIZE = 52;
@@ -100,8 +118,28 @@ const ACTION_CONFIG: Record<
   },
 };
 
-function formatAmount(amount: number): string {
-  return `$${amount.toFixed(2)}`;
+function formatStars(amount: number): string {
+  if (Number.isInteger(amount)) return amount.toLocaleString();
+  return amount.toFixed(2);
+}
+
+function formatUsdFromStars(stars: number, starsPerUsd: number): string {
+  return `$${(stars / starsPerUsd).toFixed(2)}`;
+}
+
+function formatSubscriptionUsdPrice(
+  amount: number,
+  iapUsdAmount: string | null,
+): string {
+  const fromSku = iapUsdAmount ? Number.parseFloat(iapUsdAmount) : NaN;
+  const value =
+    Number.isFinite(fromSku) && fromSku > 0
+      ? fromSku
+      : Number.isFinite(amount) && amount > 0
+        ? amount
+        : null;
+  if (value == null) return "—";
+  return Number.isInteger(value) ? `$${value}` : `$${value.toFixed(2)}`;
 }
 
 /** Aligns with `app/(app)/wallet.tsx` — API may return number or string. */
@@ -112,7 +150,7 @@ function parseWalletBalance(raw: number | string | undefined): number {
 }
 
 interface SlideToConfirmProps {
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
   loading: boolean;
   theme: AppTheme;
 }
@@ -122,20 +160,33 @@ function SlideToConfirm({ onConfirm, loading, theme }: SlideToConfirmProps) {
   const startX = useSharedValue(0);
   const trackWidth = useSharedValue(0);
   const confirmed = useSharedValue(false);
+  const [pending, setPending] = useState(false);
+  const wasBusyRef = useRef(false);
+  const isBusy = loading || pending;
 
   useEffect(() => {
-    if (!loading) {
+    if (wasBusyRef.current && !isBusy) {
       translateX.value = withSpring(0, { damping: 20, stiffness: 200 });
       confirmed.value = false;
     }
-  }, [loading]);
+    wasBusyRef.current = isBusy;
+  }, [isBusy]);
+
+  useEffect(() => {
+    if (pending && loading) {
+      setPending(false);
+    }
+  }, [pending, loading]);
 
   const triggerConfirm = useCallback(() => {
-    onConfirm();
+    setPending(true);
+    void Promise.resolve(onConfirm()).finally(() => {
+      setPending(false);
+    });
   }, [onConfirm]);
 
   const pan = Gesture.Pan()
-    .enabled(!loading)
+    .enabled(!isBusy)
     .activeOffsetX([-8, 8])
     .onBegin(() => {
       "worklet";
@@ -176,7 +227,7 @@ function SlideToConfirm({ onConfirm, loading, theme }: SlideToConfirmProps) {
       <Text style={styles.trackLabel}>Slide to confirm</Text>
       <GestureDetector gesture={pan}>
         <Animated.View style={[styles.thumb, thumbStyle]}>
-          {loading ? (
+          {isBusy ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
             <Ionicons name="chevron-forward" size={22} color="#fff" />
@@ -225,11 +276,20 @@ const sliderStyles = (theme: AppTheme) =>
 export default function PaymentConfirmSheet({
   visible,
   onClose,
-  onConfirm,
+  onConfirm, //for wallet payment
+  onConfirmIap, //for iap payment
   action,
   username,
   amount,
+  iapSku = null,
+  iapStarsAmount = null,
+  iapUsdAmount = null,
+  starsPerUsd,
   loading = false,
+  checkingAvailability = false,
+  availabilityUnavailable = null,
+  iapOnly = false,
+  devAvailabilitySkuKey = null,
 }: PaymentConfirmSheetProps) {
   const { theme } = useTheme();
   const styles = createStyles(theme);
@@ -309,7 +369,11 @@ export default function PaymentConfirmSheet({
   }));
 
   const config = ACTION_CONFIG[action];
-  const formattedAmount = formatAmount(amount);
+  const isBuyPostAction = action === "buy_post";
+  const isUnlockMessageAction = action === "unlock_message";
+  const isWalletIapPurchaseAction = isBuyPostAction || isUnlockMessageAction;
+  const isSubscribeAction = action === "subscribe";
+  const formattedAmount = `${formatStars(amount)}`;
 
   const descriptionText =
     action === "tip"
@@ -330,35 +394,94 @@ export default function PaymentConfirmSheet({
   );
 
   const balanceKnown = !balancePending && !balanceError;
-  const insufficientFundsReal =
-    balanceKnown && walletBalance + Number.EPSILON < amount;
+  const walletSufficientReal =
+    balanceKnown && walletBalance + Number.EPSILON >= amount;
 
   const devOverrideActive =
     __DEV__ &&
     DEV_PAYMENT_BALANCE_OVERRIDE !== "auto" &&
     typeof DEV_PAYMENT_BALANCE_OVERRIDE === "boolean";
 
-  const insufficientFunds = devOverrideActive
-    ? DEV_PAYMENT_BALANCE_OVERRIDE === true
-    : insufficientFundsReal;
+  const walletAvailable = devOverrideActive
+    ? DEV_PAYMENT_BALANCE_OVERRIDE !== true
+    : walletSufficientReal;
 
   /** When dev override is on, treat balance as “known” for gating so you can preview either flow without waiting on the API. */
   const balanceGateReady = devOverrideActive ? true : balanceKnown;
+
+  const canUseIap = Boolean(onConfirmIap && iapSku);
+
+  const showWalletOption = !iapOnly && balanceGateReady && walletAvailable;
+  /** Apple Pay / Google Pay when IAP is configured (post/message unlock or creator subscription). */
+  const showIapRow =
+    iapOnly || isWalletIapPurchaseAction || isSubscribeAction;
+
+  const [selectedMethod, setSelectedMethod] = useState<"wallet" | "iap">(
+    "wallet",
+  );
+
+  useEffect(() => {
+    if (iapOnly || !showWalletOption) {
+      setSelectedMethod("iap");
+      return;
+    }
+    if (showWalletOption) {
+      setSelectedMethod("wallet");
+    }
+  }, [iapOnly, showWalletOption, showIapRow]);
 
   const handleGoToWallet = useCallback(() => {
     onClose();
     router.push("/wallet");
   }, [onClose]);
 
-  const canConfirm = balanceGateReady && !insufficientFunds;
+  const canConfirm =
+    selectedMethod === "wallet"
+      ? balanceGateReady && showWalletOption
+      : showIapRow && canUseIap;
 
-  /** Hide API error chrome while a dev override is active so only the forced insufficient / slider path shows. */
+  const showMethodSelector =
+    (iapOnly && showIapRow) ||
+    ((isWalletIapPurchaseAction || isSubscribeAction) &&
+      (showWalletOption || showIapRow));
+  const hasAvailabilityBlock = Boolean(availabilityUnavailable);
+  const showNoMethodCard =
+    (iapOnly || isWalletIapPurchaseAction || isSubscribeAction) &&
+    (iapOnly
+      ? !canUseIap && !loading && !checkingAvailability && !hasAvailabilityBlock
+      : balanceGateReady) &&
+    !showWalletOption &&
+    !canUseIap;
   const showBalanceErrorUi = balanceError && !devOverrideActive;
+  const showLegacyInsufficientCard =
+    !isWalletIapPurchaseAction &&
+    !isSubscribeAction &&
+    balanceGateReady &&
+    !showWalletOption;
+  const showCheckingWalletPlaceholder =
+    !iapOnly &&
+    (isWalletIapPurchaseAction || isSubscribeAction) &&
+    selectedMethod === "wallet" &&
+    balancePending &&
+    !devOverrideActive;
+  const showCheckingSubscriptionPlaceholder =
+    iapOnly && isSubscribeAction && checkingAvailability;
+  const showAvailabilityUnavailableUi =
+    iapOnly &&
+    isSubscribeAction &&
+    !checkingAvailability &&
+    hasAvailabilityBlock;
 
-  const showCheckingWalletPlaceholder = balancePending && !devOverrideActive;
-
-  const showDescription =
-    !insufficientFunds && (!balanceError || devOverrideActive);
+  const handleConfirmAction = useCallback(async () => {
+    if (selectedMethod === "iap") {
+      if (!onConfirmIap || !iapSku) {
+        return;
+      }
+      await Promise.resolve(onConfirmIap(iapSku));
+      return;
+    }
+    await Promise.resolve(onConfirm());
+  }, [iapSku, onConfirm, onConfirmIap, selectedMethod]);
 
   return (
     <Modal
@@ -389,78 +512,177 @@ export default function PaymentConfirmSheet({
           {/* Drag handle */}
           <View style={styles.handle} />
 
-          {/* Title row */}
-          <View style={styles.titleRow}>
-            <View style={styles.iconBadge}>
-              <Ionicons
-                name={config.icon}
-                size={20}
-                color={theme.colors.primary}
-              />
+          {/* Header: title + close */}
+          <View style={styles.headerRow}>
+            <View style={styles.titleRow}>
+              <View style={styles.iconBadge}>
+                <Ionicons
+                  name={config.icon}
+                  size={20}
+                  color={theme.colors.primary}
+                />
+              </View>
+              <View>
+                <Text style={styles.title} numberOfLines={1}>
+                  {config.title}
+                </Text>
+                <Text style={styles.titleSub}>from @{username}</Text>
+              </View>
             </View>
-            <Text style={styles.title}>{config.title}</Text>
+            <Pressable
+              onPress={onClose}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              style={styles.closeButton}
+              disabled={loading}
+            >
+              <Ionicons
+                name="close"
+                size={26}
+                color={theme.colors.textSecondary}
+              />
+            </Pressable>
           </View>
 
-          {/* Detail card */}
-          <View style={styles.detailCard}>
-            <View style={styles.detailRow}>
-              <Ionicons
-                name="person-outline"
-                size={16}
-                color={theme.colors.textSecondary}
-              />
-              <Text style={styles.detailLabel}>User</Text>
-              <Text style={styles.detailValue}>@{username}</Text>
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.detailRow}>
-              <Ionicons
-                name={config.icon}
-                size={16}
-                color={theme.colors.textSecondary}
-              />
-              <Text style={styles.detailLabel}>Action</Text>
-              <Text style={styles.detailValue}>{config.label}</Text>
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.detailRow}>
-              <Ionicons
-                name="wallet-outline"
-                size={16}
-                color={theme.colors.textSecondary}
-              />
-              <Text style={styles.detailLabel}>Amount</Text>
-              <Text style={styles.amountValue}>{formattedAmount}</Text>
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.detailRow}>
-              <Ionicons
-                name="cash-outline"
-                size={16}
-                color={theme.colors.textSecondary}
-              />
-              <Text style={styles.detailLabel}>Your balance</Text>
-              {balancePending ? (
-                <ActivityIndicator size="small" color={theme.colors.primary} />
-              ) : balanceError ? (
-                <Text style={styles.balanceUnavailable}>Unavailable</Text>
-              ) : (
-                <Text style={styles.balanceValue}>
-                  {formatAmount(walletBalance)}
+          {/* Price (no breakdown table) */}
+          <View style={styles.priceBlock}>
+            <Text style={styles.priceLabel}>
+              {isSubscribeAction
+                ? "1 month subscription"
+                : isBuyPostAction
+                  ? "Post price"
+                  : isUnlockMessageAction
+                    ? "Unlock price"
+                    : "Amount"}
+            </Text>
+            <View style={styles.priceRow}>
+              {isSubscribeAction && iapOnly ? (
+                <Text style={styles.priceValue}>
+                  {formatSubscriptionUsdPrice(amount, iapUsdAmount ?? null)}
+                  <Text style={styles.pricePeriod}>/month</Text>
                 </Text>
+              ) : (
+                <>
+                  <JaasiStar width={28} height={28} />
+                  <Text style={styles.priceValue}>{formatStars(amount)}</Text>
+                </>
               )}
             </View>
+            <Text style={styles.priceSub}>@{username}</Text>
+            {__DEV__ && isSubscribeAction && devAvailabilitySkuKey ? (
+              <Text style={styles.devSkuKey} selectable>
+                SKU: {devAvailabilitySkuKey}
+              </Text>
+            ) : null}
           </View>
 
           {/* Description */}
-          {showDescription && (
-            <Text style={styles.description}>{descriptionText}</Text>
+          {/* <Text style={styles.description}>{descriptionText}</Text> */}
+
+          {showMethodSelector && (
+            <View style={styles.methodCard}>
+              {showWalletOption && (
+                <Pressable
+                  onPress={() => setSelectedMethod("wallet")}
+                  style={[
+                    styles.methodRow,
+                    showIapRow && styles.methodRowDividerBottom,
+                    selectedMethod === "wallet" && styles.methodRowActive,
+                  ]}
+                >
+                  <View style={styles.radioOuter}>
+                    {selectedMethod === "wallet" && (
+                      <View style={styles.radioInner} />
+                    )}
+                  </View>
+                  <Ionicons
+                    name="wallet-outline"
+                    size={18}
+                    color={theme.colors.textPrimary}
+                  />
+                  <Text style={styles.methodLabel}>Wallet</Text>
+                </Pressable>
+              )}
+
+              {showIapRow && (
+                <Pressable
+                  onPress={() => canUseIap && setSelectedMethod("iap")}
+                  disabled={!canUseIap}
+                  style={[
+                    styles.methodRow,
+                    selectedMethod === "iap" && styles.methodRowActive,
+                    !canUseIap && styles.methodRowDisabled,
+                  ]}
+                >
+                  <View style={styles.radioOuter}>
+                    {selectedMethod === "iap" && (
+                      <View style={styles.radioInner} />
+                    )}
+                  </View>
+                  <Ionicons
+                    name={Platform.OS === "ios" ? "logo-apple" : "logo-google"}
+                    size={18}
+                    color={theme.colors.textPrimary}
+                  />
+                  <View style={styles.methodTextWrap}>
+                    <Text style={styles.methodLabel}>
+                      {Platform.OS === "ios" ? "App Store" : "Google Play"}
+                    </Text>
+                    {isSubscribeAction && iapUsdAmount ? (
+                      <Text style={styles.methodHint}>
+                        {iapUsdAmount}/month via App Store
+                      </Text>
+                    ) : null}
+                    {!isSubscribeAction &&
+                      iapStarsAmount != null &&
+                      starsPerUsd != null &&
+                      starsPerUsd > 0 && (
+                        <Text style={styles.methodHint}>
+                          Buy {formatStars(iapStarsAmount)} stars (
+                          {formatUsdFromStars(iapStarsAmount, starsPerUsd)})
+                        </Text>
+                      )}
+                    {!isSubscribeAction &&
+                      iapStarsAmount != null &&
+                      (starsPerUsd == null || starsPerUsd <= 0) && (
+                        <Text style={styles.methodHint}>
+                          Buy {formatStars(iapStarsAmount)} stars
+                        </Text>
+                      )}
+                    {!canUseIap && (
+                      <Text style={styles.methodHint}>
+                        Temporarily unavailable
+                      </Text>
+                    )}
+                  </View>
+                </Pressable>
+              )}
+            </View>
+          )}
+
+          {showNoMethodCard && (
+            <View style={styles.insufficientCard}>
+              <View style={styles.insufficientHeading}>
+                <Ionicons
+                  name="wallet-outline"
+                  size={22}
+                  color={theme.colors.tint}
+                />
+                <Text style={styles.insufficientTitle}>
+                  No payment method available
+                </Text>
+              </View>
+              <Text style={styles.insufficientBody}>
+                {isSubscribeAction && iapOnly
+                  ? "Subscribe with the App Store or Google Play when available."
+                  : isSubscribeAction
+                    ? "Subscribe with the App Store, or add Stars to your wallet."
+                    : isUnlockMessageAction
+                      ? "Add more Stars in your wallet or use the App Store to unlock this message."
+                      : "Add more Stars in your wallet to unlock this post."}
+              </Text>
+            </View>
           )}
 
           {showBalanceErrorUi && (
@@ -481,7 +703,7 @@ export default function PaymentConfirmSheet({
             </View>
           )}
 
-          {insufficientFunds && (
+          {showLegacyInsufficientCard && (
             <View style={styles.insufficientCard}>
               <View style={styles.insufficientHeading}>
                 <Ionicons
@@ -494,53 +716,81 @@ export default function PaymentConfirmSheet({
                 </Text>
               </View>
               <Text style={styles.insufficientBody}>
-                You have {formatAmount(walletBalance)} but this costs{" "}
-                {formattedAmount}. Top up your wallet first, then return here to
-                confirm.
+                You have {formatStars(walletBalance)} stars but this costs{" "}
+                {formatStars(amount)} stars. Top up your wallet and try again.
               </Text>
             </View>
           )}
 
-          {/* Slide to confirm */}
-          {canConfirm ? (
-            <SlideToConfirm
-              onConfirm={onConfirm}
-              loading={loading}
+          {isSubscribeAction && !showAvailabilityUnavailableUi ? (
+            <IapLegalFooter
               theme={theme}
+              variant="subscribe"
+              subscribeDisclosure={subscriptionAutoRenewDisclosure()}
             />
-          ) : showCheckingWalletPlaceholder ? (
-            <View style={styles.sliderPlaceholder}>
-              <ActivityIndicator size="small" color={theme.colors.primary} />
-              <Text style={styles.sliderPlaceholderText}>Checking wallet…</Text>
+          ) : null}
+
+          {!isSubscribeAction &&
+          showIapRow &&
+          canUseIap &&
+          (selectedMethod === "iap" || iapOnly) &&
+          !showAvailabilityUnavailableUi ? (
+            <IapLegalFooter theme={theme} variant="consumable" />
+          ) : null}
+
+          {showAvailabilityUnavailableUi && availabilityUnavailable ? (
+            <View style={styles.insufficientCard}>
+              <View style={styles.insufficientHeading}>
+                <Ionicons
+                  name="alert-circle-outline"
+                  size={22}
+                  color={theme.colors.tint}
+                />
+                <Text style={styles.insufficientTitle}>
+                  Subscription unavailable
+                </Text>
+              </View>
+              <Text style={styles.insufficientBody}>
+                {availabilityUnavailable.message}
+              </Text>
+              {availabilityUnavailable.reason ? (
+                <Text style={styles.insufficientReason}>
+                  {availabilityUnavailable.reason}
+                </Text>
+              ) : null}
             </View>
           ) : null}
 
-          {/* Cancel */}
-          {insufficientFunds || showBalanceErrorUi ? (
-            <>
-              <Button
-                title="Go to wallet"
-                variant="primary"
-                onPress={handleGoToWallet}
-                disabled={loading}
-              />
-              <Button
-                title="Cancel"
-                variant="outline"
-                onPress={onClose}
-                style={styles.cancelButton}
-                disabled={loading}
-              />
-            </>
-          ) : (
+          {/* Slide to confirm */}
+          {canConfirm ? (
+            <SlideToConfirm
+              onConfirm={handleConfirmAction}
+              loading={loading}
+              theme={theme}
+            />
+          ) : showCheckingWalletPlaceholder ||
+            showCheckingSubscriptionPlaceholder ? (
+            <View style={styles.sliderPlaceholder}>
+              <ActivityIndicator size="small" color={theme.colors.primary} />
+              <Text style={styles.sliderPlaceholderText}>
+                {showCheckingSubscriptionPlaceholder
+                  ? "Checking subscription…"
+                  : "Checking wallet…"}
+              </Text>
+            </View>
+          ) : null}
+
+          {!iapOnly &&
+          (showNoMethodCard ||
+            showLegacyInsufficientCard ||
+            showBalanceErrorUi) ? (
             <Button
-              title="Cancel"
-              variant="outline"
-              onPress={onClose}
-              style={styles.cancelButton}
+              title="Go to wallet"
+              variant="primary"
+              onPress={handleGoToWallet}
               disabled={loading}
             />
-          )}
+          ) : null}
         </Animated.View>
       </GestureHandlerRootView>
     </Modal>
@@ -576,10 +826,23 @@ const createStyles = (theme: AppTheme) =>
       alignSelf: "center",
       marginBottom: theme.spacing.xs,
     },
+    headerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: theme.spacing.sm,
+    },
     titleRow: {
+      flex: 1,
+      minWidth: 0,
       flexDirection: "row",
       alignItems: "center",
       gap: theme.spacing.sm,
+      // backgroundColor: "red",
+    },
+    closeButton: {
+      padding: theme.spacing.xs,
+      marginRight: -theme.spacing.xs,
     },
     iconBadge: {
       width: 36,
@@ -592,43 +855,49 @@ const createStyles = (theme: AppTheme) =>
       borderColor: theme.colors.border,
     },
     title: {
+      flex: 1,
       fontSize: 18,
       fontWeight: "700",
       color: theme.colors.textPrimary,
     },
-    detailCard: {
-      backgroundColor: theme.colors.surface,
-      borderRadius: theme.radius.md,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      overflow: "hidden",
+    priceBlock: {
+      alignItems: "center",
+      gap: theme.spacing.sm,
+      paddingVertical: theme.spacing.sm,
     },
-    detailRow: {
+    priceLabel: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: theme.colors.textSecondary,
+      letterSpacing: 0.6,
+      textTransform: "uppercase",
+    },
+    priceRow: {
       flexDirection: "row",
       alignItems: "center",
-      paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.spacing.md,
       gap: theme.spacing.sm,
+      flexWrap: "wrap",
+      justifyContent: "center",
     },
-    detailLabel: {
-      flex: 1,
+    priceValue: {
+      fontSize: 32,
+      fontWeight: "800",
+      color: theme.colors.textPrimary,
+    },
+    priceStarsSuffix: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: theme.colors.textSecondary,
+    },
+    priceSub: {
       fontSize: 14,
       color: theme.colors.textSecondary,
     },
-    detailValue: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: theme.colors.textPrimary,
-    },
-    amountValue: {
-      fontSize: 16,
-      fontWeight: "700",
-      color: theme.colors.primary,
-    },
-    divider: {
-      height: 1,
-      backgroundColor: theme.colors.border,
-      marginHorizontal: theme.spacing.md,
+    devSkuKey: {
+      fontSize: 11,
+      fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+      color: theme.colors.tint,
+      marginTop: 2,
     },
     description: {
       fontSize: 13,
@@ -636,17 +905,57 @@ const createStyles = (theme: AppTheme) =>
       lineHeight: 20,
       textAlign: "center",
     },
-    cancelButton: {
-      marginTop: theme.spacing.xs,
+    methodCard: {
+      borderRadius: theme.radius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+      overflow: "hidden",
     },
-    balanceValue: {
-      fontSize: 15,
-      fontWeight: "700",
+    methodRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.md,
+    },
+    methodRowDividerBottom: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.colors.border,
+    },
+    methodRowActive: {
+      backgroundColor: theme.colors.card,
+    },
+    methodRowDisabled: {
+      opacity: 0.5,
+    },
+    methodTextWrap: {
+      flex: 1,
+      gap: 2,
+    },
+    methodLabel: {
+      fontSize: 14,
+      fontWeight: "600",
       color: theme.colors.textPrimary,
     },
-    balanceUnavailable: {
-      fontSize: 13,
+    methodHint: {
+      fontSize: 12,
       color: theme.colors.textSecondary,
+    },
+    radioOuter: {
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      borderWidth: 2,
+      borderColor: theme.colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    radioInner: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: theme.colors.primary,
     },
     insufficientCard: {
       gap: theme.spacing.sm,
@@ -672,6 +981,12 @@ const createStyles = (theme: AppTheme) =>
       lineHeight: 19,
       color: theme.colors.textSecondary,
     },
+    insufficientReason: {
+      fontSize: 12,
+      lineHeight: 18,
+      color: theme.colors.textSecondary,
+      fontStyle: "italic",
+    },
     sliderPlaceholder: {
       height: TRACK_HEIGHT + theme.spacing.sm,
       alignItems: "center",
@@ -681,6 +996,15 @@ const createStyles = (theme: AppTheme) =>
     },
     sliderPlaceholderText: {
       fontSize: 14,
+      color: theme.colors.textSecondary,
+    },
+    titleSub: {
+      fontSize: 12,
+      color: theme.colors.textSecondary,
+    },
+    pricePeriod: {
+      fontSize: 18,
+      fontWeight: "600",
       color: theme.colors.textSecondary,
     },
   });

@@ -428,13 +428,18 @@ export default function NotificationsScreen() {
   const notificationHandler = (item: TNotification) => {
     console.log("👁️ notificationHandler: ", item);
 
+    const username = item.from_user?.username;
+    const postId = item.post?.id;
+    if (!username || postId == null) return;
+
     router.push(
-      `/user/${item.from_user?.username}/posts/${item.post?.id}/?commentOpen=${item.type.startsWith("comment") ? "true" : "false"}`,
+      `/user/${username}/posts/${postId}/?commentOpen=${item.type.startsWith("comment") ? "true" : "false"}`,
     );
   };
 
   const renderItem = ({ item }: { item: TNotification }) => {
-    const profilePic = item.from_user.avatar;
+    const fromUser = item.from_user;
+    const profilePic = fromUser?.avatar?.trim() ?? "";
     const isRead = item.read || optimisticReadIds.has(item.id);
 
     return (
@@ -444,17 +449,37 @@ export default function NotificationsScreen() {
         style={[styles.notificationItem, !isRead && styles.unreadItem]}
       >
         <Pressable
-          onPress={() => router.push(`/user/${item.from_user?.username}`)}
+          onPress={() => {
+            if (fromUser?.username)
+              router.push(`/user/${fromUser.username}`);
+          }}
+          disabled={!fromUser?.username}
         >
-          <Image source={{ uri: profilePic }} style={styles.avatar} />
+          {profilePic ? (
+            <Image source={{ uri: profilePic }} style={styles.avatar} />
+          ) : (
+            <View style={[styles.avatar, styles.avatarPlaceholder]}>
+              <Ionicons
+                name="person"
+                size={22}
+                color={theme.colors.textSecondary}
+              />
+            </View>
+          )}
         </Pressable>
 
         <View style={styles.notificationContent}>
           <View style={styles.notificationHeader}>
             <Pressable
-              onPress={() => router.push(`/user/${item.from_user?.username}`)}
+              onPress={() => {
+                if (fromUser?.username)
+                  router.push(`/user/${fromUser.username}`);
+              }}
+              disabled={!fromUser?.username}
             >
-              <Text style={styles.username}>@{item.from_user?.username}</Text>
+              <Text style={styles.username}>
+                {fromUser?.username ? `@${fromUser.username}` : "System"}
+              </Text>
             </Pressable>
             <Text style={styles.time}>{timeAgo(item.created_at)}</Text>
           </View>
@@ -582,6 +607,11 @@ const createStyles = (theme: AppTheme) =>
       height: 48,
       borderRadius: 24,
       backgroundColor: theme.colors.border,
+    },
+
+    avatarPlaceholder: {
+      alignItems: "center",
+      justifyContent: "center",
     },
 
     tabContainer: {

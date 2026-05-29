@@ -1,24 +1,24 @@
-import PaymentConfirmSheet from "@/src/components/payment/PaymentConfirmSheet";
+import SubscribePaymentConfirmSheet from "@/src/components/payment/SubscribePaymentConfirmSheet";
+// import { logSubscriptionDebug } from "@/src/features/wallet/iap-dev.store";
 import TipBottomSheet from "@/src/components/payment/TipBottomSheet";
 import { ThemedText as Text } from "@/src/components/themed-text";
-import { useGetProfile } from "@/src/features/profile/profile.hooks";
 import {
-    useFollowToggleMutation,
-    useGetProfileByUsername,
-    useUnblockUserMutation,
+  useFollowToggleMutation,
+  useGetProfile,
+  useGetProfileByUsername,
+  useUnblockUserMutation,
 } from "@/src/features/profile/profile.hooks";
-import { useSubscribeUser } from "@/src/features/wallet/wallet.hooks";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { capitalize } from "@/src/utils/helpers";
 import {
-    isProfilePublicInAppSense,
-    viewerIsAcceptedFollower,
+  isProfilePublicInAppSense,
+  viewerIsAcceptedFollower,
 } from "@/src/utils/profile-visibility";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useCallback, useState } from "react";
-import { Alert, Image, Pressable, StyleSheet, View } from "react-native";
+import { Image, Pressable, StyleSheet, View } from "react-native";
 
 const ProfileHeader = ({ username }: { username: string }) => {
   const { theme } = useTheme();
@@ -28,12 +28,11 @@ const ProfileHeader = ({ username }: { username: string }) => {
     useGetProfileByUsername(username);
   const followMutation = useFollowToggleMutation();
   const unblockMutation = useUnblockUserMutation();
-  const subscribeMutation = useSubscribeUser();
-
   const { data: myProfileData } = useGetProfile();
   const myUsername = myProfileData?.data?.username;
 
   const profile = isSuccess ? data.data : null;
+  const isDeletionPending = Boolean(profile?.deletion_requested_at);
   const blockedByYou = profile?.blocked_status === "blocked_by_you";
   const blockedByOther =
     !blockedByYou &&
@@ -41,6 +40,17 @@ const ProfileHeader = ({ username }: { username: string }) => {
       profile?.viewer?.is_blocked === true);
 
   const isOwnProfile = myUsername === username;
+
+  const monthlySubscriptionPrice = profile?.subscription?.price_1_month ?? 0;
+  const offersPaidSubscription =
+    Boolean(profile?.paid_profile) || monthlySubscriptionPrice > 0;
+  const isSubscribed = Boolean(profile?.viewer?.is_subscribed);
+  const showSubscriptionRow =
+    !isOwnProfile &&
+    !blockedByYou &&
+    !blockedByOther &&
+    !isDeletionPending &&
+    offersPaidSubscription;
 
   const [activeTab, setActiveTab] = useState<"posts" | "flicks" | "tagged">(
     "posts",
@@ -51,34 +61,55 @@ const ProfileHeader = ({ username }: { username: string }) => {
   const handleOpenTip = useCallback(() => setTipSheetOpen(true), []);
   const handleCloseTip = useCallback(() => setTipSheetOpen(false), []);
 
-  const handleOpenSubscribe = useCallback(
-    () => setSubscribeSheetOpen(true),
-    [],
-  );
+  const handleOpenSubscribe = useCallback(() => {
+    // logSubscriptionDebug(
+    //   "UserProfileHeader:subscribe tapped",
+    //   { username, monthlySubscriptionPrice, isSubscribed },
+    //   {
+    //     phase: "ui",
+    //     status: "success",
+    //     summary: `Subscribe tapped @${username}`,
+    //     payload: {
+    //       username,
+    //       monthlySubscriptionPrice,
+    //       isSubscribed,
+    //       offersPaidSubscription,
+    //     },
+    //   },
+    // );
+    setSubscribeSheetOpen(true);
+  }, [
+    username,
+    monthlySubscriptionPrice,
+    isSubscribed,
+    offersPaidSubscription,
+  ]);
   const handleCloseSubscribe = useCallback(
     () => setSubscribeSheetOpen(false),
     [],
   );
 
-  const handleConfirmSubscribe = useCallback(async () => {
-    try {
-      await subscribeMutation.mutateAsync({ username });
-      setSubscribeSheetOpen(false);
-      router.replace({
-        pathname: "/user/[username]",
-        params: {
-          username,
-          tab: "premium",
-          subscribed: String(Date.now()),
-        },
-      });
-    } catch (e) {
-      Alert.alert(
-        "Subscription failed",
-        e instanceof Error ? e.message : "Could not subscribe. Try again.",
-      );
-    }
-  }, [username, subscribeMutation]);
+  const handleSubscribeSuccess = useCallback(() => {
+    // logSubscriptionDebug(
+    //   "UserProfileHeader:subscribe success",
+    //   { username },
+    //   {
+    //     phase: "ui",
+    //     status: "success",
+    //     summary: `Subscribe success @${username}`,
+    //     payload: { username },
+    //   },
+    // );
+    setSubscribeSheetOpen(false);
+    router.replace({
+      pathname: "/user/[username]",
+      params: {
+        username,
+        tab: "premium",
+        subscribed: String(Date.now()),
+      },
+    });
+  }, [username]);
 
   const navigateToFollowersFollowing = (type: "followers" | "following") => {
     router.push({
@@ -142,7 +173,19 @@ const ProfileHeader = ({ username }: { username: string }) => {
 
         {/* ACTIONS / BLOCKED NOTICE */}
         <View style={styles.buttonContainer}>
-          {blockedByYou ? (
+          {isDeletionPending ? (
+            <View style={styles.blockedNotice}>
+              <Ionicons name="time-outline" size={22} color="#EF4444" />
+              <Text style={styles.blockedNoticeTitle}>
+                Account scheduled for deletion
+              </Text>
+              <Text style={styles.blockedNoticeSubtitle}>
+                {profile.deletion_scheduled_for
+                  ? `This profile will be permanently removed on ${new Date(profile.deletion_scheduled_for).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}. Content is no longer available.`
+                  : "This profile is no longer available."}
+              </Text>
+            </View>
+          ) : blockedByYou ? (
             <View style={styles.blockedNotice}>
               <Ionicons name="ban-outline" size={22} color="#EF4444" />
               <Text style={styles.blockedNoticeTitle}>User blocked</Text>
@@ -194,7 +237,11 @@ const ProfileHeader = ({ username }: { username: string }) => {
               {!isOwnProfile && (
                 <Pressable
                   onPress={handleOpenTip}
-                  style={[styles.button, styles.buttonSecondary, styles.buttonIcon]}
+                  style={[
+                    styles.button,
+                    styles.buttonSecondary,
+                    styles.buttonIcon,
+                  ]}
                 >
                   <Ionicons
                     name="gift-outline"
@@ -207,25 +254,46 @@ const ProfileHeader = ({ username }: { username: string }) => {
           )}
         </View>
 
-        {/* Subscribe button for paid profiles */}
-        {!isOwnProfile &&
-          !blockedByYou &&
-          !blockedByOther &&
-          profile.paid_profile &&
-          !profile.viewer?.is_subscribed && (
-            <View style={styles.subscribeContainer}>
+        {showSubscriptionRow ? (
+          <View style={styles.subscribeContainer}>
+            {isSubscribed ? (
+              <View
+                style={styles.subscribedBanner}
+                accessibilityRole="text"
+              >
+                <View
+                  style={[
+                    styles.subscribedIconWrap,
+                    { backgroundColor: theme.colors.primary + "18" },
+                  ]}
+                >
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={24}
+                    color={theme.colors.primary}
+                  />
+                </View>
+                <View style={styles.subscribedTextWrap}>
+                  <Text style={styles.subscribedTitle}>Subscribed</Text>
+                  <Text style={styles.subscribedSubtitle}>
+                    You have access to exclusive posts from this creator.
+                  </Text>
+                </View>
+              </View>
+            ) : (
               <Pressable
                 onPress={handleOpenSubscribe}
                 style={[styles.button, styles.subscribeButton]}
-                disabled={subscribeMutation.isPending}
+                disabled={subscribeSheetOpen}
               >
                 <Ionicons name="star-outline" size={16} color="#fff" />
                 <Text style={[styles.editText, { color: "white" }]}>
-                  Subscribe ${profile.subscription.price_1_month}/mo
+                  Subscribe ${monthlySubscriptionPrice}/mo
                 </Text>
               </Pressable>
-            </View>
-          )}
+            )}
+          </View>
+        ) : null}
 
         {/* HIGHLIGHTS */}
         {/* <ScrollView
@@ -274,15 +342,15 @@ const ProfileHeader = ({ username }: { username: string }) => {
           username={profile.username}
         />
 
-        <PaymentConfirmSheet
-          visible={subscribeSheetOpen}
-          onClose={handleCloseSubscribe}
-          onConfirm={handleConfirmSubscribe}
-          action="subscribe"
-          username={profile.username}
-          amount={profile.subscription.price_1_month}
-          loading={subscribeMutation.isPending}
-        />
+        {subscribeSheetOpen ? (
+          <SubscribePaymentConfirmSheet
+            visible
+            onClose={handleCloseSubscribe}
+            username={profile.username}
+            amount={profile.subscription.price_1_month}
+            onSuccess={handleSubscribeSuccess}
+          />
+        ) : null}
       </>
     );
 };
@@ -363,10 +431,42 @@ const createStyles = (theme: AppTheme) =>
     },
 
     subscribeButton: {
-      flex: 0,
+      alignSelf: "stretch",
+      width: "100%",
       flexDirection: "row",
       gap: 6,
-      paddingHorizontal: 16,
+    },
+    subscribedBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.md,
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.md,
+      borderRadius: theme.radius.md,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.colors.primary + "55",
+      backgroundColor: theme.colors.surface,
+    },
+    subscribedIconWrap: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    subscribedTextWrap: {
+      flex: 1,
+      gap: 2,
+    },
+    subscribedTitle: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: theme.colors.textPrimary,
+    },
+    subscribedSubtitle: {
+      fontSize: 13,
+      lineHeight: 18,
+      color: theme.colors.textSecondary,
     },
 
     username: {

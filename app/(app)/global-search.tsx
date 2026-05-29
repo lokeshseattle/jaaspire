@@ -289,7 +289,12 @@ export default function GlobalSearchScreen() {
           {pagerIndex === 0 && (
             <SearchPostsTab
               postIds={latestIds}
-              {...latestQ}
+              refetch={latestQ.refetch}
+              isRefetching={latestQ.isRefetching}
+              fetchNextPage={latestQ.fetchNextPage}
+              hasNextPage={latestQ.hasNextPage}
+              isFetchingNextPage={latestQ.isFetchingNextPage}
+              isLoading={latestQ.isLoading}
               isEmpty={!latestQ.isLoading && latestIds.length === 0}
             />
           )}
@@ -301,7 +306,12 @@ export default function GlobalSearchScreen() {
           {pagerIndex === 2 && (
             <SearchPostsTab
               postIds={photosIds}
-              {...photosQ}
+              refetch={photosQ.refetch}
+              isRefetching={photosQ.isRefetching}
+              fetchNextPage={photosQ.fetchNextPage}
+              hasNextPage={photosQ.hasNextPage}
+              isFetchingNextPage={photosQ.isFetchingNextPage}
+              isLoading={photosQ.isLoading}
               isEmpty={!photosQ.isLoading && photosIds.length === 0}
             />
           )}
@@ -309,7 +319,12 @@ export default function GlobalSearchScreen() {
           {pagerIndex === 3 && (
             <SearchPostsTab
               postIds={videosIds}
-              {...videosQ}
+              refetch={videosQ.refetch}
+              isRefetching={videosQ.isRefetching}
+              fetchNextPage={videosQ.fetchNextPage}
+              hasNextPage={videosQ.hasNextPage}
+              isFetchingNextPage={videosQ.isFetchingNextPage}
+              isLoading={videosQ.isLoading}
               isEmpty={!videosQ.isLoading && videosIds.length === 0}
             />
           )}

@@ -4,7 +4,9 @@ import {
     useGetPendingRequests,
 } from "@/src/features/profile/notification.hooks";
 import { useAcceptRejectRequestMutation } from "@/src/features/profile/profile.hooks";
+import { apiClient } from "@/src/services/api/api.client";
 import { Ionicons } from "@expo/vector-icons";
+import { useQuery } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { Stack, router } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
@@ -38,6 +40,34 @@ interface PendingRequest {
         story_count: number;
     };
     requested_at: string;
+}
+
+interface SuggestedMember {
+    id: number;
+    name: string;
+    username: string;
+    bio: string | null;
+    location: string | null;
+    avatar: string;
+    cover: string;
+    verified_user: boolean;
+    paid_profile: boolean;
+    profile_access_price: number;
+    story_status: {
+        has_stories: boolean;
+        all_viewed: boolean;
+        story_count: number;
+    };
+    follow_status: string;
+}
+
+interface SuggestedMembersResponse {
+    success: boolean;
+    message: string;
+    data: {
+        members: SuggestedMember[];
+        total: number;
+    };
 }
 
 // Animated Pressable for button press feedback
@@ -156,6 +186,17 @@ export default function PendingRequestsScreen() {
         refetch,
         isRefetching,
     } = useGetPendingRequests();
+    const {
+        data: suggestionsData,
+        isLoading: isSuggestionsLoading,
+        refetch: refetchSuggestedMembers,
+    } = useQuery<SuggestedMembersResponse>({
+        queryKey: ["suggested_members", "pending_requests"],
+        queryFn: async () => {
+            const response = await apiClient.get<SuggestedMembersResponse>("/suggestions/members");
+            return response.data;
+        },
+    });
 
     // Track which requests are being processed
     const [processingIds, setProcessingIds] = useState<{
@@ -165,19 +206,25 @@ export default function PendingRequestsScreen() {
         accepting: new Set(),
         rejecting: new Set(),
     });
+    const [optimisticallyRemovedIds, setOptimisticallyRemovedIds] = useState<Set<number>>(
+        new Set(),
+    );
 
     // TODO: Replace with your actual mutation hooks
     // const acceptMutation = useAcceptFollowRequestMutation();
     // const rejectMutation = useRejectFollowRequestMutation();
-    const { mutate, variables, isPending } = useAcceptRejectRequestMutation();
+    const { mutate } = useAcceptRejectRequestMutation();
 
 
     // Flatten paginated data
     // const hasInteracted = useRef(false);
 
-    const requests = useMemo(() => {
+    const allRequests = useMemo(() => {
         return data?.pages.flatMap((page) => page.data.requests) ?? [];
     }, [data]);
+    const requests = useMemo(() => {
+        return allRequests.filter((request) => !optimisticallyRemovedIds.has(request.id));
+    }, [allRequests, optimisticallyRemovedIds]);
 
     // 👇 Navigate back when requests become empty AFTER user interaction
     // useEffect(() => {
@@ -187,40 +234,55 @@ export default function PendingRequestsScreen() {
     // }, [requests.length, isLoading]);
 
     const totalCount = data?.pages?.[0]?.data?.pagination?.total ?? 0;
+    const displayPendingCount = Math.max(totalCount - optimisticallyRemovedIds.size, 0);
+    const suggestedMembers = suggestionsData?.data?.members ?? [];
 
     const handleAccept = useCallback((id: number) => {
+        setProcessingIds((prev) => ({
+            ...prev,
+            accepting: new Set(prev.accepting).add(id),
+        }));
+        setOptimisticallyRemovedIds((prev) => new Set(prev).add(id));
+
         mutate({ userId: id, action: "accept" }, {
             onSuccess: () => {
                 // Remove from list or refetch
             },
-
+            onError: () => {
+                setOptimisticallyRemovedIds((prev) => {
+                    const next = new Set(prev);
+                    next.delete(id);
+                    return next;
+                });
+            },
 
             onSettled: () => {
                 setProcessingIds((prev) => {
-                    const newRejecting = new Set(prev.rejecting);
-                    newRejecting.delete(id);
-                    return { ...prev, rejecting: newRejecting };
+                    const newAccepting = new Set(prev.accepting);
+                    newAccepting.delete(id);
+                    return { ...prev, accepting: newAccepting };
                 });
             },
         });
-    }, [refetch]);
+    }, [mutate]);
 
     const handleReject = useCallback((id: number) => {
-        // console.log("Reject request:", id);
+        setProcessingIds((prev) => ({
+            ...prev,
+            rejecting: new Set(prev.rejecting).add(id),
+        }));
+        setOptimisticallyRemovedIds((prev) => new Set(prev).add(id));
 
-        // Optimistic UI - add to processing
-        // setProcessingIds((prev) => ({
-        //     ...prev,
-        //     rejecting: new Set(prev.rejecting).add(id),
-        // }));
-
-        // TODO: Implement with actual mutation
         mutate({ userId: id, action: "reject" }, {
             onSuccess: () => {
                 // Remove from list or refetch
             },
             onError: () => {
-                // Show error toast
+                setOptimisticallyRemovedIds((prev) => {
+                    const next = new Set(prev);
+                    next.delete(id);
+                    return next;
+                });
             },
 
             onSettled: () => {
@@ -231,23 +293,18 @@ export default function PendingRequestsScreen() {
                 });
             },
         });
-
-        // Simulate API call (remove this when implementing real mutation)
-        // setTimeout(() => {
-        //     setProcessingIds((prev) => {
-        //         const newRejecting = new Set(prev.rejecting);
-        //         newRejecting.delete(id);
-        //         return { ...prev, rejecting: newRejecting };
-        //     });
-        //     refetch(); // Refetch to update the list
-        // }, 1000);
-    }, [refetch]);
+    }, [mutate]);
 
     const handleLoadMore = useCallback(() => {
         if (hasNextPage && !isFetchingNextPage) {
             fetchNextPage();
         }
     }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+    const handleRefresh = useCallback(() => {
+        refetch();
+        refetchSuggestedMembers();
+    }, [refetch, refetchSuggestedMembers]);
 
     const renderItem = useCallback(
         ({ item }: { item: PendingRequest }) => (
@@ -263,10 +320,65 @@ export default function PendingRequestsScreen() {
     );
 
     const renderFooter = () => {
-        if (!isFetchingNextPage) return null;
+        const showSuggestionsSection = isSuggestionsLoading || suggestedMembers.length > 0;
+        if (!isFetchingNextPage && !showSuggestionsSection) return null;
+
         return (
-            <View style={styles.footerLoader}>
-                <ActivityIndicator />
+            <View>
+                {showSuggestionsSection && (
+                    <View style={styles.suggestionsSection}>
+                        <Text style={styles.suggestionsTitle}>Suggested members</Text>
+                        {isSuggestionsLoading ? (
+                            <View style={styles.suggestionsLoader}>
+                                <ActivityIndicator />
+                            </View>
+                        ) : (
+                            suggestedMembers.map((member) => (
+                                <Pressable
+                                    key={member.id}
+                                    onPress={() => router.push(`/user/${member.username}`)}
+                                    style={styles.suggestionItem}
+                                >
+                                    <View style={styles.avatarContainer}>
+                                        <Image source={{ uri: member.avatar }} style={styles.avatar} />
+                                        {member.story_status?.has_stories && (
+                                            <View
+                                                style={[
+                                                    styles.storyRing,
+                                                    member.story_status.all_viewed && styles.storyRingViewed,
+                                                ]}
+                                            />
+                                        )}
+                                    </View>
+                                    <View style={styles.suggestionInfo}>
+                                        <View style={styles.nameRow}>
+                                            <Text style={styles.name} numberOfLines={1}>
+                                                {member.name}
+                                            </Text>
+                                            {member.verified_user && (
+                                                <Ionicons name="checkmark-circle" size={16} color="#1DA1F2" />
+                                            )}
+                                        </View>
+                                        <Text style={styles.username} numberOfLines={1}>
+                                            @{member.username}
+                                        </Text>
+                                        {!!member.bio && (
+                                            <Text style={styles.suggestionBio} numberOfLines={2}>
+                                                {member.bio}
+                                            </Text>
+                                        )}
+                                    </View>
+                                </Pressable>
+                            ))
+                        )}
+                    </View>
+                )}
+
+                {isFetchingNextPage && (
+                    <View style={styles.footerLoader}>
+                        <ActivityIndicator />
+                    </View>
+                )}
             </View>
         );
     };
@@ -276,7 +388,7 @@ export default function PendingRequestsScreen() {
         return (
             <View style={styles.header}>
                 <Text style={styles.headerText}>
-                    {totalCount} pending {totalCount === 1 ? "request" : "requests"}
+                    {displayPendingCount} pending {displayPendingCount === 1 ? "request" : "requests"}
                 </Text>
             </View>
         );
@@ -319,11 +431,11 @@ export default function PendingRequestsScreen() {
                     onEndReached={handleLoadMore}
                     onEndReachedThreshold={0.3}
                     refreshing={isRefetching}
-                    onRefresh={refetch}
+                    onRefresh={handleRefresh}
                     refreshControl={
                         <RefreshControl
                             refreshing={isRefetching}
-                            onRefresh={refetch}
+                            onRefresh={handleRefresh}
                             colors={["#007AFF"]}
                             tintColor="#007AFF"
                         />
@@ -470,6 +582,47 @@ const styles = StyleSheet.create({
     footerLoader: {
         paddingVertical: 20,
         alignItems: "center",
+    },
+
+    suggestionsSection: {
+        marginTop: 8,
+        paddingTop: 16,
+        borderTopWidth: 8,
+        borderTopColor: "#f5f5f5",
+    },
+
+    suggestionsTitle: {
+        fontSize: 16,
+        fontWeight: "700",
+        color: "#111",
+        paddingHorizontal: 16,
+        marginBottom: 8,
+    },
+
+    suggestionsLoader: {
+        paddingVertical: 16,
+        alignItems: "center",
+    },
+
+    suggestionItem: {
+        flexDirection: "row",
+        alignItems: "flex-start",
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        gap: 12,
+        borderTopWidth: 1,
+        borderTopColor: "#f1f1f1",
+    },
+
+    suggestionInfo: {
+        flex: 1,
+    },
+
+    suggestionBio: {
+        fontSize: 13,
+        color: "#666",
+        marginTop: 4,
+        lineHeight: 18,
     },
 
     emptyContainer: {

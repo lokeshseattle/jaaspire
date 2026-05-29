@@ -1,8 +1,21 @@
+import { registerPushDevice, unregisterPushDevice } from "@/src/features/push/push-device.api";
 import { asyncStoragePersister } from "@/src/lib/persister";
 import { queryClient } from "@/src/lib/query-client";
-import { tokenStorage } from "@/src/lib/secure-storage";
+import {
+  clearIapAccountToken,
+  syncIapAccountTokenFromMe,
+} from "@/src/features/wallet/iap-account-token";
+import { clearIapPendingStorage } from "@/src/features/wallet/iap-pending.storage";
+import { pushTokenStorage, tokenStorage } from "@/src/lib/secure-storage";
 import { apiClient } from "@/src/services/api/api.client";
 import {
+  getPushDeviceName,
+  getPushPlatform,
+  registerForPushNotificationsAsync,
+} from "@/src/utils/notifications";
+import {
+  DeleteAccountRequest,
+  DeleteAccountResponse,
   LoginRequest,
   LoginResponse,
   PossibleErrorResponse,
@@ -69,6 +82,17 @@ export const useVerify2FA = (): UseMutationResult<
   });
 };
 
+export const useDeleteAccountMutation = (): UseMutationResult<
+  DeleteAccountResponse,
+  PossibleErrorResponse,
+  DeleteAccountRequest
+> => {
+  return useMutation({
+    mutationFn: (body) =>
+      apiClient.delete("/auth/account", { data: body }).then((r) => r.data),
+  });
+};
+
 export const useAuth = () => {
   const accessToken = useAuthStore((s) => s.accessToken);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -100,8 +124,15 @@ export const useAuth = () => {
 
       if (storedToken) {
         setToken(storedToken);
+        void syncIapAccountTokenFromMe().catch((error) => {
+          if (__DEV__) {
+            console.warn("[auth] iap account token sync on restore failed", error);
+          }
+        });
       } else {
         setToken(null);
+        await clearIapAccountToken();
+        await clearIapPendingStorage();
       }
     } catch (error) {
       console.error("Restore session failed:", error);
@@ -115,6 +146,23 @@ export const useAuth = () => {
     async (token: string): Promise<void> => {
       await tokenStorage.save(token);
       setToken(token);
+
+      try {
+        await syncIapAccountTokenFromMe();
+      } catch (error) {
+        if (__DEV__) {
+          console.warn("[auth] iap account token sync on login failed", error);
+        }
+      }
+
+      const pushToken = await registerForPushNotificationsAsync();
+      const platform = getPushPlatform();
+      if (pushToken && platform) {
+        const device_name = await getPushDeviceName();
+        await registerPushDevice({ token: pushToken, platform, device_name });
+        await pushTokenStorage.save(pushToken);
+      }
+
       router.replace("/(app)/(tabs)");
     },
     [setToken],
@@ -123,9 +171,17 @@ export const useAuth = () => {
   // Logout
   const logout = useCallback(async (): Promise<void> => {
     try {
+      const pushToken = await pushTokenStorage.get();
+      if (pushToken) {
+        await unregisterPushDevice(pushToken);
+      }
+
       await apiClient.post("/auth/logout");
 
       await tokenStorage.remove();
+      await pushTokenStorage.remove();
+      await clearIapAccountToken();
+      await clearIapPendingStorage();
       setToken(null);
       queryClient.clear();
       await asyncStoragePersister.removeClient();

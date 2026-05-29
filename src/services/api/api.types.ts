@@ -71,6 +71,33 @@ export type Verify2FAResponse = {
   data: AuthSessionPayload;
 };
 
+export type DeleteAccountRequest = {
+  password: string;
+};
+
+export type PushPlatform = "ios" | "android";
+
+export type PushDeviceRegisterRequest = {
+  token: string;
+  platform: PushPlatform;
+  device_name: string;
+};
+
+export type PushDeviceRegisterResponse = {
+  success: boolean;
+  message: string;
+  data?: unknown;
+};
+
+export type DeleteAccountResponse = {
+  success: boolean;
+  message: string;
+  data: {
+    deletion_scheduled_for: string;
+    grace_days: number;
+  };
+};
+
 export type RegisterRequest = {
   name: string;
   email: string;
@@ -175,6 +202,10 @@ export type TUserProfile = {
   username: string;
   bio: string;
   location: string;
+  deletion_requested_at: string | null;
+  deletion_scheduled_for: string | null;
+  deleted_at: string | null;
+  banned_at: string | null;
   website: string;
   avatar: string;
   cover: string;
@@ -206,6 +237,8 @@ export type TUserProfile = {
   wallet: {
     balance: number;
   };
+  /** Stable UUID for StoreKit appAccountToken / Play obfuscatedAccountId. */
+  iap_account_token?: string | null;
 };
 
 export type ProfileResponse = {
@@ -296,9 +329,9 @@ export type PrivacyFlagResponse = {
   };
 };
 
-/** POST /settings/rates — profile paywall / access pricing. */
+/** POST /settings/rates — creator monthly subscription tier (IAP `tier_key`, e.g. `t3`). */
 export type SettingsRatesRequestBody = {
-  profile_access_price: number;
+  subscription_sku_key: string;
 };
 
 export type SettingsRatesResponse = {
@@ -478,6 +511,7 @@ export type TNotification = {
   message: string;
   read: boolean;
   created_at: string;
+  /** Some system notifications omit a sender. */
   from_user: {
     id: number;
     name: string;
@@ -489,7 +523,7 @@ export type TNotification = {
       all_viewed: boolean;
       story_count: number;
     };
-  };
+  } | null;
   post?: {
     id: number;
     text: string;
@@ -752,14 +786,25 @@ export type ReportTypesResponse = {
   data: ReportTypesData;
 };
 
-export type CreateReportPayload = {
+type ReportContentBase = {
   type: string;
   user_id: number;
-  post_id: number;
-  message_id?: string;
-  stream_id?: string;
-  details: string;
+  details?: string;
 };
+
+export type CreateReportPayload =
+  | (ReportContentBase & { post_id: number })
+  | (ReportContentBase & { comment_id: number })
+  | (ReportContentBase & { story_id: number })
+  | (ReportContentBase & { message_id: number })
+  | ReportContentBase;
+
+export type ReportTarget =
+  | { kind: "post"; postId: number; userId: number }
+  | { kind: "comment"; commentId: number; userId: number }
+  | { kind: "story"; storyId: number; userId: number }
+  | { kind: "message"; messageId: number; userId: number }
+  | { kind: "user"; userId: number };
 export type PendingFollowRequestsResponse = {
   success: boolean;
   message: string;
@@ -917,7 +962,7 @@ export type MessengerMessagesResponse = {
 
 export type SendMessengerMessageRequest = {
   message: string;
-  price: number;
+  sku_key: string;
   attachments: string[];
 };
 
@@ -986,6 +1031,33 @@ export type NotificationCountsResponse = {
   };
 };
 
+/** GET /iap/sku?category=consumable|subscription */
+export type IapSkuCategory = "consumable" | "subscription";
+
+export type IapSkuCurrency = {
+  name: string;
+  symbol: string;
+  stars_per_usd: number;
+};
+
+export type IapSkuListItem = {
+  sku_key: string;
+  category: IapSkuCategory;
+  apple_sku: string;
+  google_product_id: string;
+  google_base_plan_id: string | null;
+  stars: number | null;
+  usd_amount: string;
+  tier_key: string | null;
+  group_id: number | null;
+};
+
+export type IapSkusResponse = {
+  success: boolean;
+  currency: IapSkuCurrency;
+  skus: IapSkuListItem[];
+};
+
 /** POST /iap/apple/verify */
 export type IapAppleVerifyRequest = {
   jws: string;
@@ -1005,6 +1077,136 @@ export type IapVerifyResponse = {
   message: string;
   data?: unknown;
 };
+
+/** GET /iap/subscription/{username}/availability */
+export type SubscriptionAvailabilitySku = {
+  sku_key: string;
+  tier_key: string;
+  group_id: number;
+  usd_amount: string;
+  apple_sku: string;
+  google_product_id: string;
+  google_base_plan_id: string;
+};
+
+export type SubscriptionAvailabilityResponse = {
+  success: boolean;
+  available: boolean;
+  creator: {
+    id: number;
+    username: string;
+  };
+  message?: string;
+  reason?: string;
+  slot_usage: {
+    used: number;
+    total: number;
+    free: number[];
+  };
+  sku?: SubscriptionAvailabilitySku;
+};
+
+/** POST /iap/subscribe/attempt */
+export type IapSubscribeAttemptRequest = {
+  platform: "apple" | "google";
+  group_id: number;
+  creator_username: string;
+};
+
+export type IapSubscribeAttemptResponse = {
+  success: boolean;
+  attempt_id: number;
+  transaction_id: number;
+  expires_at: string;
+  sku: SubscriptionAvailabilitySku;
+};
+
+/** POST /iap/subscribe — iOS */
+export type IapSubscribeAppleRequest = {
+  platform: "apple";
+  creator_username: string;
+  jws: string;
+  product_id: string;
+  attempt_id?: number;
+};
+
+/** POST /iap/subscribe — Android */
+export type IapSubscribeGoogleRequest = {
+  platform: "google";
+  creator_username: string;
+  purchase_token: string;
+  google_product_id: string;
+  base_plan_id: string;
+  attempt_id?: number;
+};
+
+export type IapSubscribeRequest =
+  | IapSubscribeAppleRequest
+  | IapSubscribeGoogleRequest;
+
+export type IapSubscribeResponse = {
+  success: boolean;
+  message?: string;
+  subscription?: {
+    id: number;
+    expires_at: string;
+    status: string;
+  };
+};
+
+export type IapRestoreErrorCode =
+  | "RECEIPT_INVALID"
+  | "BUYER_MISMATCH"
+  | "UPSTREAM_UNAVAILABLE";
+
+/** POST /iap/restore — Apple */
+export type IapRestoreAppleRequest = {
+  platform: "apple";
+  jws: string;
+};
+
+/** POST /iap/restore — Google */
+export type IapRestoreGoogleRequest = {
+  platform: "google";
+  purchase_token: string;
+  google_product_id: string;
+  base_plan_id: string;
+};
+
+export type IapRestoreRequest = IapRestoreAppleRequest | IapRestoreGoogleRequest;
+
+export type IapRestoreSubscriptionCreator = {
+  id: number;
+  username: string;
+  name: string;
+};
+
+export type IapRestoreSubscription = {
+  id: number;
+  sku_key: string;
+  group_id: number;
+  amount: number | string;
+  expires_at: string;
+  status: string;
+  provider: string;
+  creator: IapRestoreSubscriptionCreator;
+};
+
+export type IapRestoreRestoredResponse = {
+  success: true;
+  restored: true;
+  subscription: IapRestoreSubscription;
+};
+
+export type IapRestoreOrphanResponse = {
+  success: true;
+  orphan: true;
+  message: string;
+};
+
+export type IapRestoreResponse =
+  | IapRestoreRestoredResponse
+  | IapRestoreOrphanResponse;
 
 export type CreatorDashboardStartLinkResponse = {
   success: boolean;
@@ -1067,11 +1269,6 @@ export type SubscriptionsResponse = {
     subscriptions: Subscription[];
     pagination: Pagination;
   };
-};
-
-export type CancelSubscriptionResponse = {
-  success: boolean;
-  message: string;
 };
 
 export type PaymentUser = {

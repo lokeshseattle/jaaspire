@@ -1,20 +1,14 @@
 import { usePost } from "@/src/context/post-context";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
-import { FontAwesome } from "@expo/vector-icons";
-import Feather from "@expo/vector-icons/Feather";
-import Octicons from "@expo/vector-icons/Octicons";
+import { Ionicons } from "@expo/vector-icons";
 import React, { useMemo, useRef, useState } from "react";
-import {
-  Animated,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 import RichText from "../../ui/rich-text";
 
 const LIKED_COLOR = "#ff3040";
+const ACTION_ICON_SIZE = 24;
+const VIEWS_ICON_SIZE = 18;
 
 function PostFooterInner() {
   const { theme } = useTheme();
@@ -51,9 +45,7 @@ const PostActions = ({ theme, styles }: ActionProps) => {
       <View style={styles.leftActions}>
         <View style={styles.actionItem}>
           <Heart isLiked={isLiked} onPress={toggleLike} theme={theme} />
-          {loveCount > 0 && (
-            <Text style={styles.countText}>{loveCount}</Text>
-          )}
+          {loveCount > 0 && <Text style={styles.countText}>{loveCount}</Text>}
         </View>
         <View style={styles.actionItem}>
           <Comments theme={theme} />
@@ -83,9 +75,9 @@ interface HeartProps {
 const Heart = ({ isLiked, onPress, theme }: HeartProps) => {
   return (
     <Pressable onPress={onPress}>
-      <FontAwesome
-        name={isLiked ? "heart" : "heart-o"}
-        size={24}
+      <Ionicons
+        name={isLiked ? "heart" : "heart-outline"}
+        size={ACTION_ICON_SIZE}
         color={isLiked ? LIKED_COLOR : theme.colors.icon}
       />
     </Pressable>
@@ -96,7 +88,11 @@ const Comments = ({ theme }: { theme: AppTheme }) => {
   const { onPressComments } = usePost();
   return (
     <Pressable onPress={onPressComments}>
-      <Feather name="message-circle" size={24} color={theme.colors.icon} />
+      <Ionicons
+        name="chatbubble-outline"
+        size={ACTION_ICON_SIZE}
+        color={theme.colors.icon}
+      />
     </Pressable>
   );
 };
@@ -105,7 +101,11 @@ const Tip = ({ theme }: { theme: AppTheme }) => {
   const { onTip } = usePost();
   return (
     <Pressable onPress={onTip}>
-      <Octicons name="gift" size={24} color={theme.colors.icon} />
+      <Ionicons
+        name="gift-outline"
+        size={ACTION_ICON_SIZE}
+        color={theme.colors.icon}
+      />
     </Pressable>
   );
 };
@@ -114,7 +114,11 @@ const ShareButton = ({ theme }: { theme: AppTheme }) => {
   const { onPressShare } = usePost();
   return (
     <Pressable onPress={onPressShare}>
-      <Feather name="send" size={24} color={theme.colors.icon} />
+      <Ionicons
+        name="paper-plane-outline"
+        size={ACTION_ICON_SIZE}
+        color={theme.colors.icon}
+      />
     </Pressable>
   );
 };
@@ -128,7 +132,11 @@ interface ViewsProps {
 const Views = ({ viewCount, theme, styles }: ViewsProps) => {
   return (
     <View style={styles.viewsContainer}>
-      <Feather name="eye" size={16} color={theme.colors.icon} />
+      <Ionicons
+        name="eye-outline"
+        size={VIEWS_ICON_SIZE}
+        color={theme.colors.icon}
+      />
       <Text style={styles.countText}>{viewCount}</Text>
     </View>
   );

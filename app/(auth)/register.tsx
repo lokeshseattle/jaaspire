@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from "react-native";
+import { LEGAL_LINKS } from "@/src/constants/legal-links";
+import { StyleSheet, Text, View, Pressable } from "react-native";
 
 import { useDebounce } from "@/hooks/use-debounce";
 import { AuthScreenLayout } from "@/src/features/auth/AuthScreenLayout";
@@ -12,6 +13,7 @@ import {
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { setServerErrors } from "@/src/utils/form-errors";
+import { openWebUrl } from "@/src/utils/open-web-url";
 import {
   hasNumber,
   hasSpecialChar,
@@ -20,6 +22,7 @@ import {
 } from "@/src/utils/validators";
 import FontAwesome5 from "@expo/vector-icons/FontAwesome5";
 import Fontisto from "@expo/vector-icons/Fontisto";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
@@ -29,6 +32,26 @@ const FIELD_MAP = {
 };
 
 const ERROR_COLOR = "#DC2626";
+const SUCCESS_COLOR = "#16A34A";
+
+type PolicyLinkProps = {
+  label: string;
+  url: string;
+  linkStyle: ReturnType<typeof createStyles>["link"];
+};
+
+function PolicyLink({ label, url, linkStyle }: PolicyLinkProps) {
+  return (
+    <Text
+      style={linkStyle}
+      onPress={() => void openWebUrl(url)}
+      accessibilityRole="link"
+      accessibilityLabel={label}
+    >
+      {label}
+    </Text>
+  );
+}
 
 type FormData = {
   email: string;
@@ -44,7 +67,7 @@ export default function Register() {
   const { theme } = useTheme();
   const styles = createStyles(theme);
 
-  const { control, handleSubmit, setError } = useForm<FormData>({
+  const { control, handleSubmit, setError, clearErrors } = useForm<FormData>({
     mode: "onBlur",
     defaultValues: {
       name: "",
@@ -71,9 +94,11 @@ export default function Register() {
           type: "manual",
           message: checkUsername.data.data.message,
         });
+      } else {
+        clearErrors("username");
       }
     }
-  }, [checkUsername.isSuccess, checkUsername.data, setError]);
+  }, [checkUsername.isSuccess, checkUsername.data, setError, clearErrors]);
 
   const onSubmit = (data: FormData) => {
     register.mutate(
@@ -113,6 +138,11 @@ export default function Register() {
     checkUsername.isSuccess &&
     checkUsername.data?.data &&
     !checkUsername.data.data.available;
+  const usernameAvailable =
+    username.length >= 3 &&
+    username === debouncedUsername &&
+    checkUsername.isSuccess &&
+    checkUsername.data?.data?.available === true;
 
   return (
     <AuthScreenLayout
@@ -147,6 +177,16 @@ export default function Register() {
           },
         }}
         accessibilityLabel="Username"
+        Right={
+          usernameAvailable ? (
+            <Ionicons
+              name="checkmark-circle"
+              size={22}
+              color={SUCCESS_COLOR}
+              accessibilityLabel="Username available"
+            />
+          ) : undefined
+        }
       />
       {isCheckingUsername && (
         <Text style={styles.checkingText}>Checking availability...</Text>
@@ -211,18 +251,35 @@ export default function Register() {
         render={({ field: { value, onChange }, fieldState: { error } }) => (
           <View>
             <View style={styles.checkboxRow}>
-              <FontAwesome5
-                name={value ? "check-square" : "square"}
-                size={22}
-                color={theme.colors.primary}
+              <Pressable
                 onPress={() => onChange(!value)}
-              />
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: value }}
+                hitSlop={8}
+              >
+                <FontAwesome5
+                  name={value ? "check-square" : "square"}
+                  size={22}
+                  color={theme.colors.primary}
+                />
+              </Pressable>
               <Text
                 style={styles.checkboxText}
                 onPress={() => onChange(!value)}
               >
-                I acknowledge and agree to the Terms of Service and Privacy
-                Policy, and confirm that I am at least 18 years old
+                I acknowledge and agree to the{" "}
+                <PolicyLink
+                  label="Terms of Service"
+                  url={LEGAL_LINKS.termsOfService}
+                  linkStyle={styles.link}
+                />{" "}
+                and{" "}
+                <PolicyLink
+                  label="Privacy Policy"
+                  url={LEGAL_LINKS.privacyPolicy}
+                  linkStyle={styles.link}
+                />
+                , and confirm that I am at least 18 years old
               </Text>
             </View>
             {error && (
@@ -241,20 +298,31 @@ export default function Register() {
         render={({ field: { value, onChange }, fieldState: { error } }) => (
           <View>
             <View style={styles.checkboxRow}>
-              <FontAwesome5
-                name={value ? "check-square" : "square"}
-                size={22}
-                color={theme.colors.primary}
+              <Pressable
                 onPress={() => onChange(!value)}
-              />
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: value }}
+                hitSlop={8}
+              >
+                <FontAwesome5
+                  name={value ? "check-square" : "square"}
+                  size={22}
+                  color={theme.colors.primary}
+                />
+              </Pressable>
               <Text
                 style={styles.checkboxText}
                 onPress={() => onChange(!value)}
               >
-                I agree to the Acceptable Use Policy and acknowledge that
-                pornography and illegal content are strictly prohibited. I
-                understand that uploading such content will result in immediate
-                account termination.
+                I agree to the{" "}
+                <PolicyLink
+                  label="Acceptable Use Policy"
+                  url={LEGAL_LINKS.acceptableUsePolicy}
+                  linkStyle={styles.link}
+                />{" "}
+                and acknowledge that pornography and illegal content are
+                strictly prohibited. I understand that uploading such content
+                will result in immediate account termination.
               </Text>
             </View>
             {error && (
@@ -290,6 +358,11 @@ const createStyles = (theme: AppTheme) =>
       color: theme.colors.textPrimary,
       fontSize: 14,
       lineHeight: 20,
+    },
+    link: {
+      color: theme.colors.primary,
+      fontWeight: "600",
+      textDecorationLine: "underline",
     },
     errorText: {
       color: ERROR_COLOR,
