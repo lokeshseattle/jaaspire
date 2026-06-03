@@ -57,11 +57,7 @@ export default function ProfileScreen() {
     onDismiss: onShareProfileDismiss,
   } = useShareProfileSheet();
 
-  const {
-    data: profileData,
-    refetch: refetchProfile,
-    isRefetching: isRefetchingProfile,
-  } = useGetProfile();
+  const { data: profileData, refetch: refetchProfile } = useGetProfile();
 
   const username = profileData?.data.username;
 
@@ -78,7 +74,6 @@ export default function ProfileScreen() {
   const {
     data: feedData,
     refetch: refetchFeed,
-    isRefetching: isRefetchingFeed,
     hasNextPage,
     fetchNextPage,
     isFetchingNextPage,
@@ -97,9 +92,16 @@ export default function ProfileScreen() {
     return feedData.pages.flatMap((page) => page.data.posts);
   }, [feedData?.pages]);
 
-  // Handle refresh
+  const [isPullRefreshing, setIsPullRefreshing] = useState(false);
+
+  // Only drive RefreshControl from explicit pull — not background refetches on tab focus.
   const handleRefresh = useCallback(async () => {
-    await Promise.all([refetchProfile(), refetchFeed(), refetchStories()]);
+    setIsPullRefreshing(true);
+    try {
+      await Promise.all([refetchProfile(), refetchFeed(), refetchStories()]);
+    } finally {
+      setIsPullRefreshing(false);
+    }
   }, [refetchProfile, refetchFeed, refetchStories]);
 
   // Handle pagination
@@ -146,7 +148,7 @@ export default function ProfileScreen() {
             postIds={postIds}
             ListHeaderComponent={ListHeader}
             onRefresh={handleRefresh}
-            isRefreshing={isRefetchingProfile || isRefetchingFeed}
+            isRefreshing={isPullRefreshing}
             onEndReached={handleEndReached}
             isFetchingNextPage={isFetchingNextPage}
             isTabActive={activeTab === "home_feed"}
@@ -161,7 +163,7 @@ export default function ProfileScreen() {
             postIds={postIds} // Empty for now
             ListHeaderComponent={ListHeader}
             onRefresh={handleRefresh}
-            isRefreshing={isRefetchingProfile || isRefetchingFeed}
+            isRefreshing={isPullRefreshing}
             onEndReached={handleEndReached}
             isFetchingNextPage={isFetchingNextPage}
             postRouteUsername={username}

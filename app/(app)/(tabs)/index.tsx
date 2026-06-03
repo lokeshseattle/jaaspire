@@ -207,6 +207,7 @@ export default function Home() {
         ListHeaderComponent={ListHeader}
         onRefresh={handleRefresh}
         isRefreshing={isRefetching}
+        refreshProgressViewOffset={HEADER_HEIGHT}
         onEndReached={handleEndReached}
         isFetchingNextPage={isFetchingNextPage}
         flatListProps={{

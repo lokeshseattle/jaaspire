@@ -26,7 +26,7 @@ const StoryHeader = ({
   const insets = useSafeAreaInsets();
 
   function navigateToUser() {
-    router.push({
+    router.dismissTo({
       params: { username },
       pathname: "/user/[username]",
     });

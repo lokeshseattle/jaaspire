@@ -33,10 +33,11 @@ import {
 } from "react-native-enriched";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 
-import { PickedFile, useMediaPicker } from "@/hooks/use-media-picker";
 import JaasiStar from "@/assets/svg/JaasiStar";
+import { PickedFile, useMediaPicker } from "@/hooks/use-media-picker";
 import MentionSuggestionsList from "@/src/components/mentions/MentionSuggestionsList";
 import { useToast } from "@/src/components/toast/ToastProvider";
+import AndroidSelectDialog from "@/src/components/ui/android-select-dialog";
 import SelectPickerSheet from "@/src/components/ui/selectpicker-sheet";
 import { useImageEditStore } from "@/src/features/post-editor/store/useImageEditorStore";
 import { useVideoPostDraftStore } from "@/src/features/post-editor/store/useVideoPostDraftStore";
@@ -45,9 +46,7 @@ import {
   useUploadAndCreatePost,
   useUploadImageAndCreatePost,
 } from "@/src/features/upload/upload.hooks";
-import {
-  storeProductIdFromIapSku,
-} from "@/src/features/wallet/iap.constants";
+import { storeProductIdFromIapSku } from "@/src/features/wallet/iap.constants";
 import { useIapSkus } from "@/src/features/wallet/wallet.hooks";
 import { queryClient } from "@/src/lib/query-client";
 import type { IapSkuListItem, MentionUser } from "@/src/services/api/api.types";
@@ -262,7 +261,10 @@ function CreateContent() {
   }, [iapSkusResponse?.skus]);
 
   const selectedPriceProduct = useMemo(
-    () => sortedIapProducts.find((product) => product.product_id === selectedPriceSku),
+    () =>
+      sortedIapProducts.find(
+        (product) => product.product_id === selectedPriceSku,
+      ),
     [selectedPriceSku, sortedIapProducts],
   );
 
@@ -285,7 +287,7 @@ function CreateContent() {
 
   const computedIsExclusive = postType === "subscription";
   const computedPrice =
-    postType === "paid" ? selectedPriceProduct?.stars ?? 0 : 0;
+    postType === "paid" ? (selectedPriceProduct?.stars ?? 0) : 0;
 
   const canPost =
     (!!selectedImage || (!!selectedVideo && !!selectedVideoThumbnail)) &&
@@ -445,7 +447,9 @@ function CreateContent() {
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
-          keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+          keyboardDismissMode={
+            Platform.OS === "ios" ? "interactive" : "on-drag"
+          }
           keyboardShouldPersistTaps="never"
           onTouchStart={() => {
             if (isFocused && mentionIndicator !== "@") {
@@ -652,13 +656,24 @@ function CreateContent() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <SelectPickerSheet
-        visible={pricePickerOpen}
-        value={selectedPriceSku}
-        options={priceOptions}
-        onChange={(value) => setSelectedPriceSku(value)}
-        onClose={() => setPricePickerOpen(false)}
-      />
+      {Platform.OS === "ios" ? (
+        <SelectPickerSheet
+          visible={pricePickerOpen}
+          value={selectedPriceSku}
+          options={priceOptions}
+          onChange={(value) => setSelectedPriceSku(value)}
+          onClose={() => setPricePickerOpen(false)}
+        />
+      ) : (
+        <AndroidSelectDialog
+          visible={pricePickerOpen}
+          value={selectedPriceSku}
+          options={priceOptions}
+          title="Price"
+          onChange={setSelectedPriceSku}
+          onClose={() => setPricePickerOpen(false)}
+        />
+      )}
 
       <Modal
         visible={mentionIndicator === "@"}

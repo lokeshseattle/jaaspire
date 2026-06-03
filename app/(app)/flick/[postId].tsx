@@ -2,6 +2,7 @@ import { useCommentsSheet } from "@/hooks/use-comment-sheet";
 import { useShareSheet } from "@/hooks/use-share-sheet";
 import { CommentsBottomSheet } from "@/src/components/comments/CommentsBottomSheet";
 import FlickItem from "@/src/components/flicks/FlickItem";
+import FlickItemErrorBoundary from "@/src/components/flicks/FlickItemErrorBoundary";
 import { SharePostBottomSheet } from "@/src/components/share/SharePostBottomSheet";
 import {
     fetchFlickById,
@@ -139,18 +140,25 @@ const FlickRow = memo(function FlickRow({
 
   return (
     <View style={{ width: flickWidth, height: flickHeight }}>
-      <FlickItem
-        post={post}
-        itemHeight={flickHeight}
-        itemWidth={flickWidth}
-        safeTopInset={safeTopInset}
-        isFocused={isFocused}
-        isScreenFocused={isScreenFocused}
-        inFlickWindow={inFlickWindow}
-        nextPost={nextPost}
-        onOpenComments={() => openComments(id)}
-        onOpenShare={() => openShare(id)}
-      />
+      <FlickItemErrorBoundary
+        key={id}
+        postId={id}
+        width={flickWidth}
+        height={flickHeight}
+      >
+        <FlickItem
+          post={post}
+          itemHeight={flickHeight}
+          itemWidth={flickWidth}
+          safeTopInset={safeTopInset}
+          isFocused={isFocused}
+          isScreenFocused={isScreenFocused}
+          inFlickWindow={inFlickWindow}
+          nextPost={nextPost}
+          onOpenComments={() => openComments(id)}
+          onOpenShare={() => openShare(id)}
+        />
+      </FlickItemErrorBoundary>
     </View>
   );
 });

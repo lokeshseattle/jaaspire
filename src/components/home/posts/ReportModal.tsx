@@ -1,10 +1,10 @@
 import {
-  useCreateReportMutation,
-  useGetReport,
+    useCreateReportMutation,
+    useGetReport,
 } from "@/src/features/post/post.hooks";
 import {
-  CreateReportPayload,
-  ReportTarget,
+    CreateReportPayload,
+    ReportTarget,
 } from "@/src/services/api/api.types";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
@@ -12,16 +12,16 @@ import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { useForm } from "react-hook-form";
 import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import FormInput from "../../ui/input";
 
@@ -121,10 +121,7 @@ const ReportModal: React.FC<ReportModalProps> = ({
 
     try {
       await mutation.mutateAsync(payload);
-      Alert.alert(
-        "Reported Successfully",
-        TARGET_LABELS[target.kind].success,
-      );
+      Alert.alert("Reported Successfully", TARGET_LABELS[target.kind].success);
       reset();
       onClose();
     } catch {

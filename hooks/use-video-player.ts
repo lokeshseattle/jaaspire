@@ -20,6 +20,16 @@ function safePlayerSnapshot(p: VideoPlayer): {
   }
 }
 
+export function safePlayerDuration(p: VideoPlayer | null | undefined): number {
+  if (!p) return 0;
+  try {
+    const d = p.duration;
+    return Number.isFinite(d) && d > 0 ? d : 0;
+  } catch {
+    return 0;
+  }
+}
+
 export function useManagedVideoPlayer(
   postId: number,
   url: string | null,

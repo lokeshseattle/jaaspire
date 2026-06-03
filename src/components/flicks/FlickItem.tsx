@@ -1,4 +1,10 @@
-import { useManagedVideoPlayer } from "@/hooks/use-video-player";
+import {
+  safePlayerDuration,
+  useManagedVideoPlayer,
+} from "@/hooks/use-video-player";
+import { useVerticalVideoLayout } from "@/src/hooks/use-vertical-video-layout";
+import { useVideoTrackSize } from "@/src/hooks/use-video-track-size";
+import { VerticalVideoFrame } from "@/src/components/video/VerticalVideoFrame";
 import ReportModal from "@/src/components/home/posts/ReportModal";
 import StoryAvatar from "@/src/components/home/story/StoryAvatar";
 import RichText from "@/src/components/ui/rich-text";
@@ -9,16 +15,15 @@ import {
 } from "@/src/features/post/post.hooks";
 import { canViewPostMedia, parseDuration } from "@/src/features/post/post.utils";
 import { useGetProfile } from "@/src/features/profile/profile.hooks";
-import type { PossibleErrorResponse, Post } from "@/src/services/api/api.types";
+import { getApiErrorMessage } from "@/src/services/api/api.error";
+import type { Post } from "@/src/services/api/api.types";
 import { getMediaType } from "@/src/utils/helpers";
 import { FontAwesome, Ionicons } from "@expo/vector-icons";
 import Feather from "@expo/vector-icons/Feather";
-import { isAxiosError } from "axios";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import { VideoView, type VideoContentFit } from "expo-video";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
@@ -73,35 +78,6 @@ const FLICK_ACTION_GLASS_GAP = 12;
 const FLICK_MENU_WIDTH = 188;
 /** Horizontal space reserved beside the action rail so captions don’t slide under icons. */
 const FLICK_CAPTION_RAIL_GUTTER = 64;
-
-/**
- * Landscape videos: use cover only if center-crop still shows at least this fraction
- * of the source frame on the worst axis (otherwise contain + letterboxing).
- */
-const FIT_COVER_THRESHOLD = 0.78;
-
-/** Under object-fit:cover with scale s = max(W/vw,H/vh), visible fraction on each axis. */
-function coverVisibleMinFrac(
-  W: number,
-  H: number,
-  vw: number,
-  vh: number,
-): number {
-  const s = Math.max(W / vw, H / vh);
-  return Math.min(W / (vw * s), H / (vh * s));
-}
-
-function chooseContentFit(
-  W: number,
-  H: number,
-  vw?: number | null,
-  vh?: number | null,
-): VideoContentFit {
-  if (!vw || !vh || vw <= 0 || vh <= 0 || W <= 0 || H <= 0) return "cover";
-  if (vw <= vh) return "cover";
-  const visibleMin = coverVisibleMinFrac(W, H, vw, vh);
-  return visibleMin >= FIT_COVER_THRESHOLD ? "cover" : "contain";
-}
 
 type PostMediaViewer = Post["viewer"];
 
@@ -158,10 +134,7 @@ function FlickItemInner({
     [itemHeight, safeTopInset, insets.bottom],
   );
 
-  const videoFrameSize = useMemo(
-    () => ({ width: itemWidth, height: itemHeight }),
-    [itemWidth, itemHeight],
-  );
+
   const { data: profileData } = useGetProfile();
   const me = profileData?.data;
 
@@ -221,6 +194,13 @@ function FlickItemInner({
     nextVideoInfo?.postId,
   );
 
+  const trackSize = useVideoTrackSize(player, isReady);
+  const videoLayout = useVerticalVideoLayout(itemWidth, itemHeight, {
+    fillViewport: true,
+    sourceWidth: trackSize?.width,
+    sourceHeight: trackSize?.height,
+  });
+
   const progress = useSharedValue(0);
   const isScrubbing = useSharedValue(false);
   const progressBarWidth = useSharedValue(0);
@@ -244,70 +224,20 @@ function FlickItemInner({
     if (!isFocused) setUserPaused(false);
   }, [isFocused]);
 
-  const [videoSourceSize, setVideoSourceSize] = useState<{
-    w: number;
-    h: number;
-  } | null>(null);
-
-  useEffect(() => {
-    if (!player) {
-      setVideoSourceSize(null);
-      return;
-    }
-    const sync = () => {
-      try {
-        const t = player.videoTrack;
-        const w = t?.size?.width ?? 0;
-        const h = t?.size?.height ?? 0;
-        if (w > 0 && h > 0) {
-          setVideoSourceSize((prev) =>
-            prev?.w === w && prev?.h === h ? prev : { w, h },
-          );
-        }
-      } catch {
-        /* native player */
-      }
-    };
-    sync();
-    const sub = player.addListener("statusChange" as any, sync);
-    return () => sub.remove();
-  }, [player]);
-
-  useEffect(() => {
-    if (!player || !isReady) return;
-    try {
-      const t = player.videoTrack;
-      const w = t?.size?.width ?? 0;
-      const h = t?.size?.height ?? 0;
-      if (w > 0 && h > 0) {
-        setVideoSourceSize((prev) =>
-          prev?.w === w && prev?.h === h ? prev : { w, h },
-        );
-      }
-    } catch {
-      /* native player */
-    }
-  }, [player, isReady]);
-
-  const videoContentFit = useMemo(
-    () =>
-      chooseContentFit(
-        itemWidth,
-        itemHeight,
-        videoSourceSize?.w,
-        videoSourceSize?.h,
-      ),
-    [itemWidth, itemHeight, videoSourceSize?.w, videoSourceSize?.h],
-  );
-
   const seekTo = useCallback(
     (value: number) => {
-      if (!player?.duration) return;
+      if (!player) return;
+      const duration = safePlayerDuration(player);
+      if (duration <= 0) return;
 
       if (isPaidVideo && parsedDuration) {
-        const cap = player.duration;
+        const cap = duration;
         const targetTime = Math.min(value * parsedDuration, cap);
-        player.currentTime = targetTime;
+        try {
+          player.currentTime = targetTime;
+        } catch {
+          return;
+        }
         progress.value = targetTime / parsedDuration;
 
         const reachedEnd = targetTime >= cap - 0.08;
@@ -322,7 +252,11 @@ function FlickItemInner({
           setPreviewEnded(false);
         }
       } else {
-        player.currentTime = value * player.duration;
+        try {
+          player.currentTime = value * duration;
+        } catch {
+          return;
+        }
         progress.value = value;
       }
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -335,15 +269,16 @@ function FlickItemInner({
       const total =
         isPaidVideo && parsedDuration
           ? parsedDuration
-          : (player?.duration ?? 0);
+          : safePlayerDuration(player);
       if (total <= 0) return;
       let cur = ratio * total;
-      if (isPaidVideo && parsedDuration && player?.duration) {
-        cur = Math.min(cur, player.duration);
+      if (isPaidVideo && parsedDuration) {
+        const cap = safePlayerDuration(player);
+        if (cap > 0) cur = Math.min(cur, cap);
       }
       setTimeUi({ current: cur, total });
     },
-    [isPaidVideo, parsedDuration, player?.duration],
+    [isPaidVideo, parsedDuration, player],
   );
 
   const progressStyle = useAnimatedStyle(() => ({
@@ -486,11 +421,10 @@ function FlickItemInner({
                 ]);
               },
               onError: (err: unknown) => {
-                const msg =
-                  isAxiosError(err) && err.response?.data
-                    ? (err.response.data as PossibleErrorResponse).message
-                    : "Could not delete this post.";
-                Alert.alert("Error", msg);
+                Alert.alert(
+                  "Error",
+                  getApiErrorMessage(err, "Could not delete this post."),
+                );
               },
             });
           }
@@ -646,34 +580,39 @@ function FlickItemInner({
     const sub = player.addListener(
       "timeUpdate" as any,
       ({ currentTime }: { currentTime: number }) => {
-        if (isScrubbing.value) return;
-        if (!player.duration) return;
+        try {
+          if (isScrubbing.value) return;
+          const duration = safePlayerDuration(player);
+          if (duration <= 0) return;
 
-        if (isPaidVideo && parsedDuration) {
-          const cap = player.duration;
-          maxProgressRatio.value = cap / parsedDuration;
+          if (isPaidVideo && parsedDuration) {
+            const cap = duration;
+            maxProgressRatio.value = cap / parsedDuration;
 
-          if (currentTime >= cap - 0.1) {
-            pause();
-            progress.value = cap / parsedDuration;
-            setTimeUi({ current: cap, total: parsedDuration });
-            if (!previewEndedRef.current) {
-              previewEndedRef.current = true;
-              setPreviewEnded(true);
+            if (currentTime >= cap - 0.1) {
+              pause();
+              progress.value = cap / parsedDuration;
+              setTimeUi({ current: cap, total: parsedDuration });
+              if (!previewEndedRef.current) {
+                previewEndedRef.current = true;
+                setPreviewEnded(true);
+              }
+            } else {
+              progress.value = currentTime / parsedDuration;
+              setTimeUi({
+                current: currentTime,
+                total: parsedDuration,
+              });
             }
           } else {
-            progress.value = currentTime / parsedDuration;
+            progress.value = currentTime / duration;
             setTimeUi({
               current: currentTime,
-              total: parsedDuration,
+              total: duration,
             });
           }
-        } else {
-          progress.value = currentTime / player.duration;
-          setTimeUi({
-            current: currentTime,
-            total: player.duration,
-          });
+        } catch {
+          /* player was released between resetAll() and effect cleanup */
         }
       },
     );
@@ -816,9 +755,6 @@ function FlickItemInner({
 
   const captionSource = post.text ?? "";
 
-  const frameW = videoFrameSize.width > 0 ? videoFrameSize.width : itemWidth;
-  const frameH = videoFrameSize.height > 0 ? videoFrameSize.height : itemHeight;
-
   const showFlickHud =
     !showVideoBlockPaywall &&
     videoUrlForPlayer &&
@@ -829,7 +765,9 @@ function FlickItemInner({
   const seekTotalSeconds =
     isPaidVideo && parsedDuration != null && parsedDuration > 0
       ? parsedDuration
-      : (player?.duration ?? 0);
+      : timeUi.total > 0
+        ? timeUi.total
+        : safePlayerDuration(player);
 
   const showSeekBar =
     !showVideoBlockPaywall &&
@@ -853,56 +791,26 @@ function FlickItemInner({
           />
         </View>
       ) : (
-        <View style={styles.mediaStage}>
-          <View style={[styles.videoFrame, { width: frameW, height: frameH }]}>
-            {showVideoView && player && (
-              <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                <VideoView
-                  style={StyleSheet.absoluteFill}
-                  player={player}
-                  contentFit={videoContentFit}
-                  nativeControls={false}
-                  allowsPictureInPicture={false}
-                  fullscreenOptions={{ enable: false }}
-                  useExoShutter={false}
-                  onFirstFrameRender={handleFirstFrameRender}
-                />
+        <VerticalVideoFrame
+          frameWidth={videoLayout.frameWidth}
+          frameHeight={videoLayout.frameHeight}
+          contentFit={videoLayout.contentFit}
+          canvasColor={FLICKS_CANVAS}
+          player={player}
+          showVideo={showVideoView}
+          thumbnail={thumbnail}
+          posterAnimatedStyle={posterAnimatedStyle}
+          onFirstFrameRender={handleFirstFrameRender}
+          posterFallbackStyle={styles.posterFallback}
+        >
+          {isFocused &&
+            (isBuffering || !isReady) &&
+            !showVideoBlockPaywall && (
+              <View style={styles.loadingOverlay} pointerEvents="none">
+                <ActivityIndicator size="large" color={FLICK_TEXT} />
               </View>
             )}
-
-            {thumbnail ? (
-              <Animated.View
-                style={[StyleSheet.absoluteFill, posterAnimatedStyle]}
-                pointerEvents="none"
-              >
-                <Image
-                  source={{ uri: thumbnail }}
-                  style={StyleSheet.absoluteFill}
-                  contentFit={videoContentFit}
-                  cachePolicy="disk"
-                  transition={0}
-                />
-              </Animated.View>
-            ) : (
-              <Animated.View
-                style={[
-                  StyleSheet.absoluteFill,
-                  styles.posterFallback,
-                  posterAnimatedStyle,
-                ]}
-                pointerEvents="none"
-              />
-            )}
-
-            {isFocused &&
-              (isBuffering || !isReady) &&
-              !showVideoBlockPaywall && (
-                <View style={styles.loadingOverlay} pointerEvents="none">
-                  <ActivityIndicator size="large" color={FLICK_TEXT} />
-                </View>
-              )}
-          </View>
-        </View>
+        </VerticalVideoFrame>
       )}
 
       {/* Tap zone — fullscreen; overlays use higher z-index */}
@@ -1417,16 +1325,6 @@ function createStyles(
   return StyleSheet.create({
     root: {
       position: "relative",
-      backgroundColor: FLICKS_CANVAS,
-    },
-    mediaStage: {
-      ...StyleSheet.absoluteFillObject,
-      justifyContent: "center",
-      alignItems: "center",
-      backgroundColor: FLICKS_CANVAS,
-    },
-    videoFrame: {
-      overflow: "hidden",
       backgroundColor: FLICKS_CANVAS,
     },
     fallbackText: {

@@ -1,36 +1,38 @@
 import JaasiStar from "@/assets/svg/JaasiStar";
 import { useManagedVideoPlayer } from "@/hooks/use-video-player";
 import { PostHeartOverlay } from "@/src/components/home/posts/media/PostHeartOverlay";
+import { VerticalVideoFrame } from "@/src/components/video/VerticalVideoFrame";
 import { Colors } from "@/src/constants/theme";
 import {
   canViewPostMedia,
   parseDuration,
 } from "@/src/features/post/post.utils";
+import { useVerticalVideoLayout } from "@/src/hooks/use-vertical-video-layout";
+import { useVideoTrackSize } from "@/src/hooks/use-video-track-size";
 import type { Post } from "@/src/services/api/api.types";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import { VideoView } from "expo-video";
 import {
   Component,
-  type ErrorInfo,
-  type ReactNode,
   memo,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
+  type ErrorInfo,
+  type ReactNode,
 } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
   Pressable,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -72,10 +74,6 @@ interface Props {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const DOUBLE_TAP_DELAY = 300;
-const SCREEN_WIDTH = Dimensions.get("window").width;
-const SCREEN_HEIGHT = Dimensions.get("window").height;
-const MAX_MEDIA_HEIGHT = SCREEN_HEIGHT * 0.75;
-const MIN_MEDIA_HEIGHT = Math.min(440, Math.max(450, SCREEN_HEIGHT * 0.42));
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -97,9 +95,9 @@ class PostMediaErrorBoundary extends Component<
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     // console.warn(
-      // "[PostMedia] Error boundary caught:",
-      // error,
-      // info.componentStack,
+    // "[PostMedia] Error boundary caught:",
+    // error,
+    // info.componentStack,
     // );
   }
 
@@ -318,6 +316,10 @@ function PostMediaInnerMain({
   nextPostUrl,
   onRequestPurchase,
 }: Props) {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const maxMediaHeight = screenHeight * 0.75;
+  const minMediaHeight = screenHeight * 0.65;
+
   // ── Refs ───────────────────────────────────────────────────────────────────
   const isFocusedRef = useRef(isFocused);
   const isLongPressingRef = useRef(false);
@@ -384,6 +386,14 @@ function PostMediaInnerMain({
     nextPostUrl,
     nextPostId,
   );
+
+  const trackSize = useVideoTrackSize(player, isReady);
+  const videoLayout = useVerticalVideoLayout(screenWidth, minMediaHeight, {
+    minHeight: minMediaHeight,
+    maxHeight: minMediaHeight,
+    sourceWidth: trackSize?.width,
+    sourceHeight: trackSize?.height,
+  });
 
   // ── Poster crossfade: shared value driven by onFirstFrameRender ──────────
   const firstFrameRendered = useRef(false);
@@ -767,14 +777,14 @@ function PostMediaInnerMain({
   const showPremiumBadge = price > 0 || isExclusive;
 
   const containerHeight = useMemo(() => {
+    if (type === "video") {
+      return minMediaHeight;
+    }
     const calculatedHeight = aspectRatio
-      ? SCREEN_WIDTH / aspectRatio
-      : SCREEN_WIDTH;
-    return Math.max(
-      MIN_MEDIA_HEIGHT,
-      Math.min(calculatedHeight, MAX_MEDIA_HEIGHT),
-    );
-  }, [aspectRatio]);
+      ? screenWidth / aspectRatio
+      : screenWidth;
+    return Math.max(minMediaHeight, Math.min(calculatedHeight, maxMediaHeight));
+  }, [type, aspectRatio, screenWidth, minMediaHeight, maxMediaHeight]);
 
   if (!media && !viewerSeesImagePaywall && !isPaidVideo) return null;
 
@@ -799,64 +809,26 @@ function PostMediaInnerMain({
             />
           ) : (
             <>
-              {/* ✅ FIX: VideoView mounts for ALL posts in ±2 window (not just focused).
-                    This keeps the decoder connected so the first frame is already rendered
-                    when the post becomes focused — eliminating the black flash.
+              <VerticalVideoFrame
+                fillParent
+                frameWidth={videoLayout.frameWidth}
+                frameHeight={videoLayout.frameHeight}
+                contentFit={videoLayout.contentFit}
+                player={player}
+                showVideo={showVideoView}
+                thumbnail={thumbnail}
+                posterAnimatedStyle={posterAnimatedStyle}
+                onFirstFrameRender={handleFirstFrameRender}
+                onPosterLoad={handleImageLoad}
+                posterFallbackStyle={styles.videoPosterFallback}
+              >
+                {showLoadingOverlay && (
+                  <View style={styles.loadingOverlay}>
+                    <ActivityIndicator color="white" size="large" />
+                  </View>
+                )}
+              </VerticalVideoFrame>
 
-                    surfaceType="textureView" prevents the SurfaceView z-ordering black flash.
-                    useExoShutter={false} prevents ExoPlayer's default black shutter layer.
-                    onFirstFrameRender replaces the timer-based poster hide. */}
-              {showVideoView && player && (
-                <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                  <VideoView
-                    style={StyleSheet.absoluteFill}
-                    player={player}
-                    contentFit="contain"
-                    nativeControls={false}
-                    allowsPictureInPicture={false}
-                    // allowsFullscreen={false}
-                    fullscreenOptions={{
-                      enable: false,
-                    }}
-                    // surfaceType="textureView"
-                    useExoShutter={false}
-                    onFirstFrameRender={handleFirstFrameRender}
-                  />
-                </View>
-              )}
-
-              {thumbnail ? (
-                <Animated.View
-                  style={[StyleSheet.absoluteFill, posterAnimatedStyle]}
-                  pointerEvents="none"
-                >
-                  <Image
-                    source={{ uri: thumbnail }}
-                    style={StyleSheet.absoluteFill}
-                    contentFit="contain"
-                    cachePolicy="disk"
-                    transition={0}
-                    onLoad={handleImageLoad}
-                  />
-                </Animated.View>
-              ) : (
-                <Animated.View
-                  style={[
-                    StyleSheet.absoluteFill,
-                    styles.videoPosterFallback,
-                    posterAnimatedStyle,
-                  ]}
-                  pointerEvents="none"
-                />
-              )}
-
-              {showLoadingOverlay && (
-                <View style={styles.loadingOverlay}>
-                  <ActivityIndicator color="white" size="large" />
-                </View>
-              )}
-
-              {/* Progress bar + controls only for focused post */}
               {showVideoView && player && isFocused && (
                 <GestureDetector gesture={barGesture}>
                   <Animated.View
@@ -953,6 +925,35 @@ const PostMediaImage = memo(function PostMediaImage({
   isLiked,
   onRequestPurchase,
 }: Props) {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const minMediaHeight = screenHeight * 0.65;
+
+  const [sourceSize, setSourceSize] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
+
+  const imageLayout = useVerticalVideoLayout(screenWidth, minMediaHeight, {
+    minHeight: minMediaHeight,
+    maxHeight: minMediaHeight,
+    sourceWidth: sourceSize?.width,
+    sourceHeight: sourceSize?.height,
+  });
+
+  const handleImageLoad = useCallback((event: unknown) => {
+    const source = (event as { source?: { width?: number; height?: number } })
+      ?.source;
+    const width = source?.width;
+    const height = source?.height;
+    if (width && height) {
+      setSourceSize((prev) =>
+        prev?.width === width && prev?.height === height
+          ? prev
+          : { width, height },
+      );
+    }
+  }, []);
+
   const lastTapRef = useRef(0);
   const singleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1016,18 +1017,22 @@ const PostMediaImage = memo(function PostMediaImage({
         <ImagePaywall
           price={price}
           isExclusive={isExclusive}
-          containerHeight={MIN_MEDIA_HEIGHT}
+          containerHeight={minMediaHeight}
           onPay={handlePayPress}
         />
       ) : (
         <Pressable onPress={handleTap}>
-          <Image
-            source={{ uri: media }}
-            style={styles.imageMedia}
-            contentFit="contain"
-            cachePolicy="memory-disk"
-            transition={0}
-          />
+          <View style={[styles.media, { height: minMediaHeight }]}>
+            <VerticalVideoFrame
+              fillParent
+              frameWidth={imageLayout.frameWidth}
+              frameHeight={imageLayout.frameHeight}
+              contentFit={imageLayout.contentFit}
+              thumbnail={media}
+              onPosterLoad={handleImageLoad}
+              posterFallbackStyle={styles.videoPosterFallback}
+            />
+          </View>
         </Pressable>
       )}
 
@@ -1176,7 +1181,7 @@ const styles = StyleSheet.create({
   paywallContent: {
     alignItems: "center",
     width: "100%",
-    maxWidth: SCREEN_WIDTH,
+    maxWidth: "100%",
     paddingHorizontal: 32,
     paddingVertical: 8,
     gap: 12,
@@ -1272,11 +1277,5 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "rgba(255,255,255,0.35)",
     marginTop: 2,
-  },
-  imageMedia: {
-    width: SCREEN_WIDTH,
-    height: undefined, // let aspectRatio drive it
-    aspectRatio: 4 / 5, // safe default (portrait); adjust to your typical content
-    backgroundColor: "#111", // dark but not pure black so it's clearly a placeholder
   },
 });

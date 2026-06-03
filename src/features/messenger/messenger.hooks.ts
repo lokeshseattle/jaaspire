@@ -1,4 +1,5 @@
 import { apiClient } from "@/src/services/api/api.client";
+import { sendAiChatMessageStream } from "@/src/services/api/ai-chat.api";
 import {
   MarkMessengerMessagesReadResponse,
   MessengerContactsResponse,
@@ -9,8 +10,10 @@ import {
   MessengerMessageUser,
   MessengerUser,
   PossibleErrorResponse,
+  AiChatStreamCompleteData,
+  AiChatStreamStartData,
   SendAiChatMessageRequest,
-  SendAiChatMessageResponse,
+  SendAiChatMessageResult,
   SendMessengerMessageRequest,
   SendMessengerMessageResponse,
 } from "@/src/services/api/api.types";
@@ -218,6 +221,111 @@ export function mergeMessengerMessageIntoInfiniteCache(
   );
 }
 
+/** Patch a single message row in page 0 (e.g. streaming AI text updates). */
+export function patchMessengerMessageInInfiniteCache(
+  queryClient: QueryClient,
+  peerUserId: number,
+  messageId: number,
+  patch: Partial<Pick<MessengerMessage, "message">>,
+): void {
+  const key = messengerMessagesQueryKey(peerUserId);
+  const targetId = Number(messageId);
+  queryClient.setQueryData<InfiniteData<MessengerMessagesResponse>>(
+    key,
+    (prev) => {
+      if (!prev?.pages.length) return prev;
+      const firstPage = prev.pages[0];
+      const idx = firstPage.data.messages.findIndex(
+        (m) => Number(m.id) === targetId,
+      );
+      if (idx === -1) return prev;
+      const nextMessages = [...firstPage.data.messages];
+      nextMessages[idx] = {
+        ...nextMessages[idx],
+        ...patch,
+        message: patch.message ?? nextMessages[idx].message ?? "",
+      };
+      return {
+        ...prev,
+        pages: [
+          {
+            ...firstPage,
+            data: { ...firstPage.data, messages: nextMessages },
+          },
+          ...prev.pages.slice(1),
+        ],
+      };
+    },
+  );
+}
+
+export function messengerUserFromProfile(
+  id: number,
+  profile: {
+    name: string;
+    username?: string;
+    avatar: string;
+    bio?: string;
+    profileUrl?: string;
+    canEarnMoney?: boolean;
+  },
+): MessengerUser {
+  const username = profile.username?.replace(/^@/, "").trim() ?? "";
+  return {
+    id,
+    name: profile.name,
+    username,
+    avatar: profile.avatar,
+    bio: profile.bio ?? "",
+    profileUrl: profile.profileUrl ?? (username ? `/${username}` : ""),
+    canEarnMoney: profile.canEarnMoney ?? false,
+  };
+}
+
+export function buildAiChatPlaceholderMessages(params: {
+  userMessageId: number;
+  aiMessageId: number;
+  userText: string;
+  myId: number;
+  peerId: number;
+  myUser: MessengerUser;
+  peerUser: MessengerUser;
+}): { userMessage: MessengerMessage; aiMessage: MessengerMessage } {
+  const userAt = Date.now();
+  const userCreated = new Date(userAt).toISOString();
+  const aiCreated = new Date(userAt + 1).toISOString();
+  return {
+    userMessage: {
+      id: params.userMessageId,
+      sender_id: params.myId,
+      receiver_id: params.peerId,
+      message: params.userText,
+      isSeen: false,
+      price: 0,
+      is_ai_conversation: true,
+      created_at: userCreated,
+      hasUserUnlockedMessage: true,
+      sender: params.myUser,
+      receiver: params.peerUser,
+      attachments: [],
+    },
+    aiMessage: {
+      id: params.aiMessageId,
+      sender_id: params.peerId,
+      receiver_id: params.myId,
+      message: "",
+      isSeen: false,
+      price: 0,
+      is_ai_conversation: true,
+      created_at: aiCreated,
+      hasUserUnlockedMessage: true,
+      sender: params.peerUser,
+      receiver: params.myUser,
+      attachments: [],
+    },
+  };
+}
+
 /** Used by realtime to skip redundant refetches when POST already merged the row. */
 export function isMessengerMessageIdInThreadCache(
   queryClient: QueryClient,
@@ -283,17 +391,74 @@ export const useSendMessengerMessage = (
   });
 };
 
+export type SendAiChatMessageVariables = SendAiChatMessageRequest & {
+  peerUserId: number;
+  myId: number;
+  myUser: MessengerUser;
+  peerUser: MessengerUser;
+  onStreamStart?: (data: AiChatStreamStartData) => void;
+  onStreamChunk?: (aiMessageId: number, accumulated: string) => void;
+  onStreamComplete?: (data: AiChatStreamCompleteData) => void;
+};
+
 export const useSendAiChatMessage = (): UseMutationResult<
-  SendAiChatMessageResponse,
+  SendAiChatMessageResult,
   PossibleErrorResponse,
-  SendAiChatMessageRequest
+  SendAiChatMessageVariables
 > => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: SendAiChatMessageRequest) =>
-      apiClient
-        .post<SendAiChatMessageResponse>("/ai-chat/send", body)
-        .then((r) => r.data),
+    mutationFn: ({
+      message,
+      peerUserId,
+      myId,
+      myUser,
+      peerUser,
+      onStreamStart,
+      onStreamChunk,
+      onStreamComplete,
+    }: SendAiChatMessageVariables) => {
+      let aiMessageId = 0;
+
+      return sendAiChatMessageStream(message, {
+        onStart: (data) => {
+          aiMessageId = data.ai_message_id;
+          onStreamStart?.(data);
+          const { userMessage, aiMessage } = buildAiChatPlaceholderMessages({
+            userMessageId: data.user_message_id,
+            aiMessageId: data.ai_message_id,
+            userText: message,
+            myId,
+            peerId: peerUserId,
+            myUser,
+            peerUser,
+          });
+          mergeMessengerMessageIntoInfiniteCache(
+            queryClient,
+            peerUserId,
+            userMessage,
+          );
+          mergeMessengerMessageIntoInfiniteCache(
+            queryClient,
+            peerUserId,
+            aiMessage,
+          );
+        },
+        onChunk: (_piece, accumulated) => {
+          if (!aiMessageId) return;
+          onStreamChunk?.(aiMessageId, accumulated);
+        },
+        onComplete: (data) => {
+          onStreamComplete?.(data);
+          patchMessengerMessageInInfiniteCache(
+            queryClient,
+            peerUserId,
+            data.message_id,
+            { message: data.full_content },
+          );
+        },
+      });
+    },
   });
 };
 

@@ -5,14 +5,13 @@ import {
     usePinPostMutation,
 } from "@/src/features/post/post.hooks";
 import { useGetProfile } from "@/src/features/profile/profile.hooks";
-import type { PossibleErrorResponse } from "@/src/services/api/api.types";
+import { getApiErrorMessage } from "@/src/services/api/api.error";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { timeAgo } from "@/src/utils/helpers";
 import { Ionicons } from "@expo/vector-icons";
 import Feather from "@expo/vector-icons/Feather";
 import { router } from "expo-router";
-import { isAxiosError } from "axios";
 import React, { useMemo, useRef, useState } from "react";
 import {
     Alert,
@@ -137,11 +136,10 @@ const PostHeader: React.FC = React.memo(() => {
                 Alert.alert("Deleted", data.message);
               },
               onError: (err: unknown) => {
-                const msg =
-                  isAxiosError(err) && err.response?.data
-                    ? (err.response.data as PossibleErrorResponse).message
-                    : "Could not delete this post.";
-                Alert.alert("Error", msg);
+                Alert.alert(
+                  "Error",
+                  getApiErrorMessage(err, "Could not delete this post."),
+                );
               },
             }),
         },

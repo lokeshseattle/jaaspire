@@ -69,13 +69,21 @@ function isRefundedOrCanceledStatus(status: string): boolean {
 
 function getStatusTone(theme: AppTheme, status: string) {
   const normalized = status.toLowerCase();
-  if (normalized === "approved" || normalized === "completed" || normalized === "success") {
+  if (
+    normalized === "approved" ||
+    normalized === "completed" ||
+    normalized === "success"
+  ) {
     return { bg: "#16a34a1a", text: "#16a34a" };
   }
   if (normalized === "pending" || normalized === "processing") {
     return { bg: "#f59e0b1a", text: "#d97706" };
   }
-  if (normalized === "failed" || normalized === "declined" || normalized === "canceled") {
+  if (
+    normalized === "failed" ||
+    normalized === "declined" ||
+    normalized === "canceled"
+  ) {
     return { bg: "#ef44441a", text: "#ef4444" };
   }
   return { bg: theme.colors.surface, text: theme.colors.textSecondary };
@@ -133,12 +141,12 @@ export default function ManagePaymentsScreen() {
       const amountColor = isDepositRefundedOrCanceled
         ? theme.colors.textSecondary
         : isDeposit
-        ? "#16a34a"
-        : isReceived
           ? "#16a34a"
-          : isSpent
-          ? "#ef4444"
-          : theme.colors.textPrimary;
+          : isReceived
+            ? "#16a34a"
+            : isSpent
+              ? "#ef4444"
+              : theme.colors.textPrimary;
       const counterparty = isSpent
         ? (item.receiver ?? item.sender)
         : (item.sender ?? item.receiver);
@@ -156,7 +164,9 @@ export default function ManagePaymentsScreen() {
                 style={[styles.amountText, { color: amountColor }]}
                 numberOfLines={1}
               >
-                {formatCurrency(item.amount, item.currency)}
+                {item.provider === "credit"
+                  ? item.stars + " Stars"
+                  : formatCurrency(item.amount, item.currency)}
               </Text>
               {showSeePost ? (
                 <Pressable
@@ -174,7 +184,9 @@ export default function ManagePaymentsScreen() {
               <Text style={styles.typeText} numberOfLines={1}>
                 {toTitleCase(item.type)}
               </Text>
-              <View style={[styles.statusPill, { backgroundColor: statusTone.bg }]}>
+              <View
+                style={[styles.statusPill, { backgroundColor: statusTone.bg }]}
+              >
                 <Text style={[styles.statusText, { color: statusTone.text }]}>
                   {toTitleCase(item.status)}
                 </Text>

@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   FlatList,
   ListRenderItemInfo,
+  RefreshControl,
   StyleSheet,
   View,
 } from "react-native";
@@ -24,6 +25,8 @@ type FeedContainerProps = {
   isFetchingNextPage: boolean;
   flatListRef?: React.RefObject<FlatList<number> | null>;
   flatListProps?: Partial<React.ComponentProps<typeof FlatList<number>>>;
+  /** Pushes the pull-to-refresh spinner below an overlay header (e.g. home tab). */
+  refreshProgressViewOffset?: number;
 };
 
 export function FeedContainer({
@@ -37,9 +40,28 @@ export function FeedContainer({
   isFetchingNextPage,
   flatListRef,
   flatListProps,
+  refreshProgressViewOffset,
 }: FeedContainerProps) {
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+
+  const refreshControl = useMemo(() => {
+    if (refreshProgressViewOffset == null) return undefined;
+    return (
+      <RefreshControl
+        refreshing={isRefreshing}
+        onRefresh={onRefresh}
+        progressViewOffset={refreshProgressViewOffset}
+        tintColor={theme.colors.primary}
+        colors={[theme.colors.primary]}
+      />
+    );
+  }, [
+    refreshProgressViewOffset,
+    isRefreshing,
+    onRefresh,
+    theme.colors.primary,
+  ]);
 
   const ListFooter = useMemo(
     () =>
@@ -85,8 +107,9 @@ export function FeedContainer({
         }
         onEndReached={onEndReached}
         onEndReachedThreshold={0.5}
-        onRefresh={onRefresh}
-        refreshing={isRefreshing}
+        {...(refreshControl
+          ? { refreshControl }
+          : { onRefresh, refreshing: isRefreshing })}
         extraData={controller.extraData}
         removeClippedSubviews
         windowSize={5}

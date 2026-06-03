@@ -17,7 +17,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 /** Core tab row height; safe area (home indicator) is added via insets. */
-const TAB_BAR_BASE_HEIGHT = Platform.OS === "ios" ? 49 : 56;
+const TAB_BAR_BASE_HEIGHT = Platform.OS === "ios" ? 49 : 61;
 const GAP_ABOVE_TAB_BAR = 6;
 
 type Variant = "success" | "error" | "info" | "warning";

@@ -1,6 +1,7 @@
 import { useAuth } from "@/src/features/auth/auth.hooks";
 import { configureForegroundNotificationHandler } from "@/src/features/push/foreground-notification-handler";
 import { useActiveChatRouteSync } from "@/src/hooks/use-active-chat-route-sync";
+import { useAndroidNavigationBarSync } from "@/src/hooks/use-android-navigation-bar-sync";
 import { useNotificationDeepLink } from "@/src/hooks/use-notification-deep-link";
 import { asyncStoragePersister } from "@/src/lib/persister";
 import { initializeSessionSeed } from "@/src/lib/seed.store";
@@ -45,6 +46,7 @@ function RootLayoutInner() {
   }, []);
 
   useActiveChatRouteSync();
+  useAndroidNavigationBarSync();
 
   // Notification tap → rewrite data.url → router.push (cold start + foreground/background).
   useNotificationDeepLink({ enabled: !authLoading });

@@ -5,7 +5,7 @@ import {
 } from "@/src/features/story/story.hooks";
 import { queryClient } from "@/src/lib/query-client";
 import { getMediaType } from "@/src/utils/helpers";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, StyleSheet, View } from "react-native";
 import Animated, {
@@ -46,6 +46,19 @@ const StoryView = ({ username, onClose, isPanning = false }: TProps) => {
   const progress = useSharedValue(0);
   const callbackRef = useRef(onClose);
   callbackRef.current = onClose;
+  const isFocusedRef = useRef(true);
+
+  useFocusEffect(
+    useCallback(() => {
+      isFocusedRef.current = true;
+      setIsPaused(false);
+      return () => {
+        isFocusedRef.current = false;
+        cancelAnimation(progress);
+        setIsPaused(true);
+      };
+    }, [progress]),
+  );
 
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
   const mediaRef = useRef<StoryMediaHandle>(null);
@@ -61,10 +74,10 @@ const StoryView = ({ username, onClose, isPanning = false }: TProps) => {
 
   const currentMediaType = currentStory ? getMediaType(currentStory.path) : "video";
 
-  // const storyViewerQuery = useGetStoryViewers(currentStory.id)
-  ` `
   // Go to next story
   const goNext = useCallback(() => {
+    if (!isFocusedRef.current) return;
+
     if (safeIndex < stories.length - 1) {
       setCurrentIndex((prev) => prev + 1);
     } else {
@@ -274,7 +287,9 @@ const StoryView = ({ username, onClose, isPanning = false }: TProps) => {
         onFastForwardStart={handleFastForwardStart}
         onFastForwardEnd={handleFastForwardEnd}
       />
-      <Viewers id={currentStory.id} setIsPaused={setIsPaused} />
+      {ownStory && (
+        <Viewers id={currentStory.id} setIsPaused={setIsPaused} />
+      )}
       <ReportModal
         visible={reportOpen}
         onClose={handleCloseReport}

@@ -2,7 +2,7 @@ import { useTheme } from "@/src/theme/ThemeProvider";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Tabs, usePathname, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { View } from "react-native";
+import { Platform, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function TabsLayout() {
@@ -16,13 +16,20 @@ export default function TabsLayout() {
   /** Flicks is full-bleed black; other tabs follow app theme (must update on tab change — child-only StatusBar may not restore when leaving Flicks). */
   const statusBarStyle = isFlicksTab ? "light" : isDarkTheme ? "light" : "dark";
 
+  /** Android: lift tab items above the system nav bar + a little extra breathing room. */
+  const androidTabBarBottom =
+    Platform.OS === "android" ? Math.max(insets.bottom, 4) : 15;
+
+  // const androidTabBarBottom = Math.max(insets.bottom, 4);
+
   /** Bottom tab chrome: force dark chrome on Flicks regardless of light/dark app theme. */
   const flicksTabChrome = {
     tabBarStyle: {
       backgroundColor: "#000000",
       borderTopColor: "rgba(255,255,255,0.14)",
       borderTopWidth: 1,
-      paddingBottom: 20,
+      paddingBottom: androidTabBarBottom,
+      height: 55 + androidTabBarBottom,
     },
     tabBarActiveTintColor: theme.colors.primary,
     tabBarInactiveTintColor: "rgba(255,255,255,0.5)",
@@ -32,7 +39,8 @@ export default function TabsLayout() {
       backgroundColor: theme.colors.background,
       borderTopColor: theme.colors.border,
       borderTopWidth: 1,
-      paddingBottom: 10,
+      paddingBottom: +androidTabBarBottom,
+      height: 55 + androidTabBarBottom,
     },
     tabBarActiveTintColor: theme.colors.primary,
     tabBarInactiveTintColor: theme.colors.textSecondary,

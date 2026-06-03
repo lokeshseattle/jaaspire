@@ -44,6 +44,10 @@ const VIDEO_EXTENSIONS = new Set<string>([
 export const getMediaType = (pathOrExtension: string): MediaType => {
   if (!pathOrExtension) return "image";
 
+  const normalized = pathOrExtension.toLowerCase().trim();
+  if (normalized === "video") return "video";
+  if (normalized === "image") return "image";
+
   // Strip query params, then extract just the filename from the path/URL
   const withoutQuery = pathOrExtension.split("?")[0];
   const filename = withoutQuery.split("/").pop() ?? "";

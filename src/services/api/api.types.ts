@@ -1007,13 +1007,24 @@ export type SendAiChatMessageRequest = {
   message: string;
 };
 
-export type SendAiChatMessageResponse = {
-  success: boolean;
-  message: string;
-  data: {
-    user_message: MessengerMessage;
-    ai_message: MessengerMessage;
-  };
+export type AiChatStreamStartData = {
+  user_message_id: number;
+  ai_message_id: number;
+};
+
+export type AiChatStreamChunkData = {
+  content: string;
+};
+
+export type AiChatStreamCompleteData = {
+  message_id: number;
+  full_content: string;
+};
+
+export type SendAiChatMessageResult = {
+  userMessageId: number;
+  aiMessageId: number;
+  fullContent: string;
 };
 
 export type MarkMessengerMessagesReadResponse = {
@@ -1175,7 +1186,9 @@ export type IapRestoreGoogleRequest = {
   base_plan_id: string;
 };
 
-export type IapRestoreRequest = IapRestoreAppleRequest | IapRestoreGoogleRequest;
+export type IapRestoreRequest =
+  | IapRestoreAppleRequest
+  | IapRestoreGoogleRequest;
 
 export type IapRestoreSubscriptionCreator = {
   id: number;
@@ -1283,6 +1296,7 @@ export type PaymentUser = {
 export type Payment = {
   id: number;
   type: string;
+  stars: number;
   status: string;
   amount: number;
   currency: string;

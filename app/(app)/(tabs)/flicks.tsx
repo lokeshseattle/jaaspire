@@ -1,6 +1,7 @@
 import { CommentsBottomSheet } from "@/src/components/comments/CommentsBottomSheet";
 import { useFeedController } from "@/src/components/feed/use-feed-controller";
 import FlickItem from "@/src/components/flicks/FlickItem";
+import FlickItemErrorBoundary from "@/src/components/flicks/FlickItemErrorBoundary";
 import { SharePostBottomSheet } from "@/src/components/share/SharePostBottomSheet";
 import {
   type FlicksFeed,
@@ -13,8 +14,8 @@ import {
 import { usePostStore } from "@/src/features/post/post.store";
 import { canViewPostMedia } from "@/src/features/post/post.utils";
 import { videoManager } from "@/src/lib/video-manager";
-import type { Post, PossibleErrorResponse } from "@/src/services/api/api.types";
-import { isAxiosError } from "axios";
+import { getApiErrorMessage } from "@/src/services/api/api.error";
+import type { Post } from "@/src/services/api/api.types";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { getMediaType } from "@/src/utils/helpers";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
@@ -136,19 +137,26 @@ const FlickRow = memo(function FlickRow({
 
   return (
     <View style={{ width: flickWidth, height: flickHeight }}>
-      <FlickItem
-        post={post}
-        itemHeight={flickHeight}
-        itemWidth={flickWidth}
-        safeTopInset={safeTopInset}
-        isFocused={isFocused}
-        isScreenFocused={isScreenFocused}
-        inFlickWindow={inFlickWindow}
-        nextPost={nextPost}
-        onOpenComments={() => openComments(id)}
-        onOpenShare={() => openShare(id)}
-        onDeleteFlick={onDeleteFlick}
-      />
+      <FlickItemErrorBoundary
+        key={id}
+        postId={id}
+        width={flickWidth}
+        height={flickHeight}
+      >
+        <FlickItem
+          post={post}
+          itemHeight={flickHeight}
+          itemWidth={flickWidth}
+          safeTopInset={safeTopInset}
+          isFocused={isFocused}
+          isScreenFocused={isScreenFocused}
+          inFlickWindow={inFlickWindow}
+          nextPost={nextPost}
+          onOpenComments={() => openComments(id)}
+          onOpenShare={() => openShare(id)}
+          onDeleteFlick={onDeleteFlick}
+        />
+      </FlickItemErrorBoundary>
     </View>
   );
 });
@@ -232,11 +240,10 @@ export default function FlicksScreen() {
     const doDelete = () => {
       deletePostMutationRef.current.mutate(postId, {
         onError: (err: unknown) => {
-          const msg =
-            isAxiosError(err) && err.response?.data
-              ? (err.response.data as PossibleErrorResponse).message
-              : "Could not delete this post.";
-          Alert.alert("Error", msg);
+          Alert.alert(
+            "Error",
+            getApiErrorMessage(err, "Could not delete this post."),
+          );
         },
       });
     };

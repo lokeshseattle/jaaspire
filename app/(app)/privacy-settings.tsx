@@ -1,14 +1,15 @@
-import SelectPickerSheet from "@/src/components/ui/selectpicker-sheet";
 import { useToast } from "@/src/components/toast/ToastProvider";
+import AndroidSelectDialog from "@/src/components/ui/android-select-dialog";
+import SelectPickerSheet from "@/src/components/ui/selectpicker-sheet";
 import {
-  useGetProfile,
-  useSetEnable2faFlagMutation,
-  useSetOpenProfileFlagMutation,
-  useSetSettingsRatesMutation,
+    useGetProfile,
+    useSetEnable2faFlagMutation,
+    useSetOpenProfileFlagMutation,
+    useSetSettingsRatesMutation,
 } from "@/src/features/profile/profile.hooks";
 import {
-  findTierKeyForMonthlyPrice,
-  uniqueSubscriptionTiersByTierKey,
+    findTierKeyForMonthlyPrice,
+    uniqueSubscriptionTiersByTierKey,
 } from "@/src/features/wallet/iap.constants";
 import { useIapSkus } from "@/src/features/wallet/wallet.hooks";
 import type { IapSkuListItem } from "@/src/services/api/api.types";
@@ -17,16 +18,22 @@ import { useTheme } from "@/src/theme/ThemeProvider";
 import { profileVisibilityLabel } from "@/src/utils/profile-visibility";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "expo-router";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  View,
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useState,
+} from "react";
+import {
+    ActivityIndicator,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -114,11 +121,7 @@ export default function PrivacySettingsScreen() {
       headerTitleStyle: { color: theme.colors.textPrimary },
       headerShadowVisible: false,
     });
-  }, [
-    navigation,
-    theme.colors.background,
-    theme.colors.textPrimary,
-  ]);
+  }, [navigation, theme.colors.background, theme.colors.textPrimary]);
 
   useEffect(() => {
     if (!profile) return;
@@ -205,7 +208,9 @@ export default function PrivacySettingsScreen() {
 
   if (isLoading && !profile) {
     return (
-      <View style={[styles.centered, { backgroundColor: theme.colors.background }]}>
+      <View
+        style={[styles.centered, { backgroundColor: theme.colors.background }]}
+      >
         <ActivityIndicator color={theme.colors.primary} />
       </View>
     );
@@ -220,9 +225,7 @@ export default function PrivacySettingsScreen() {
     baseline != null && selectedTierKey !== baseline.selectedTierKey;
 
   const saveDisabled =
-    !isDirty ||
-    savePending ||
-    (priceDirty && !selectedTierKey);
+    !isDirty || savePending || (priceDirty && !selectedTierKey);
 
   return (
     <View style={styles.flex}>
@@ -248,7 +251,8 @@ export default function PrivacySettingsScreen() {
                 key={opt.value}
                 style={[
                   styles.optionRow,
-                  index < VISIBILITY_OPTIONS.length - 1 && styles.optionRowBorder,
+                  index < VISIBILITY_OPTIONS.length - 1 &&
+                    styles.optionRowBorder,
                 ]}
                 onPress={() => setVisibility(opt.value)}
                 accessibilityRole="radio"
@@ -289,7 +293,9 @@ export default function PrivacySettingsScreen() {
         <View style={styles.section}>
           <View style={styles.switchRow}>
             <View style={styles.switchTextWrap}>
-              <Text style={styles.switchTitle}>Email two-factor authentication</Text>
+              <Text style={styles.switchTitle}>
+                Email two-factor authentication
+              </Text>
               <Text style={styles.switchSubtitle}>
                 We’ll email a code when you sign in on a new device.
               </Text>
@@ -301,7 +307,13 @@ export default function PrivacySettingsScreen() {
                 false: theme.colors.border,
                 true: theme.colors.primary + "99",
               }}
-              thumbColor={Platform.OS === "ios" ? "#fff" : email2fa ? theme.colors.primary : "#f4f4f5"}
+              thumbColor={
+                Platform.OS === "ios"
+                  ? "#fff"
+                  : email2fa
+                    ? theme.colors.primary
+                    : "#f4f4f5"
+              }
               ios_backgroundColor={theme.colors.border}
             />
           </View>
@@ -361,13 +373,24 @@ export default function PrivacySettingsScreen() {
         </View>
       </ScrollView>
 
-      <SelectPickerSheet
-        visible={pricePickerOpen}
-        value={selectedTierKey}
-        options={subscriptionOptions}
-        onChange={setSelectedTierKey}
-        onClose={() => setPricePickerOpen(false)}
-      />
+      {Platform.OS === "ios" ? (
+        <SelectPickerSheet
+          visible={pricePickerOpen}
+          value={selectedTierKey}
+          options={subscriptionOptions}
+          onChange={setSelectedTierKey}
+          onClose={() => setPricePickerOpen(false)}
+        />
+      ) : (
+        <AndroidSelectDialog
+          visible={pricePickerOpen}
+          value={selectedTierKey}
+          options={subscriptionOptions}
+          title="Monthly subscription tier"
+          onChange={setSelectedTierKey}
+          onClose={() => setPricePickerOpen(false)}
+        />
+      )}
 
       <View
         style={[

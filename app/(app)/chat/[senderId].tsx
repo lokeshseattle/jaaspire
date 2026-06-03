@@ -10,6 +10,7 @@ import {
 import { MessageMediaStack } from "@/src/features/messenger/messenger-message-media";
 import { messengerMessagesQueryKey } from "@/src/features/messenger/messenger-query-keys";
 import {
+    messengerUserFromProfile,
     useGetMessengerContacts,
     useInfiniteMessengerMessages,
     useMarkMessageAsRead,
@@ -50,7 +51,6 @@ import { normalizeImage } from "@/src/utils/helpers";
 import { getMessengerPeer } from "@/src/utils/messenger-contact";
 import { Ionicons } from "@expo/vector-icons";
 import { useHeaderHeight } from "@react-navigation/elements";
-import type { InfiniteData } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import {
@@ -64,6 +64,7 @@ import React, {
     useEffect,
     useLayoutEffect,
     useMemo,
+    useRef,
     useState,
     type ComponentProps,
 } from "react";
@@ -79,6 +80,7 @@ import {
     useColorScheme,
     View,
 } from "react-native";
+import type { ScrollEvent } from "react-native-reanimated";
 import {
     Bubble,
     InputToolbar,
@@ -90,6 +92,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 /** WhatsApp-style blue for “read” double-ticks (outgoing bubble). */
 const READ_RECEIPT_BLUE = "#34B7F1";
+
+/** In inverted GiftedChat, offset near 0 means the user is at the newest messages. */
+const CHAT_AT_BOTTOM_OFFSET_THRESHOLD = 80;
 
 function formatLockStars(amount: number): string {
   if (Number.isInteger(amount)) return amount.toLocaleString();
@@ -606,6 +611,27 @@ export default function MessengerChatScreen() {
   } | null>(null);
   const [menuVisible, setMenuVisible] = useState(false);
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
+  const streamingAiRef = useRef(false);
+  const isAtBottomRef = useRef(true);
+  const [streamingAi, setStreamingAi] = useState<{
+    messageId: number;
+    text: string;
+  } | null>(null);
+
+  const giftedListProps = useMemo(
+    () => ({
+      scrollEventThrottle: 16,
+      onScroll: (event: ScrollEvent) => {
+        const y = event.contentOffset?.y ?? 0;
+        isAtBottomRef.current = y <= CHAT_AT_BOTTOM_OFFSET_THRESHOLD;
+      },
+      maintainVisibleContentPosition: {
+        minIndexForVisible: 0,
+        autoscrollToTopThreshold: CHAT_AT_BOTTOM_OFFSET_THRESHOLD,
+      },
+    }),
+    [],
+  );
 
   const { senderId, name, username, avatar, isAiBot } = useLocalSearchParams<{
     senderId?: string | string[];
@@ -806,7 +832,7 @@ export default function MessengerChatScreen() {
     [isIapConnected, peerId, startPurchase, unlockTarget],
   );
 
-  useChatRealtime(peerId, myId);
+  useChatRealtime(peerId, myId, streamingAiRef);
 
   useEffect(() => {
     markMessageAsReadMutation.mutate(peerId);
@@ -833,10 +859,12 @@ export default function MessengerChatScreen() {
     messagesData?.pages.forEach((page: MessengerMessagesResponse) => {
       page.data.messages.forEach((m: MessengerMessage) => map.set(m.id, m));
     });
-    return Array.from(map.values()).sort(
-      (a, b) =>
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-    );
+    return Array.from(map.values()).sort((a, b) => {
+      const byTime =
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      if (byTime !== 0) return byTime;
+      return Number(b.id) - Number(a.id);
+    });
   }, [messagesData]);
 
   const peerFromContacts = useMemo(() => {
@@ -1142,6 +1170,7 @@ export default function MessengerChatScreen() {
         },
       };
       setPending((prev) => appendGiftedMessages(prev, [optimistic]));
+      let aiSendConfirmed = false;
       try {
         if (isAiConversation) {
           if (!trimmed) {
@@ -1152,64 +1181,50 @@ export default function MessengerChatScreen() {
             setPending((prev) => prev.filter((m) => m._id !== tempId));
             return;
           }
-          const res = await sendAiChatMutation.mutateAsync({
-            message: trimmed,
-          });
-          queryClient.setQueryData<InfiniteData<MessengerMessagesResponse>>(
-            messengerMessagesQueryKey(peerId),
-            (prev) => {
-              const userMessage = res.data.user_message;
-              const aiMessage = res.data.ai_message;
-              if (!prev || prev.pages.length === 0) {
-                return {
-                  pageParams: [undefined],
-                  pages: [
-                    {
-                      status: "success",
-                      data: {
-                        messages: [userMessage, aiMessage],
-                        pagination: {
-                          hasMore: false,
-                          oldestMessageId: Math.min(
-                            userMessage.id,
-                            aiMessage.id,
-                          ),
-                        },
-                      },
-                    },
-                  ],
-                };
-              }
-
-              const firstPage = prev.pages[0];
-              const existingIds = new Set(
-                firstPage.data.messages.map((m) => Number(m.id)),
-              );
-              const nextMessages = [...firstPage.data.messages];
-              if (!existingIds.has(Number(userMessage.id))) {
-                nextMessages.push(userMessage);
-              }
-              if (!existingIds.has(Number(aiMessage.id))) {
-                nextMessages.push(aiMessage);
-              }
-
-              return {
-                ...prev,
-                pages: [
-                  {
-                    ...firstPage,
-                    data: {
-                      ...firstPage.data,
-                      messages: nextMessages,
-                    },
-                  },
-                  ...prev.pages.slice(1),
-                ],
-              };
-            },
-          );
-          setAttachments(null);
-          setProcessedAttachmentId(null);
+          if (!myId || !me?.data) {
+            setPending((prev) => prev.filter((m) => m._id !== tempId));
+            return;
+          }
+          streamingAiRef.current = true;
+          try {
+            await sendAiChatMutation.mutateAsync({
+              message: trimmed,
+              peerUserId: peerId,
+              myId,
+              myUser: messengerUserFromProfile(myId, {
+                name: me.data.name,
+                username: me.data.username,
+                avatar: me.data.avatar,
+                bio: me.data.bio,
+              }),
+              peerUser: messengerUserFromProfile(peerId, {
+                name: peerDisplay.name,
+                username: peerDisplay.username,
+                avatar: peerDisplay.avatar,
+              }),
+              onStreamStart: (data) => {
+                aiSendConfirmed = true;
+                setPending((prev) => prev.filter((m) => m._id !== tempId));
+                setStreamingAi({
+                  messageId: data.ai_message_id,
+                  text: "",
+                });
+              },
+              onStreamChunk: (aiMessageId, text) => {
+                setStreamingAi({ messageId: aiMessageId, text });
+              },
+              onStreamComplete: () => {
+                setStreamingAi(null);
+              },
+            });
+            setAttachments(null);
+            setProcessedAttachmentId(null);
+          } finally {
+            streamingAiRef.current = false;
+            if (!aiSendConfirmed) {
+              setStreamingAi(null);
+            }
+          }
         } else {
           await sendMutation.mutateAsync({
             message: trimmed,
@@ -1226,14 +1241,18 @@ export default function MessengerChatScreen() {
         }
         /** Let React Query subscribers apply cache before dropping the temp row (prevents flicker). */
         await new Promise<void>((resolve) => queueMicrotask(() => resolve()));
-        setPending((prev) => prev.filter((m) => m._id !== tempId));
+        if (!isAiConversation || !aiSendConfirmed) {
+          setPending((prev) => prev.filter((m) => m._id !== tempId));
+        }
       } catch {
         setPending((prev) => prev.filter((m) => m._id !== tempId));
+        setStreamingAi(null);
         Alert.alert("Could not send", "Please try again.");
       }
     },
     [
       myId,
+      me?.data,
       me?.data?.name,
       me?.data?.avatar,
       sendMutation,
@@ -1241,6 +1260,9 @@ export default function MessengerChatScreen() {
       queryClient,
       peerId,
       isAiConversation,
+      peerDisplay.name,
+      peerDisplay.username,
+      peerDisplay.avatar,
       attachments,
       processedAttachmentId,
       isUploadingAttachment,
@@ -1494,10 +1516,17 @@ export default function MessengerChatScreen() {
         myId != null && msg?.user._id === peerId && !msg?.pending;
       const canReportMessage =
         isPeerMessage && typeof messageId === "number" && messageId > 0;
+      const displayMessage =
+        streamingAi != null &&
+        msg != null &&
+        Number(msg._id) === streamingAi.messageId
+          ? { ...msg, text: streamingAi.text }
+          : msg;
 
       return (
         <Bubble
           {...bubbleProps}
+          currentMessage={displayMessage}
           renderTicks={renderTicks}
           onLongPressMessage={
             canReportMessage
@@ -1516,7 +1545,7 @@ export default function MessengerChatScreen() {
         />
       );
     },
-    [myId, peerId, renderTicks, handleLongPressMessage],
+    [myId, peerId, renderTicks, handleLongPressMessage, streamingAi],
   );
 
   if (!Number.isFinite(peerId) || peerId <= 0) {
@@ -1552,6 +1581,8 @@ export default function MessengerChatScreen() {
     <View style={styles.root}>
       <GiftedChat
         messages={displayMessages}
+        extraData={streamingAi?.text}
+        listProps={giftedListProps}
         onSend={onSend}
         user={currentUser}
         renderBubble={renderBubble}

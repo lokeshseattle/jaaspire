@@ -4,7 +4,7 @@ import { Pusher } from "@pusher/pusher-websocket-react-native";
 import NetInfo from "@react-native-community/netinfo";
 import { InfiniteData } from "@tanstack/react-query";
 import { useFocusEffect, usePathname } from "expo-router";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, type RefObject } from "react";
 import { AppState, AppStateStatus } from "react-native";
 import { messengerMessagesQueryKey } from "../features/messenger/messenger-query-keys";
 import {
@@ -877,6 +877,7 @@ export const useUnreadMessengerBadgeRealtime = () => {
 export const useChatRealtime = (
   peerUserId: number,
   myUserId: number | undefined,
+  skipThreadInvalidationRef?: RefObject<boolean>,
 ) => {
   const chatId = useMemo(() => {
     if (myUserId == null) return "";
@@ -892,6 +893,8 @@ export const useChatRealtime = (
         String(data.senderId) === String(peerUserId) &&
         String(data.senderId) !== String(myUserId);
       if (!matchesCanonicalChat && !incomingFromPeer) return;
+
+      if (skipThreadInvalidationRef?.current) return;
 
       const messageIdNum = Number(data.id);
       const isOwnMessage = String(data.senderId) === String(myUserId);
@@ -938,7 +941,7 @@ export const useChatRealtime = (
       eventBus.off("message.new", handleNewMessage);
       eventBus.off("message.read", handleRead);
     };
-  }, [chatId, peerUserId, myUserId]);
+  }, [chatId, peerUserId, myUserId, skipThreadInvalidationRef]);
 };
 
 /**
