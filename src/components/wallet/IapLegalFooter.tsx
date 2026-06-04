@@ -12,8 +12,7 @@ function storeAccountLabel(): string {
 /** App Store / Play virtual-currency disclosure (Jaasi Stars). */
 export function virtualCurrencyDisclaimerText(): string {
   return (
-    "Jaasi Stars are virtual currency with no cash value, are not legal tender, " +
-    "and cannot be exchanged for cash. Purchases are final and non-refundable, except where required by law."
+    "Jaasi Stars are a virtual, in-app credit system. They are licensed, not sold, and grant only a limited, revocable, non-refundable, non-transferable right to access eligible in-app features. Stars carry no monetary value, cannot be redeemed for legal tender by Users, are non-transferable between accounts, and have no utility outside of Jaaspire."
   );
 }
 

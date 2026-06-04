@@ -1,7 +1,5 @@
 import JaasiStar from "@/assets/svg/JaasiStar";
-import IapLegalFooter, {
-  VirtualCurrencyDisclaimer,
-} from "@/src/components/wallet/IapLegalFooter";
+import IapLegalFooter from "@/src/components/wallet/IapLegalFooter";
 import { useNotificationCounts } from "@/src/features/profile/notification.hooks";
 import { getStarsForWalletSku } from "@/src/features/wallet/iap.constants";
 import { useIap } from "@/src/features/wallet/iap.context";
@@ -252,10 +250,6 @@ export default function WalletScreen() {
           <Text style={styles.sectionLabel}>
             Choose a pack to add Jaasi Stars
           </Text>
-          <VirtualCurrencyDisclaimer
-            theme={theme}
-            style={styles.virtualCurrencyDisclaimer}
-          />
           {iapSkusError ? (
             <View style={styles.noticeCard}>
               <Text style={styles.noticeTitle}>
@@ -471,9 +465,6 @@ const createStyles = (theme: AppTheme) =>
       letterSpacing: 0.6,
       marginBottom: theme.spacing.sm,
     },
-    virtualCurrencyDisclaimer: {
-      marginBottom: theme.spacing.md,
-    },
     productsLoading: {
       flexDirection: "row",
       alignItems: "center",
@@ -485,20 +476,18 @@ const createStyles = (theme: AppTheme) =>
       color: theme.colors.textSecondary,
     },
     productList: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      justifyContent: "space-between",
+      flexDirection: "column",
       gap: theme.spacing.sm,
     },
     productChip: {
-      width: "48%",
+      width: "100%",
       minHeight: 46,
       paddingVertical: theme.spacing.sm,
       paddingHorizontal: theme.spacing.md,
       borderRadius: theme.radius.md,
-      backgroundColor: "#FFFFFF",
-      borderWidth: 1,
-      borderColor: "#D8EEFF",
+      backgroundColor: theme.colors.card,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.colors.border,
       justifyContent: "center",
     },
     productChipPressed: {
