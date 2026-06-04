@@ -1,423 +1,474 @@
 // src/features/videoEditor/VideoEditorScreen.tsx
 
-import { VideoPlayer, useVideoPlayer } from 'expo-video';
-import React, { useCallback, useEffect, useState } from 'react';
+import { VideoPlayer, useVideoPlayer } from "expo-video";
+import { Ionicons } from "@expo/vector-icons";
+import React, { useCallback, useEffect, useRef } from "react";
 import {
-    ActivityIndicator,
-    Pressable,
-    StatusBar,
-    StyleSheet,
-    Text,
-    View,
-} from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { TrimmerBar } from '../components/Trimmerbar/index';
-import { VideoPreview } from '../components/VideoPreview';
-import { COLORS, LAYOUT, TRIMMER } from '../constants';
-import { useVideoLoop } from '../hooks/useVideoLoop';
-import { useVideoTrimmer } from '../hooks/useVideoTrimmer';
-import { VideoEditorProps, VideoEditorResult } from '../types';
+  ActivityIndicator,
+  Pressable,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import {
+  useAnimatedStyle,
+  useSharedValue,
+} from "react-native-reanimated";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { TrimmerBar } from "../components/Trimmerbar/index";
+import { VideoPreview } from "../components/VideoPreview";
+import { COLORS, LAYOUT, TRIMMER } from "../constants";
+import { usePlayheadScrubber } from "../hooks/usePlayheadScrubber";
+import { useTrimmerThumbnails } from "../hooks/useTrimmerThumbnails";
+import { useVideoLoop } from "../hooks/useVideoLoop";
+import { useVideoTrimmer } from "../hooks/useVideoTrimmer";
+import { VideoEditorProps, VideoEditorResult } from "../types";
 
-// ============================================
-// INNER COMPONENT - Only renders when duration is known
-// ============================================
 interface VideoEditorContentProps {
-    player: VideoPlayer;
-    videoUri: string;
-    duration: number; // Required - guaranteed to be a real number
-    onConfirm: (result: VideoEditorResult) => void;
-    onCancel: () => void;
+  player: VideoPlayer;
+  videoUri: string;
+  fallbackDimensions?: { width?: number; height?: number };
+  duration: number;
+  onConfirm: (result: VideoEditorResult) => void;
+  onCancel: () => void;
 }
 
 const VideoEditorContent: React.FC<VideoEditorContentProps> = ({
-    player,
+  player,
+  videoUri,
+  fallbackDimensions,
+  duration,
+  onConfirm,
+  onCancel,
+}) => {
+  const prevTrimRef = useRef<{ startTime: number; endTime: number } | null>(
+    null,
+  );
+
+  const { thumbnails, isLoading: thumbnailsLoading } = useTrimmerThumbnails(
     videoUri,
     duration,
-    onConfirm,
-    onCancel,
-}) => {
-    const [isPlaying, setIsPlaying] = useState(true);
-    const [isMuted, setIsMuted] = useState(false);
+  );
 
-    // Initialize trimmer hook - duration is now guaranteed to be real
-    const {
-        trimRange,
-        leftHandleGesture,
-        rightHandleGesture,
-        middleGesture,
-        leftHandleStyle,
-        rightHandleStyle,
-        selectionStyle,
-        resetTrim,
-    } = useVideoTrimmer({
-        duration,
-        initialStartTime: 0,
-        initialEndTime: duration, // Will be capped at MAX_DURATION inside the hook
-    });
+  const {
+    trimRange,
+    leftHandleGesture,
+    rightHandleGesture,
+    middleGesture,
+    leftHandleStyle,
+    rightHandleStyle,
+    selectionStyle,
+    leftDimStyle,
+    rightDimStyle,
+  } = useVideoTrimmer({
+    duration,
+    initialStartTime: 0,
+    initialEndTime: duration,
+  });
 
-    // Handle video looping within trim range
-    useVideoLoop({
-        player,
-        startTime: trimRange.startTime,
-        endTime: trimRange.endTime,
-        isPlaying,
-    });
+  const resumePlayback = useCallback(
+    (afterSeek = false) => {
+      if (!player) return;
 
-    // Sync muted state with player
-    useEffect(() => {
-        if (player) {
-            player.muted = isMuted;
+      const tryPlay = () => {
+        try {
+          player.play();
+        } catch {
+          /* native player */
         }
-    }, [isMuted, player]);
+      };
 
-    // Sync playing state with player events
-    useEffect(() => {
-        if (!player) return;
-
-        const handlePlayingChange = () => {
-            setIsPlaying(player.playing);
-        };
-
-        return () => {
-            // Cleanup if needed
-        };
-    }, [player]);
-
-    // Track progressing playhead
-    const progressPosition = useSharedValue(0);
-
-    // Sync progress with player
-    useEffect(() => {
-        let animationFrameId: number;
-
-        const updateProgress = () => {
-            if (!player || !duration) return;
-
-            const currentTimeMs = player.currentTime * 1000;
-            const progress = duration > 0 ? currentTimeMs / duration : 0;
-            progressPosition.value = Math.max(0, Math.min(progress, 1));
-
-            if (isPlaying) {
-                animationFrameId = requestAnimationFrame(updateProgress);
+      if (afterSeek) {
+        const playingSub = player.addListener("playingChange", ({ isPlaying }) => {
+          if (!isPlaying) {
+            tryPlay();
+            playingSub.remove();
+          }
+        });
+        if (player.status !== "readyToPlay") {
+          const statusSub = player.addListener("statusChange", () => {
+            if (player.status === "readyToPlay") {
+              tryPlay();
+              statusSub.remove();
             }
-        };
-
-        if (isPlaying || (player && player.currentTime === 0)) {
-            animationFrameId = requestAnimationFrame(updateProgress);
-        } else {
-            updateProgress();
+          });
         }
+      }
 
-        return () => {
-            if (animationFrameId) cancelAnimationFrame(animationFrameId);
-        };
-    }, [isPlaying, player, duration]);
+      tryPlay();
+    },
+    [player],
+  );
 
-    const trackWidth = LAYOUT.TRIMMER_WIDTH - TRIMMER.HANDLE_WIDTH * 2;
+  useVideoLoop({
+    player,
+    startTime: trimRange.startTime,
+    endTime: trimRange.endTime,
+  });
 
-    const playheadStyle = useAnimatedStyle(() => {
-        return {
-            transform: [
-                { translateX: progressPosition.value * trackWidth + TRIMMER.HANDLE_WIDTH },
-            ],
-        };
-    });
+  useEffect(() => {
+    resumePlayback();
+  }, [player, resumePlayback]);
 
-    // Control handlers
-    const handlePlayPause = useCallback(() => {
-        if (!player) return;
+  useEffect(() => {
+    if (!player) return;
+    player.muted = false;
+  }, [player]);
 
-        if (isPlaying) {
-            player.pause();
-            setIsPlaying(false);
-        } else {
-            const currentTimeMs = player.currentTime * 1000;
-            if (currentTimeMs < trimRange.startTime || currentTimeMs >= trimRange.endTime) {
-                player.currentTime = trimRange.startTime / 1000;
-            }
-            player.play();
-            setIsPlaying(true);
-        }
-    }, [player, isPlaying, trimRange]);
+  const progressPosition = useSharedValue(0);
+  const trackWidth = LAYOUT.TRIMMER_WIDTH - TRIMMER.HANDLE_WIDTH * 2;
 
-    const handleMuteToggle = useCallback(() => {
-        setIsMuted((prev) => !prev);
-    }, []);
+  const { playheadGesture, isScrubbing } = usePlayheadScrubber({
+    player,
+    duration,
+    trimRange,
+    trackWidth,
+    progressPosition,
+  });
 
-    const handleReset = useCallback(() => {
-        resetTrim();
-        if (player) {
-            player.currentTime = 0;
-            if (isPlaying) {
-                player.pause();
-                setIsPlaying(false);
-            }
-        }
-    }, [resetTrim, player, isPlaying]);
+  useEffect(() => {
+    let animationFrameId: number;
+    let cancelled = false;
 
-    const handleConfirm = useCallback(() => {
-        if (player && isPlaying) {
-            player.pause();
-            setIsPlaying(false);
-        }
+    const updateProgress = () => {
+      if (cancelled) return;
 
-        const result: VideoEditorResult = {
-            uri: videoUri,
-            startTime: trimRange.startTime,
-            endTime: trimRange.endTime,
-            duration: duration,
-        };
+      if (player && duration > 0 && !isScrubbing.value) {
+        const currentTimeMs = player.currentTime * 1000;
+        const progress = currentTimeMs / duration;
+        const minProgress = trimRange.startTime / duration;
+        const maxProgress = Math.max(
+          minProgress,
+          (trimRange.endTime - 1) / duration,
+        );
+        progressPosition.value = Math.max(
+          minProgress,
+          Math.min(maxProgress, progress),
+        );
+      }
 
-        onConfirm(result);
-    }, [videoUri, trimRange, duration, onConfirm, player, isPlaying]);
+      animationFrameId = requestAnimationFrame(updateProgress);
+    };
 
-    const handleCancel = useCallback(() => {
-        if (player && isPlaying) {
-            player.pause();
-            setIsPlaying(false);
-        }
+    animationFrameId = requestAnimationFrame(updateProgress);
 
-        onCancel();
-    }, [onCancel, player, isPlaying]);
+    return () => {
+      cancelled = true;
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+    };
+  }, [player, duration, isScrubbing, progressPosition, trimRange.startTime, trimRange.endTime]);
 
-    return (
-        <GestureHandlerRootView style={styles.gestureRoot}>
-            <SafeAreaView edges={['top']} style={styles.container}>
-                <StatusBar barStyle="light-content" />
+  useEffect(() => {
+    if (!player) return;
 
-                {/* Header */}
-                {/* <View style={styles.header}>
-                    <Text style={styles.headerTitle}>Trim Video</Text>
-                </View> */}
+    const prev = prevTrimRef.current;
+    prevTrimRef.current = {
+      startTime: trimRange.startTime,
+      endTime: trimRange.endTime,
+    };
 
-                {/* Video Preview */}
-                <View style={styles.previewContainer}>
-                    <VideoPreview player={player} videoUri={videoUri} />
-                    <View style={styles.headerOverlay} pointerEvents="box-none">
-                        <Pressable onPress={handleCancel}>
-                            <Text style={styles.headerTitle}>Back</Text>
-                        </Pressable>
-                        <Pressable onPress={handleConfirm}>
-                            <Text style={styles.headerTitle}>Done</Text>
-                        </Pressable>
-                    </View>
-                </View>
+    if (!prev) return;
 
-                {/* Trimmer Bar */}
-                <View style={styles.trimmerContainer}>
-                    <TrimmerBar
-                        duration={duration}
-                        trimRange={trimRange}
-                        leftHandleGesture={leftHandleGesture}
-                        rightHandleGesture={rightHandleGesture}
-                        middleGesture={middleGesture}
-                        leftHandleStyle={leftHandleStyle}
-                        rightHandleStyle={rightHandleStyle}
-                        selectionStyle={selectionStyle}
-                        playheadStyle={playheadStyle}
-                    />
-                </View>
+    const deltaStart = trimRange.startTime - prev.startTime;
+    const deltaEnd = trimRange.endTime - prev.endTime;
+    const isMiddleDrag =
+      deltaStart !== 0 && Math.abs(deltaStart - deltaEnd) <= 1;
+    const isLeftHandleDrag = deltaStart !== 0 && !isMiddleDrag;
+    const isRightHandleDrag = deltaEnd !== 0 && !isMiddleDrag;
+    let targetMs = player.currentTime * 1000;
 
-                {/* Spacer */}
-                {/* <View style={styles.spacer} /> */}
+    if (isMiddleDrag) {
+      targetMs += deltaStart;
+    } else if (isLeftHandleDrag || isRightHandleDrag) {
+      // Handle-only drag — replay preview from the new in-point.
+      targetMs = trimRange.startTime;
+    } else if (
+      targetMs < trimRange.startTime ||
+      targetMs >= trimRange.endTime
+    ) {
+      targetMs = trimRange.startTime;
+    }
 
-                {/* Control Bar */}
-                <View style={styles.controlsContainer}>
-                    {/* <ControlBar
-                        isPlaying={isPlaying}
-                        isMuted={isMuted}
-                        onPlayPause={handlePlayPause}
-                        onMuteToggle={handleMuteToggle}
-                        onReset={handleReset}
-                        onConfirm={handleConfirm}
-                        onCancel={handleCancel}
-                    /> */}
-                </View>
-            </SafeAreaView>
-        </GestureHandlerRootView>
+    targetMs = Math.max(
+      trimRange.startTime,
+      Math.min(trimRange.endTime - 1, targetMs),
     );
-};
 
-// ============================================
-// OUTER COMPONENT - Handles loading/error states
-// ============================================
-export const VideoEditorScreen: React.FC<VideoEditorProps> = ({
-    videoUri,
-    onConfirm,
-    onCancel,
-}) => {
-    const [duration, setDuration] = useState<number | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const didSeek = Math.abs(targetMs - player.currentTime * 1000) > 1;
 
-    // Initialize video player
-    const player = useVideoPlayer(videoUri, (playerInstance) => {
-        playerInstance.loop = false;
-        playerInstance.muted = false;
-        // play video automatically starting from 0 (currentTime is in seconds)
-        playerInstance.currentTime = 0;
-        playerInstance.play();
+    if (didSeek) {
+      player.currentTime = targetMs / 1000;
+      progressPosition.value = targetMs / duration;
+    }
+
+    resumePlayback(didSeek || isLeftHandleDrag || isRightHandleDrag || isMiddleDrag);
+  }, [trimRange.startTime, trimRange.endTime, player, duration, resumePlayback, progressPosition]);
+
+  const playheadStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateX: progressPosition.value * trackWidth + TRIMMER.HANDLE_WIDTH,
+      },
+    ],
+  }));
+
+  const handleConfirm = useCallback(() => {
+    if (player) {
+      try {
+        player.pause();
+      } catch {
+        /* native player */
+      }
+    }
+
+    onConfirm({
+      uri: videoUri,
+      startTime: trimRange.startTime,
+      endTime: trimRange.endTime,
+      duration,
     });
+  }, [videoUri, trimRange, duration, onConfirm, player]);
 
-    // Get video duration once player is ready
-    useEffect(() => {
-        if (!player) return;
-
-        const checkDuration = setInterval(() => {
-            try {
-                if (player.duration && player.duration > 0) {
-                    const durationMs = player.duration * 1000;
-                    setDuration(durationMs);
-                    setIsLoading(false);
-                    clearInterval(checkDuration);
-                }
-            } catch (err) {
-                // console.error('Error getting duration:', err);
-                setError('Failed to load video');
-                setIsLoading(false);
-                clearInterval(checkDuration);
-            }
-        }, 100);
-
-        const timeout = setTimeout(() => {
-            if (isLoading) {
-                clearInterval(checkDuration);
-                setError('Video loading timeout');
-                setIsLoading(false);
-            }
-        }, 10000);
-
-        return () => {
-            clearInterval(checkDuration);
-            clearTimeout(timeout);
-        };
-    }, [player, isLoading]);
-
-    // Loading state
-    if (isLoading) {
-        return (
-            <SafeAreaView style={styles.container}>
-                <StatusBar barStyle="dark-content" />
-                <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color={COLORS.controlActive} />
-                    <Text style={styles.loadingText}>Loading video...</Text>
-                </View>
-            </SafeAreaView>
-        );
+  const handleCancel = useCallback(() => {
+    if (player) {
+      try {
+        player.pause();
+      } catch {
+        /* native player */
+      }
     }
 
-    // Error state
-    if (error || !duration) {
-        return (
-            <SafeAreaView style={styles.container}>
-                <StatusBar barStyle="dark-content" />
-                <View style={styles.errorContainer}>
-                    <Text style={styles.errorText}>{error || 'Failed to load video'}</Text>
-                    <Text style={styles.errorSubtext}>Please try again with a different video</Text>
-                </View>
-                {/* <View style={styles.errorButtonContainer}>
-                    <ControlBar
-                        isPlaying={false}
-                        isMuted={false}
-                        onPlayPause={() => { }}
-                        onMuteToggle={() => { }}
-                        onReset={() => { }}
-                        onConfirm={() => { }}
-                        onCancel={onCancel}
-                    />
-                </View> */}
-            </SafeAreaView>
-        );
-    }
+    onCancel();
+  }, [onCancel, player]);
 
-    // Duration is now guaranteed to be a number
-    return (
-        <VideoEditorContent
+  const handleReplayFromStart = useCallback(() => {
+    if (!player) return;
+
+    player.currentTime = trimRange.startTime / 1000;
+    progressPosition.value = trimRange.startTime / duration;
+    resumePlayback(true);
+  }, [player, trimRange.startTime, duration, progressPosition, resumePlayback]);
+
+  return (
+    <GestureHandlerRootView style={styles.gestureRoot}>
+      <SafeAreaView edges={["top", "bottom"]} style={styles.container}>
+        <StatusBar barStyle="light-content" />
+
+        <View style={styles.previewContainer}>
+          <VideoPreview
             player={player}
             videoUri={videoUri}
+            fallbackDimensions={fallbackDimensions}
+          />
+          <View style={styles.headerOverlay} pointerEvents="box-none">
+            <Pressable onPress={handleCancel}>
+              <Text style={styles.headerTitle}>Back</Text>
+            </Pressable>
+            <Pressable onPress={handleConfirm}>
+              <Text style={styles.headerTitle}>Done</Text>
+            </Pressable>
+          </View>
+          <Pressable
+            onPress={handleReplayFromStart}
+            style={styles.replayButton}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Replay from trim start"
+          >
+            <Ionicons name="refresh" size={18} color="#FFFFFF" />
+          </Pressable>
+        </View>
+
+        <View style={styles.trimmerContainer}>
+          <TrimmerBar
             duration={duration}
-            onConfirm={onConfirm}
-            onCancel={onCancel}
-        />
+            trimRange={trimRange}
+            thumbnails={thumbnails}
+            thumbnailsLoading={thumbnailsLoading}
+            leftHandleGesture={leftHandleGesture}
+            rightHandleGesture={rightHandleGesture}
+            middleGesture={middleGesture}
+            playheadGesture={playheadGesture}
+            leftHandleStyle={leftHandleStyle}
+            rightHandleStyle={rightHandleStyle}
+            selectionStyle={selectionStyle}
+            leftDimStyle={leftDimStyle}
+            rightDimStyle={rightDimStyle}
+            playheadStyle={playheadStyle}
+          />
+        </View>
+      </SafeAreaView>
+    </GestureHandlerRootView>
+  );
+};
+
+export const VideoEditorScreen: React.FC<VideoEditorProps> = ({
+  videoUri,
+  fallbackDimensions,
+  onConfirm,
+  onCancel,
+}) => {
+  const [duration, setDuration] = React.useState<number | null>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const player = useVideoPlayer(videoUri, (playerInstance) => {
+    playerInstance.loop = false;
+    playerInstance.muted = false;
+    playerInstance.currentTime = 0;
+    playerInstance.play();
+  });
+
+  useEffect(() => {
+    if (!player) return;
+
+    const checkDuration = setInterval(() => {
+      try {
+        if (player.duration && player.duration > 0) {
+          setDuration(player.duration * 1000);
+          setIsLoading(false);
+          clearInterval(checkDuration);
+        }
+      } catch {
+        setError("Failed to load video");
+        setIsLoading(false);
+        clearInterval(checkDuration);
+      }
+    }, 100);
+
+    const timeout = setTimeout(() => {
+      if (isLoading) {
+        clearInterval(checkDuration);
+        setError("Video loading timeout");
+        setIsLoading(false);
+      }
+    }, 10000);
+
+    return () => {
+      clearInterval(checkDuration);
+      clearTimeout(timeout);
+    };
+  }, [player, isLoading]);
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.controlActive} />
+          <Text style={styles.loadingText}>Loading video...</Text>
+        </View>
+      </SafeAreaView>
     );
+  }
+
+  if (error || !duration) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" />
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>
+            {error || "Failed to load video"}
+          </Text>
+          <Text style={styles.errorSubtext}>
+            Please try again with a different video
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <VideoEditorContent
+      player={player}
+      videoUri={videoUri}
+      fallbackDimensions={fallbackDimensions}
+      duration={duration}
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+    />
+  );
 };
 
 const styles = StyleSheet.create({
-    gestureRoot: {
-        flex: 1,
-        backgroundColor: "black",
-    },
-    container: {
-        flex: 1,
-        backgroundColor: "black",
-    },
-    headerOverlay: {
-        position: "absolute",
-        top: 10,
-        left: 0,
-        right: 0,
-        zIndex: 10,
-        flexDirection: "row",
-        justifyContent: "space-between",
-        paddingHorizontal: 16,
-        paddingBottom: 12,
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: "white",
-        textAlign: 'center',
-    },
-    previewContainer: {
-        backgroundColor: COLORS.previewBackground,
-        flex: 1,
-        overflow: 'hidden',
-    },
-    trimmerContainer: {
-        marginTop: 16,
-    },
-    spacer: {
-        flex: 1,
-    },
-    controlsContainer: {
-        borderTopWidth: 1,
-        borderTopColor: COLORS.unselectedRegion,
-    },
-    loadingContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        gap: 16,
-    },
-    loadingText: {
-        fontSize: 16,
-        color: COLORS.textSecondary,
-    },
-    errorContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingHorizontal: 32,
-        gap: 8,
-    },
-    errorText: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: COLORS.cancelButton,
-        textAlign: 'center',
-    },
-    errorSubtext: {
-        fontSize: 14,
-        color: COLORS.textSecondary,
-        textAlign: 'center',
-    },
-    errorButtonContainer: {
-        borderTopWidth: 1,
-        borderTopColor: COLORS.unselectedRegion,
-    },
-
+  gestureRoot: {
+    flex: 1,
+    backgroundColor: "black",
+  },
+  container: {
+    flex: 1,
+    backgroundColor: "black",
+  },
+  headerOverlay: {
+    position: "absolute",
+    top: 10,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "white",
+    textAlign: "center",
+  },
+  previewContainer: {
+    backgroundColor: COLORS.previewBackground,
+    flex: 1,
+    overflow: "hidden",
+  },
+  replayButton: {
+    position: "absolute",
+    right: 16,
+    bottom: 16,
+    zIndex: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+  },
+  trimmerContainer: {
+    marginTop: 16,
+    paddingBottom: 8,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 32,
+    gap: 8,
+  },
+  errorText: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: COLORS.cancelButton,
+    textAlign: "center",
+  },
+  errorSubtext: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: "center",
+  },
 });
 
 export default VideoEditorScreen;

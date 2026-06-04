@@ -1,28 +1,46 @@
-import React from 'react';
-import { StyleSheet } from 'react-native';
-import Animated from 'react-native-reanimated';
-import { COLORS } from '../../constants';
+import React from "react";
+import { StyleSheet, type ViewStyle } from "react-native";
+import { GestureDetector, GestureType } from "react-native-gesture-handler";
+import Animated, { type AnimatedStyle } from "react-native-reanimated";
 
 interface PlayheadProps {
-    animatedStyle: any;
+  animatedStyle: AnimatedStyle<ViewStyle>;
+  gesture: GestureType;
 }
 
-export const Playhead: React.FC<PlayheadProps> = ({ animatedStyle }) => {
-    return (
-        <Animated.View style={[styles.playhead, animatedStyle]} />
-    );
+export const Playhead: React.FC<PlayheadProps> = ({ animatedStyle, gesture }) => {
+  return (
+    <GestureDetector gesture={gesture}>
+      <Animated.View
+        style={[styles.hitArea, animatedStyle]}
+        collapsable={false}
+      >
+        <Animated.View style={styles.playhead} />
+      </Animated.View>
+    </GestureDetector>
+  );
 };
 
 const styles = StyleSheet.create({
-    playhead: {
-        position: 'absolute',
-        top: -4,
-        bottom: -4,
-        width: 4,
-        backgroundColor: COLORS.controlActive, // Red/Blue line indicating current time
-        borderRadius: 2,
-        zIndex: 10,
-        // Center the playhead horizontally so its center is exactly at the current time
-        marginLeft: -2,
-    },
+  hitArea: {
+    position: "absolute",
+    top: -6,
+    bottom: -6,
+    width: 24,
+    marginLeft: -12,
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 20,
+  },
+  playhead: {
+    width: 3,
+    height: "110%",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 1.5,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.45,
+    shadowRadius: 2,
+    elevation: 4,
+  },
 });

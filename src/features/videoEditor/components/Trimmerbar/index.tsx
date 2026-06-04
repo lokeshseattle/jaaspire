@@ -1,95 +1,95 @@
-// src/features/videoEditor/components/TrimmerBar/index.tsx
-
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { COLORS, LAYOUT, TRIMMER } from '../../constants';
-import { TrimRange } from '../../types';
-import { Playhead } from './Playhead';
-import { TimeLabels } from './TimeLabels';
-import { TrimHandle } from './TrimHandle';
-import { TrimSelection } from './TrimSelection';
+import React from "react";
+import { StyleSheet, View } from "react-native";
+import Animated from "react-native-reanimated";
+import { LAYOUT, TRIMMER } from "../../constants";
+import { ThumbnailFrame, TrimRange } from "../../types";
+import { Playhead } from "./Playhead";
+import { ThumbnailBackground } from "./ThumbnailBackground";
+import { TimeLabels } from "./TimeLabels";
+import { TrimHandle } from "./TrimHandle";
+import { TrimSelection } from "./TrimSelection";
 
 interface TrimmerBarProps {
-    duration: number;
-    trimRange: TrimRange;
-    leftHandleGesture: any;
-    rightHandleGesture: any;
-    middleGesture: any;
-    leftHandleStyle: any;
-    rightHandleStyle: any;
-    selectionStyle: any;
-    playheadStyle: any;
+  duration: number;
+  trimRange: TrimRange;
+  thumbnails: (ThumbnailFrame | undefined)[];
+  thumbnailsLoading?: boolean;
+  leftHandleGesture: ReturnType<typeof import("react-native-gesture-handler").Gesture.Pan>;
+  rightHandleGesture: ReturnType<typeof import("react-native-gesture-handler").Gesture.Pan>;
+  middleGesture: ReturnType<typeof import("react-native-gesture-handler").Gesture.Pan>;
+  playheadGesture: ReturnType<typeof import("react-native-gesture-handler").Gesture.Pan>;
+  leftHandleStyle: ReturnType<typeof Animated.useAnimatedStyle>;
+  rightHandleStyle: ReturnType<typeof Animated.useAnimatedStyle>;
+  selectionStyle: ReturnType<typeof Animated.useAnimatedStyle>;
+  leftDimStyle: ReturnType<typeof Animated.useAnimatedStyle>;
+  rightDimStyle: ReturnType<typeof Animated.useAnimatedStyle>;
+  playheadStyle: ReturnType<typeof Animated.useAnimatedStyle>;
 }
 
 export const TrimmerBar: React.FC<TrimmerBarProps> = ({
-    duration,
-    trimRange,
-    leftHandleGesture,
-    rightHandleGesture,
-    middleGesture,
-    leftHandleStyle,
-    rightHandleStyle,
-    selectionStyle,
-    playheadStyle,
+  duration,
+  trimRange,
+  thumbnails,
+  thumbnailsLoading = false,
+  leftHandleGesture,
+  rightHandleGesture,
+  middleGesture,
+  playheadGesture,
+  leftHandleStyle,
+  rightHandleStyle,
+  selectionStyle,
+  leftDimStyle,
+  rightDimStyle,
+  playheadStyle,
 }) => {
-    return (
-        <View style={styles.container}>
-            <GestureHandlerRootView style={styles.gestureRoot}>
-                <View style={styles.track}>
-                    {/* Unselected background */}
-                    <View style={styles.unselectedBackground} />
+  return (
+    <View style={styles.container}>
+      <View style={styles.track}>
+        <ThumbnailBackground
+          thumbnails={thumbnails}
+          isLoading={thumbnailsLoading}
+        />
 
-                    {/* Selected region (draggable middle) */}
-                    <TrimSelection gesture={middleGesture} style={selectionStyle} />
+        <TrimSelection gesture={middleGesture} style={selectionStyle} />
 
-                    {/* Left handle */}
-                    <TrimHandle
-                        gesture={leftHandleGesture}
-                        style={leftHandleStyle}
-                        position="left"
-                    />
+        <Animated.View style={leftDimStyle} pointerEvents="none" />
+        <Animated.View style={rightDimStyle} pointerEvents="none" />
 
-                    {/* Right handle */}
-                    <TrimHandle
-                        gesture={rightHandleGesture}
-                        style={rightHandleStyle}
-                        position="right"
-                    />
+        <TrimHandle
+          gesture={leftHandleGesture}
+          style={leftHandleStyle}
+          position="left"
+        />
 
-                    {/* Progress Playhead */}
-                    <Playhead animatedStyle={playheadStyle} />
-                </View>
-            </GestureHandlerRootView>
+        <TrimHandle
+          gesture={rightHandleGesture}
+          style={rightHandleStyle}
+          position="right"
+        />
 
-            {/* Time labels */}
-            <TimeLabels
-                startTime={trimRange.startTime}
-                endTime={trimRange.endTime}
-                duration={duration}
-            />
-        </View>
-    );
+        <Playhead animatedStyle={playheadStyle} gesture={playheadGesture} />
+      </View>
+
+      <TimeLabels
+        startTime={trimRange.startTime}
+        endTime={trimRange.endTime}
+        duration={duration}
+      />
+    </View>
+  );
 };
 
 const styles = StyleSheet.create({
-    container: {
-        paddingHorizontal: LAYOUT.TRIMMER_HORIZONTAL_PADDING,
-        paddingVertical: 10,
-    },
-    gestureRoot: {
-        width: '100%',
-    },
-    track: {
-        width: LAYOUT.TRIMMER_WIDTH,
-        height: TRIMMER.BAR_HEIGHT,
-        backgroundColor: COLORS.unselectedRegion,
-        borderRadius: 6,
-        position: 'relative',
-        overflow: 'hidden',
-    },
-    unselectedBackground: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: COLORS.unselectedRegion,
-    },
+  container: {
+    paddingHorizontal: LAYOUT.TRIMMER_HORIZONTAL_PADDING,
+    paddingVertical: 10,
+  },
+  track: {
+    width: LAYOUT.TRIMMER_WIDTH,
+    height: TRIMMER.BAR_HEIGHT,
+    backgroundColor: "#374151",
+    borderRadius: 6,
+    position: "relative",
+    overflow: "hidden",
+  },
 });

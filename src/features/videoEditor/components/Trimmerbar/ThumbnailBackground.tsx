@@ -1,43 +1,67 @@
-// src/features/videoEditor/components/TrimmerBar/ThumbnailBackground.tsx
-
-import React from 'react';
-import { Image, StyleSheet, View } from 'react-native';
-import { ThumbnailFrame } from '../../types';
+import React from "react";
+import { Image, StyleSheet, View } from "react-native";
+import { ThumbnailFrame } from "../../types";
 
 interface ThumbnailBackgroundProps {
-  thumbnails: ThumbnailFrame[];
-  // Future: Add more props for positioning, sizing, etc.
+  thumbnails: (ThumbnailFrame | undefined)[];
+  placeholderCount?: number;
+  isLoading?: boolean;
 }
 
-// Placeholder component for future thumbnail implementation
 export const ThumbnailBackground: React.FC<ThumbnailBackgroundProps> = ({
   thumbnails,
+  placeholderCount = 10,
+  isLoading = false,
 }) => {
-  if (thumbnails.length === 0) {
-    return null;
-  }
+  const cellCount =
+    thumbnails.length > 0 ? thumbnails.length : placeholderCount;
 
   return (
     <View style={styles.container}>
-      {thumbnails.map((thumb, index) => (
-        <Image
-          key={index}
-          source={{ uri: thumb.uri }}
-          style={styles.thumbnail}
-          resizeMode="cover"
-        />
-      ))}
+      {Array.from({ length: cellCount }).map((_, index) => {
+        const thumb = thumbnails[index];
+        return (
+          <View key={index} style={styles.cell}>
+            {thumb?.uri ? (
+              <Image
+                source={{ uri: thumb.uri }}
+                style={styles.thumbnail}
+                resizeMode="cover"
+              />
+            ) : (
+              <View
+                style={[
+                  styles.placeholder,
+                  isLoading && styles.placeholderLoading,
+                ]}
+              />
+            )}
+          </View>
+        );
+      })}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: "row",
+  },
+  cell: {
     flex: 1,
-    flexDirection: 'row',
+    height: "100%",
+    overflow: "hidden",
   },
   thumbnail: {
+    width: "100%",
+    height: "100%",
+  },
+  placeholder: {
     flex: 1,
-    height: '100%',
+    backgroundColor: "#374151",
+  },
+  placeholderLoading: {
+    opacity: 0.7,
   },
 });

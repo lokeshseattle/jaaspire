@@ -10,8 +10,14 @@ import {
   upsertPendingIapRecord,
 } from "@/src/features/wallet/iap-pending.storage";
 import { processIapPurchase } from "@/src/features/wallet/iap-processor";
-import { fetchAvailablePurchases } from "@/src/features/wallet/iap-sync";
-import { dedupeKeyFromPurchase } from "@/src/features/wallet/iap-subscription.utils";
+import {
+  fetchAvailablePurchases,
+  isAlreadyVerifiedError,
+} from "@/src/features/wallet/iap-sync";
+import {
+  dedupeKeyFromPurchase,
+  isCreatorSubscriptionProductId,
+} from "@/src/features/wallet/iap-subscription.utils";
 import type {
   IapPurchaseIntent,
   PendingIapRecord,
@@ -61,9 +67,18 @@ function createPendingRecord(
   };
 }
 
+type PurchaseProcessingOptions = {
+  /** When false, failures are recorded but no Alert is shown (startup / background recovery). */
+  showAlertOnFailure?: boolean;
+};
+
 type IapProviderProps = {
   children: React.ReactNode;
 };
+
+function isConsumablePurchase(purchase: Purchase): boolean {
+  return !isCreatorSubscriptionProductId(purchase.productId);
+}
 
 export function IapProvider({ children }: IapProviderProps) {
   const queryClient = useQueryClient();
@@ -80,7 +95,11 @@ export function IapProvider({ children }: IapProviderProps) {
     | null
   >(null);
   const processPurchaseRef = useRef<
-    (purchase: Purchase, record: PendingIapRecord | null) => Promise<void>
+    (
+      purchase: Purchase,
+      record: PendingIapRecord | null,
+      options?: PurchaseProcessingOptions,
+    ) => Promise<void>
   >(() => Promise.resolve());
 
   const refreshFailedRecords = useCallback(async () => {
@@ -132,7 +151,13 @@ export function IapProvider({ children }: IapProviderProps) {
   );
 
   const handlePurchaseProcessing = useCallback(
-    async (purchase: Purchase, matchedRecord: PendingIapRecord | null) => {
+    async (
+      purchase: Purchase,
+      matchedRecord: PendingIapRecord | null,
+      options: PurchaseProcessingOptions = {},
+    ) => {
+      const showAlertOnFailure = options.showAlertOnFailure ?? true;
+
       if (purchase.purchaseState === "pending") {
         const record =
           matchedRecord ??
@@ -155,10 +180,12 @@ export function IapProvider({ children }: IapProviderProps) {
       const dedupeKey = dedupeKeyFromPurchase(purchase);
       if (!dedupeKey) {
         setIsProcessing(false);
-        Alert.alert(
-          "Purchase incomplete",
-          "Missing transaction data. Try Restore purchases in Settings.",
-        );
+        if (showAlertOnFailure) {
+          Alert.alert(
+            "Purchase incomplete",
+            "Missing transaction data. Try Restore purchases in Settings.",
+          );
+        }
         return;
       }
 
@@ -203,10 +230,25 @@ export function IapProvider({ children }: IapProviderProps) {
           e instanceof Error
             ? e.message
             : "Could not complete purchase. Try again.";
+
+        if (isAlreadyVerifiedError(message)) {
+          verifiedPurchaseKeysRef.current.add(dedupeKey);
+          await finishTransactionRef.current?.({
+            purchase,
+            isConsumable: isConsumablePurchase(purchase),
+          });
+          if (record) {
+            await completeRecord(record);
+          }
+          return;
+        }
+
         if (record) {
           await markRecordFailed(record, message);
         }
-        Alert.alert("Purchase verification failed", message);
+        if (showAlertOnFailure) {
+          Alert.alert("Purchase verification failed", message);
+        }
         throw e;
       } finally {
         if (verifyingPurchaseKeyRef.current === dedupeKey) {
@@ -241,7 +283,9 @@ export function IapProvider({ children }: IapProviderProps) {
         purchase.productId,
         dedupeKeyFromPurchase(purchase),
       );
-      await processPurchaseRef.current(purchase, record);
+      await processPurchaseRef.current(purchase, record, {
+        showAlertOnFailure: record != null,
+      });
     },
     onPurchaseError: (error) => {
       setIsProcessing(false);
@@ -270,23 +314,10 @@ export function IapProvider({ children }: IapProviderProps) {
     if (!connected || recoveryRanRef.current) return;
     recoveryRanRef.current = true;
 
-    const records = await loadPendingIapRecords();
     const purchases = await fetchAvailablePurchases();
-
-    for (const record of records) {
-      if (record.status !== "failed" || record.retryCount >= 1) continue;
-      const purchase = purchases.find(
-        (item) =>
-          dedupeKeyFromPurchase(item) === record.purchaseDedupeKey ||
-          item.productId === record.storeProductId,
-      );
-      if (!purchase || purchase.purchaseState === "pending") continue;
-      try {
-        await handlePurchaseProcessing(purchase, record);
-      } catch {
-        // Failed records surface in recovery banner.
-      }
-    }
+    const recoveryOptions: PurchaseProcessingOptions = {
+      showAlertOnFailure: false,
+    };
 
     for (const purchase of purchases) {
       const dedupeKey = dedupeKeyFromPurchase(purchase);
@@ -297,13 +328,13 @@ export function IapProvider({ children }: IapProviderProps) {
       if (existing) {
         if (
           existing.status === "awaiting_store" ||
-          existing.status === "pending_approval" ||
-          existing.status === "failed"
+          existing.status === "awaiting_verify" ||
+          existing.status === "pending_approval"
         ) {
           try {
-            await handlePurchaseProcessing(purchase, existing);
+            await handlePurchaseProcessing(purchase, existing, recoveryOptions);
           } catch {
-            // Leave failed record for manual retry.
+            // Failed records surface in recovery banner.
           }
         }
         continue;
@@ -338,7 +369,9 @@ export function IapProvider({ children }: IapProviderProps) {
           );
           if (!purchase) continue;
           try {
-            await handlePurchaseProcessing(purchase, record);
+            await handlePurchaseProcessing(purchase, record, {
+              showAlertOnFailure: false,
+            });
           } catch {
             // Keep banner visible.
           }
@@ -485,7 +518,9 @@ export function IapProvider({ children }: IapProviderProps) {
           );
         }
         await updatePendingIapRecord(record.id, { status: "awaiting_verify" });
-        await handlePurchaseProcessing(purchase, record);
+        await handlePurchaseProcessing(purchase, record, {
+          showAlertOnFailure: false,
+        });
       } catch (e) {
         const message =
           e instanceof Error ? e.message : "Retry failed. Try again later.";

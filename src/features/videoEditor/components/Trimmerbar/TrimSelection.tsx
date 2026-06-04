@@ -34,10 +34,11 @@ const styles = StyleSheet.create({
         borderBottomWidth: 3,
         borderColor: COLORS.handleColor,
         overflow: 'hidden',
+        zIndex: 3,
     },
     solidBackground: {
         flex: 1,
         backgroundColor: COLORS.selectedRegion,
-        opacity: 0.3,
+        opacity: 0.25,
     },
 });

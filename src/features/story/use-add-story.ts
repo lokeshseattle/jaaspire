@@ -22,7 +22,12 @@ export function useAddStory() {
         if (file.type.startsWith("video/")) {
           router.push({
             pathname: "/video-editor",
-            params: { uri: file.uri, fileName: file.name },
+            params: {
+              uri: file.uri,
+              fileName: file.name,
+              width: file.width != null ? String(file.width) : undefined,
+              height: file.height != null ? String(file.height) : undefined,
+            },
           });
         }
       },

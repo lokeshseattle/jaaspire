@@ -924,6 +924,12 @@ export default function MessengerChatScreen() {
     [peerDisplay.username],
   );
 
+  const canAttachMedia = useMemo(() => {
+    if (peerId === 7777) return false;
+    if (peerUsername.toLowerCase() === "jaasi_ai") return false;
+    return true;
+  }, [peerId, peerUsername]);
+
   const { data: peerProfile, refetch: refetchPeerProfile } =
     useGetProfileByUsername(peerUsername);
 
@@ -1368,13 +1374,15 @@ export default function MessengerChatScreen() {
           { paddingBottom: Math.min(insets.bottom, 6) },
         ]}
       >
-        <AttachmentPreview
-          attachment={attachments}
-          onRemove={removeAttachment}
-          isUploading={isUploadingAttachment}
-          theme={theme}
-        />
-        {attachments && !isAiConversation && (
+        {canAttachMedia ? (
+          <AttachmentPreview
+            attachment={attachments}
+            onRemove={removeAttachment}
+            isUploading={isUploadingAttachment}
+            theme={theme}
+          />
+        ) : null}
+        {canAttachMedia && attachments && !isAiConversation && (
           <>
             <Pressable
               onPress={handleToggleLock}
@@ -1462,6 +1470,7 @@ export default function MessengerChatScreen() {
       isMessagingBlocked,
       isBlockedByYou,
       isAiConversation,
+      canAttachMedia,
       isLockEnabled,
       lockPrice,
       selectedLockProduct,
@@ -1634,28 +1643,32 @@ export default function MessengerChatScreen() {
           label: "Load earlier messages",
           isInfiniteScrollEnabled: true,
         }}
-        renderActions={() => (
-          <View style={styles.attachActionsWrap}>
-            <Pressable
-              onPress={handleAttachMedia}
-              disabled={isUploadingAttachment}
-              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-              style={styles.attachButton}
-              accessibilityRole="button"
-              accessibilityLabel="Attach photo or video"
-            >
-              <Ionicons
-                name={attachments ? "refresh-outline" : "add-outline"}
-                size={28}
-                color={
-                  attachments
-                    ? theme.colors.primary
-                    : theme.colors.textSecondary
-                }
-              />
-            </Pressable>
-          </View>
-        )}
+        renderActions={
+          canAttachMedia
+            ? () => (
+                <View style={styles.attachActionsWrap}>
+                  <Pressable
+                    onPress={handleAttachMedia}
+                    disabled={isUploadingAttachment}
+                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                    style={styles.attachButton}
+                    accessibilityRole="button"
+                    accessibilityLabel="Attach photo or video"
+                  >
+                    <Ionicons
+                      name={attachments ? "refresh-outline" : "add-outline"}
+                      size={28}
+                      color={
+                        attachments
+                          ? theme.colors.primary
+                          : theme.colors.textSecondary
+                      }
+                    />
+                  </Pressable>
+                </View>
+              )
+            : undefined
+        }
         messagesContainerStyle={{
           backgroundColor: theme.colors.background,
         }}
@@ -1685,9 +1698,9 @@ export default function MessengerChatScreen() {
             {...props}
             containerStyle={styles.mergedSendWrap}
             isSendButtonAlwaysVisible={Boolean(
-              attachments && processedAttachmentId,
+              canAttachMedia && attachments && processedAttachmentId,
             )}
-            isTextOptional={Boolean(attachments)}
+            isTextOptional={Boolean(canAttachMedia && attachments)}
             sendButtonProps={{
               accessibilityLabel: "Send message",
               style: styles.sendButton,

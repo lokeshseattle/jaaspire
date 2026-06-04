@@ -253,6 +253,8 @@ export default function AppLayout() {
           options={{
             headerShown: false,
             animation: "fade",
+            contentStyle: { backgroundColor: "#000000" },
+            gestureEnabled: false,
           }}
         />
 

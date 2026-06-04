@@ -1,57 +1,46 @@
-// src/features/videoEditor/hooks/useVideoLoop.ts
-
-import { VideoPlayer } from 'expo-video';
-import { useCallback, useEffect, useRef } from 'react';
+import { VideoPlayer } from "expo-video";
+import { useCallback, useEffect, useRef } from "react";
 
 interface UseVideoLoopProps {
-    player: VideoPlayer | null;
-    startTime: number;
-    endTime: number;
-    isPlaying: boolean;
+  player: VideoPlayer | null;
+  startTime: number;
+  endTime: number;
 }
 
 export const useVideoLoop = ({
-    player,
-    startTime,
-    endTime,
-    isPlaying,
+  player,
+  startTime,
+  endTime,
 }: UseVideoLoopProps) => {
-    const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-    const checkAndLoop = useCallback(() => {
-        if (!player) return;
+  const checkAndLoop = useCallback(() => {
+    if (!player) return;
 
-        const currentTime = player.currentTime * 1000; // Convert to ms
+    const currentTimeMs = Math.round(player.currentTime * 1000);
 
-        if (currentTime >= endTime || currentTime < startTime) {
-            player.currentTime = startTime / 1000; // Convert back to seconds
-        }
-    }, [player, startTime, endTime]);
+    // Only loop at the out-point. Do not clamp to startTime here — sub-ms drift
+    // after a seek (e.g. 1656.9ms vs start 1657ms) caused an infinite seek/play storm.
+    if (currentTimeMs >= endTime) {
+      player.currentTime = startTime / 1000;
+      try {
+        player.play();
+      } catch {
+        /* native player */
+      }
+    }
+  }, [player, startTime, endTime]);
 
-    const seekToStart = useCallback(() => {
-        if (player) {
-            player.currentTime = startTime / 1000;
-        }
-    }, [player, startTime]);
+  useEffect(() => {
+    if (!player) return;
 
-    useEffect(() => {
-        if (isPlaying && player) {
-            // Check every 100ms for loop boundary
-            intervalRef.current = setInterval(checkAndLoop, 100);
-        }
+    intervalRef.current = setInterval(checkAndLoop, 100);
 
-        return () => {
-            if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-                intervalRef.current = null;
-            }
-        };
-    }, [isPlaying, checkAndLoop, player]);
-
-    // Seek to start when trim range changes
-    useEffect(() => {
-        seekToStart();
-    }, [startTime]);
-
-    return { seekToStart };
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [checkAndLoop, player]);
 };

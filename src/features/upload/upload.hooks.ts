@@ -177,7 +177,8 @@ export function useVideoUpload(): UseMutationResult<
 interface UploadAndCreateStoryParams {
   fileUri: string;
   fileName: string;
-  trimVideoData: string;
+  trimStart: number;
+  trimEnd: number;
 }
 
 interface UploadAndCreateStoryResponse extends MergeChunksResponse {
@@ -192,9 +193,16 @@ export function useUploadAndCreateStory(): UseMutationResult<
 > {
   return useMutation({
     mutationKey: STORY_UPLOAD_KEY,
-    mutationFn: async ({ fileUri, fileName, trimVideoData }) => {
+    mutationFn: async ({ fileUri, fileName, trimStart, trimEnd }) => {
       // Step 1: Reusable upload
       const mergeResult = await uploadVideoInChunks(fileUri, fileName);
+
+      const trimVideoData = JSON.stringify({
+        [mergeResult.mergedFile]: {
+          start: trimStart,
+          end: trimEnd,
+        },
+      });
 
       // Step 2: Create story
       const { data } = await apiClient.post<CreateStoryResponse>(

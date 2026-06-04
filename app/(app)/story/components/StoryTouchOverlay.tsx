@@ -1,19 +1,19 @@
 import React, { useRef } from "react";
 import {
-  Dimensions,
-  GestureResponderEvent,
-  Pressable,
-  StyleSheet,
-  View,
+    Dimensions,
+    GestureResponderEvent,
+    Pressable,
+    StyleSheet,
+    View,
 } from "react-native";
 
 interface Props {
   onNext: () => void;
   onPrevious: () => void;
-  onPressIn?: () => void;   // pause on hold (left side)
-  onPressOut?: () => void;  // resume
+  onPressIn?: () => void; // pause on hold (left side)
+  onPressOut?: () => void; // resume
   onFastForwardStart?: () => void; // 2x speed (right 30%)
-  onFastForwardEnd?: () => void;   // back to 1x speed
+  onFastForwardEnd?: () => void; // back to 1x speed
 }
 
 const { width } = Dimensions.get("window");

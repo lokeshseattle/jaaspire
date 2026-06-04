@@ -18,7 +18,10 @@ export const TRIMMER = {
     BAR_HEIGHT: 50,
     MIN_TRIM_DURATION_MS: 1000, // 1 second minimum
     MAX_TRIM_DURATION_MS: 60000, // 1 minute maximum
-    HANDLE_HIT_SLOP: 0,
+    /** Expands touch target inward so drags start away from the screen edge. */
+    LEFT_HANDLE_HIT_SLOP: { left: 12, right: 56, top: 28, bottom: 28 },
+    RIGHT_HANDLE_HIT_SLOP: { left: 56, right: 12, top: 28, bottom: 28 },
+    PLAYHEAD_HIT_SLOP: { left: 12, right: 12, top: 20, bottom: 20 },
 };
 
 export const COLORS = {

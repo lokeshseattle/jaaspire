@@ -27,6 +27,8 @@ interface UseVideoTrimmerReturn {
     leftHandleStyle: ReturnType<typeof useAnimatedStyle>;
     rightHandleStyle: ReturnType<typeof useAnimatedStyle>;
     selectionStyle: ReturnType<typeof useAnimatedStyle>;
+    leftDimStyle: ReturnType<typeof useAnimatedStyle>;
+    rightDimStyle: ReturnType<typeof useAnimatedStyle>;
     resetTrim: () => void;
 }
 
@@ -81,10 +83,11 @@ export const useVideoTrimmer = ({
         [positionToTime]
     );
 
-    // Left handle gesture
+    // Left handle gesture — hitSlop extends right into the track, away from the edge back-swipe zone
     const leftHandleGesture = useMemo(
         () =>
             Gesture.Pan()
+                .hitSlop(TRIMMER.LEFT_HANDLE_HIT_SLOP)
                 .onStart(() => {
                     leftStartPosition.value = leftPosition.value;
                 })
@@ -107,6 +110,7 @@ export const useVideoTrimmer = ({
     const rightHandleGesture = useMemo(
         () =>
             Gesture.Pan()
+                .hitSlop(TRIMMER.RIGHT_HANDLE_HIT_SLOP)
                 .onStart(() => {
                     rightStartPosition.value = rightPosition.value;
                 })
@@ -171,6 +175,26 @@ export const useVideoTrimmer = ({
         width: rightPosition.value - leftPosition.value,
     }));
 
+    const leftDimStyle = useAnimatedStyle(() => ({
+        position: "absolute",
+        left: 0,
+        top: 0,
+        bottom: 0,
+        width: leftPosition.value + TRIMMER.HANDLE_WIDTH,
+        backgroundColor: "rgba(0,0,0,0.55)",
+        zIndex: 2,
+    }));
+
+    const rightDimStyle = useAnimatedStyle(() => ({
+        position: "absolute",
+        top: 0,
+        bottom: 0,
+        right: 0,
+        left: rightPosition.value + TRIMMER.HANDLE_WIDTH,
+        backgroundColor: "rgba(0,0,0,0.55)",
+        zIndex: 2,
+    }));
+
     // Reset function - also cap at MAX_DURATION
     const resetTrim = useCallback(() => {
         const cappedEndPosition = Math.min(trackWidth, maxDistancePx);
@@ -189,6 +213,8 @@ export const useVideoTrimmer = ({
         leftHandleStyle,
         rightHandleStyle,
         selectionStyle,
+        leftDimStyle,
+        rightDimStyle,
         resetTrim,
     };
 };

@@ -1,6 +1,12 @@
 import { useEvent } from "expo";
 import { useVideoPlayer, VideoView } from "expo-video";
-import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import React, {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import { ActivityIndicator, Image, StyleSheet, View } from "react-native";
 
 // ─────────────────────────────────────────────────────────────
@@ -25,7 +31,10 @@ export interface StoryMediaHandle {
 // Component
 // ─────────────────────────────────────────────────────────────
 const StoryMedia = forwardRef<StoryMediaHandle, Props>(
-  ({ uri, type, paused, onMediaLoad, onVideoLoad, onTimeUpdate, onVideoEnd }, ref) => {
+  (
+    { uri, type, paused, onMediaLoad, onVideoLoad, onTimeUpdate, onVideoEnd },
+    ref,
+  ) => {
     const [isLoading, setIsLoading] = useState(true);
     const activeUriRef = useRef(uri);
     activeUriRef.current = uri;
@@ -48,18 +57,22 @@ const StoryMedia = forwardRef<StoryMediaHandle, Props>(
     // ─────────────────────────────────────────────────────────
     // Expose seekTo and setPlaybackRate to parent via ref
     // ─────────────────────────────────────────────────────────
-    useImperativeHandle(ref, () => ({
-      seekTo: (seconds: number) => {
-        if (type === "video" && player) {
-          player.currentTime = seconds;
-        }
-      },
-      setPlaybackRate: (rate: number) => {
-        if (type === "video" && player) {
-          player.playbackRate = rate;
-        }
-      },
-    }), [player, type]);
+    useImperativeHandle(
+      ref,
+      () => ({
+        seekTo: (seconds: number) => {
+          if (type === "video" && player) {
+            player.currentTime = seconds;
+          }
+        },
+        setPlaybackRate: (rate: number) => {
+          if (type === "video" && player) {
+            player.playbackRate = rate;
+          }
+        },
+      }),
+      [player, type],
+    );
 
     // ─────────────────────────────────────────────────────────
     // Handle pause/play based on prop
@@ -78,7 +91,7 @@ const StoryMedia = forwardRef<StoryMediaHandle, Props>(
     // Subscribe to player status changes (for duration + buffering)
     // ─────────────────────────────────────────────────────────
     const { status } = useEvent(player, "statusChange", {
-      status: player?.status
+      status: player?.status,
     });
 
     useEffect(() => {
@@ -165,7 +178,7 @@ const StoryMedia = forwardRef<StoryMediaHandle, Props>(
         )}
       </View>
     );
-  }
+  },
 );
 
 StoryMedia.displayName = "StoryMedia";

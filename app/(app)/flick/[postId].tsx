@@ -1,9 +1,7 @@
 import { useCommentsSheet } from "@/hooks/use-comment-sheet";
-import { useShareSheet } from "@/hooks/use-share-sheet";
 import { CommentsBottomSheet } from "@/src/components/comments/CommentsBottomSheet";
 import FlickItem from "@/src/components/flicks/FlickItem";
 import FlickItemErrorBoundary from "@/src/components/flicks/FlickItemErrorBoundary";
-import { SharePostBottomSheet } from "@/src/components/share/SharePostBottomSheet";
 import {
   fetchFlickById,
   useGetFlicksQuery,
@@ -101,7 +99,6 @@ type FlickRowProps = {
   isScreenFocused: boolean;
   nextPostId: number | undefined;
   openComments: (postId: number) => void;
-  openShare: (postId: number) => void;
 };
 
 const FlickRow = memo(function FlickRow({
@@ -114,7 +111,6 @@ const FlickRow = memo(function FlickRow({
   isScreenFocused,
   nextPostId,
   openComments,
-  openShare,
 }: FlickRowProps) {
   const rowStyles = useMemo(() => createFlicksStyles(), []);
 
@@ -156,7 +152,6 @@ const FlickRow = memo(function FlickRow({
           inFlickWindow={inFlickWindow}
           nextPost={nextPost}
           onOpenComments={() => openComments(id)}
-          onOpenShare={() => openShare(id)}
         />
       </FlickItemErrorBoundary>
     </View>
@@ -325,12 +320,6 @@ export default function FeedFlickScreen() {
 
   const { bottomSheetRef, selectedPostId, openComments, onDismiss } =
     useCommentsSheet();
-  const {
-    bottomSheetRef: shareBottomSheetRef,
-    selectedPostId: selectedSharePostId,
-    openShare,
-    onDismiss: onShareDismiss,
-  } = useShareSheet();
 
   const trackPostView = useTrackPostView();
   const trackPostViewRef = useRef(trackPostView);
@@ -497,7 +486,6 @@ export default function FeedFlickScreen() {
           isScreenFocused={isScreenFocused}
           nextPostId={nextPostId}
           openComments={openComments}
-          openShare={openShare}
         />
       );
     },
@@ -509,7 +497,6 @@ export default function FeedFlickScreen() {
       isScreenFocused,
       focusedIndex,
       openComments,
-      openShare,
     ],
   );
 
@@ -612,11 +599,6 @@ export default function FeedFlickScreen() {
           postId={selectedPostId}
           onDismiss={onDismiss}
         />
-        <SharePostBottomSheet
-          bottomSheetRef={shareBottomSheetRef}
-          postId={selectedSharePostId}
-          onDismiss={onShareDismiss}
-        />
       </View>
     );
   }
@@ -633,11 +615,6 @@ export default function FeedFlickScreen() {
           bottomSheetRef={bottomSheetRef}
           postId={selectedPostId}
           onDismiss={onDismiss}
-        />
-        <SharePostBottomSheet
-          bottomSheetRef={shareBottomSheetRef}
-          postId={selectedSharePostId}
-          onDismiss={onShareDismiss}
         />
       </View>
     );
@@ -706,11 +683,6 @@ export default function FeedFlickScreen() {
         bottomSheetRef={bottomSheetRef}
         postId={selectedPostId}
         onDismiss={onDismiss}
-      />
-      <SharePostBottomSheet
-        bottomSheetRef={shareBottomSheetRef}
-        postId={selectedSharePostId}
-        onDismiss={onShareDismiss}
       />
     </View>
   );

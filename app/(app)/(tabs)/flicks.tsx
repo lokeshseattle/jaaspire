@@ -2,7 +2,6 @@ import { CommentsBottomSheet } from "@/src/components/comments/CommentsBottomShe
 import { useFeedController } from "@/src/components/feed/use-feed-controller";
 import FlickItem from "@/src/components/flicks/FlickItem";
 import FlickItemErrorBoundary from "@/src/components/flicks/FlickItemErrorBoundary";
-import { SharePostBottomSheet } from "@/src/components/share/SharePostBottomSheet";
 import {
     type FlicksFeed,
     useGetFlicksQuery,
@@ -96,7 +95,6 @@ type FlickRowProps = {
   isScreenFocused: boolean;
   nextPostId: number | undefined;
   openComments: (postId: number) => void;
-  openShare: (postId: number) => void;
   onDeleteFlick: (postId: number) => void;
 };
 
@@ -110,7 +108,6 @@ const FlickRow = memo(function FlickRow({
   isScreenFocused,
   nextPostId,
   openComments,
-  openShare,
   onDeleteFlick,
 }: FlickRowProps) {
   const rowStyles = useMemo(() => createFlicksStyles(), []);
@@ -153,7 +150,6 @@ const FlickRow = memo(function FlickRow({
           inFlickWindow={inFlickWindow}
           nextPost={nextPost}
           onOpenComments={() => openComments(id)}
-          onOpenShare={() => openShare(id)}
           onDeleteFlick={onDeleteFlick}
         />
       </FlickItemErrorBoundary>
@@ -214,7 +210,6 @@ export default function FlicksScreen() {
     viewabilityConfig: VIEWABILITY_CONFIG,
   });
   const openComments = controller.commentsSheet.openComments;
-  const openShare = controller.shareSheet.openShare;
 
   const postIdsRef = useRef(postIds);
   postIdsRef.current = postIds;
@@ -396,7 +391,6 @@ export default function FlicksScreen() {
           isScreenFocused={isScreenFocused}
           nextPostId={nextPostId}
           openComments={openComments}
-          openShare={openShare}
           onDeleteFlick={handleDeleteFlick}
         />
       );
@@ -409,7 +403,6 @@ export default function FlicksScreen() {
       isScreenFocused,
       focusedIndex,
       openComments,
-      openShare,
       handleDeleteFlick,
     ],
   );
@@ -588,11 +581,6 @@ export default function FlicksScreen() {
           postId={controller.commentsSheet.selectedPostId}
           onDismiss={controller.commentsSheet.onDismiss}
         />
-        <SharePostBottomSheet
-          bottomSheetRef={controller.shareSheet.bottomSheetRef}
-          postId={controller.shareSheet.selectedPostId}
-          onDismiss={controller.shareSheet.onDismiss}
-        />
       </View>
     );
   }
@@ -648,11 +636,6 @@ export default function FlicksScreen() {
         bottomSheetRef={controller.commentsSheet.bottomSheetRef}
         postId={controller.commentsSheet.selectedPostId}
         onDismiss={controller.commentsSheet.onDismiss}
-      />
-      <SharePostBottomSheet
-        bottomSheetRef={controller.shareSheet.bottomSheetRef}
-        postId={controller.shareSheet.selectedPostId}
-        onDismiss={controller.shareSheet.onDismiss}
       />
     </View>
   );

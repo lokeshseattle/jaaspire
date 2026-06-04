@@ -183,7 +183,7 @@ export async function finishProcessedPurchases(
   }
 }
 
-function isAlreadyVerifiedError(message: string): boolean {
+export function isAlreadyVerifiedError(message: string): boolean {
   const normalized = message.toLowerCase();
   return (
     normalized.includes("already") ||

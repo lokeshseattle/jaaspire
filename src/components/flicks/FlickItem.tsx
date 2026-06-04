@@ -1,3 +1,4 @@
+import { WEB_ORIGIN } from "@/src/constants/app-env";
 import {
   safePlayerDuration,
   useManagedVideoPlayer,
@@ -31,8 +32,10 @@ import {
     Dimensions,
     findNodeHandle,
     Modal,
+    Platform,
     Pressable,
     ScrollView,
+    Share,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -81,6 +84,11 @@ const FLICK_CAPTION_RAIL_GUTTER = 64;
 
 type PostMediaViewer = Post["viewer"];
 
+function buildPostUrl(postId: number): string {
+  const base = WEB_ORIGIN.replace(/\/+$/, "");
+  return `${base}/posts/${postId}`;
+}
+
 /** Display mm:ss (or h:mm:ss for long clips). */
 function formatPlaybackTime(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
@@ -107,7 +115,6 @@ export type FlickItemProps = {
   inFlickWindow: boolean;
   nextPost?: Post | null;
   onOpenComments: () => void;
-  onOpenShare: () => void;
   /**
    * When provided (feed context): the parent screen handles scroll-then-delete.
    * When absent (detail route): falls back to the local mutation + router.back().
@@ -125,7 +132,6 @@ function FlickItemInner({
   inFlickWindow,
   nextPost,
   onOpenComments,
-  onOpenShare,
   onDeleteFlick,
 }: FlickItemProps) {
   const insets = useSafeAreaInsets();
@@ -731,6 +737,19 @@ function FlickItemInner({
     });
   }, [me?.id, post.user]);
 
+  // In-app inbox sharing (SharePostBottomSheet) deferred — open native share instead.
+  const handleShare = useCallback(async () => {
+    const url = buildPostUrl(post.id);
+    try {
+      // URL-only payload so "Copy" in the system sheet copies just the link.
+      await Share.share(
+        Platform.OS === "ios" ? { url } : { message: url },
+      );
+    } catch {
+      /* dismissed */
+    }
+  }, [post.id]);
+
   const loveCount = post.reactions.find((r) => r.name === "love")?.count ?? 0;
 
   const [captionExpanded, setCaptionExpanded] = useState(false);
@@ -946,7 +965,7 @@ function FlickItemInner({
           <Pressable
             style={styles.actionGlass}
             onPress={() => {
-              onOpenShare();
+              handleShare();
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             }}
             hitSlop={8}
