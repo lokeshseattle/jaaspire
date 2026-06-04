@@ -182,7 +182,7 @@ export default function AppLayout() {
           name="notifications"
           options={{
             headerShown: true,
-            title: "Alerts",
+            title: "Notifications",
             presentation: "card",
             headerBackButtonDisplayMode: "minimal",
           }}
@@ -326,6 +326,7 @@ export default function AppLayout() {
             headerTitle: "Thumbnail",
             headerBackButtonDisplayMode: "minimal",
             presentation: "fullScreenModal",
+            contentStyle: { backgroundColor: "#0B0F14" },
           }}
         />
 

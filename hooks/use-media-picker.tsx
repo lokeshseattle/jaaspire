@@ -2,7 +2,7 @@
 
 import { useActionSheet } from "@expo/react-native-action-sheet";
 import * as ImagePicker from "expo-image-picker";
-import { Alert } from "react-native";
+import { Alert, Platform } from "react-native";
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; //2gb;
 const MAX_VIDEO_DURATION = 2 * 60 * 60 * 1000; //2hours;
@@ -17,6 +17,8 @@ export interface PickedFile {
   name: string;
   type: string;
   size?: number;
+  width?: number;
+  height?: number;
 }
 
 export interface UseMediaPickerOptions {
@@ -60,6 +62,8 @@ export const useMediaPicker = () => {
       name: fileName,
       type: fileType,
       size: asset.fileSize,
+      width: asset.width > 0 ? asset.width : undefined,
+      height: asset.height > 0 ? asset.height : undefined,
     };
   };
 
@@ -73,30 +77,61 @@ export const useMediaPicker = () => {
       onChange,
     } = options;
 
+    const allowedMediaTypes = mediaTypes ?? ["images"];
+    const wantsBoth =
+      allowedMediaTypes.includes("images") &&
+      allowedMediaTypes.includes("videos");
+    const isAndroidSplitCamera =
+      Platform.OS === "android" && wantsBoth;
+
     const finalAspect = circular ? [1, 1] : aspect;
     /** Native square crop is skipped when circular — app uses profile-crop for pan/zoom. */
     const finalAllowsEditing = circular ? false : allowsEditing;
 
+    const sheetOptions = isAndroidSplitCamera
+      ? ["Take Photo", "Record Video", "Gallery", "Cancel"]
+      : ["Camera", "Gallery", "Cancel"];
+    const cancelButtonIndex = isAndroidSplitCamera ? 3 : 2;
+
     showActionSheetWithOptions(
       {
-        options: ["Camera", "Gallery", "Cancel"],
-        cancelButtonIndex: 2,
+        options: sheetOptions,
+        cancelButtonIndex,
       },
       async (selectedIndex?: number) => {
-        if (selectedIndex === undefined || selectedIndex === 2) return;
+        if (selectedIndex === undefined || selectedIndex === cancelButtonIndex) {
+          return;
+        }
 
-        const type = selectedIndex === 0 ? "camera" : "gallery";
+        let source: "camera" | "gallery";
+        let pickerMediaTypes: MediaType[];
 
-        const hasPermission = await requestPermission(type);
+        if (isAndroidSplitCamera) {
+          if (selectedIndex === 0) {
+            source = "camera";
+            pickerMediaTypes = ["images"];
+          } else if (selectedIndex === 1) {
+            source = "camera";
+            pickerMediaTypes = ["videos"];
+          } else {
+            source = "gallery";
+            pickerMediaTypes = allowedMediaTypes;
+          }
+        } else {
+          source = selectedIndex === 0 ? "camera" : "gallery";
+          pickerMediaTypes = allowedMediaTypes;
+        }
+
+        const hasPermission = await requestPermission(source);
         if (!hasPermission) return;
 
         const pickerFn =
-          type === "camera"
+          source === "camera"
             ? ImagePicker.launchCameraAsync
             : ImagePicker.launchImageLibraryAsync;
 
         const result = await pickerFn({
-          mediaTypes,
+          mediaTypes: pickerMediaTypes,
           allowsEditing: finalAllowsEditing,
           aspect:
             Array.isArray(finalAspect) && finalAspect.length === 2
@@ -105,13 +140,10 @@ export const useMediaPicker = () => {
           quality,
         });
 
-        // console.log("result", result);
-
         if (
           result?.assets?.[0]?.duration &&
           result.assets[0].duration > MAX_VIDEO_DURATION
         ) {
-          // console.log("video duration is too long");
           Alert.alert("Error", "Video duration is too long", [
             { text: "OK", style: "destructive" },
           ]);

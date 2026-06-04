@@ -1,6 +1,8 @@
+import { VideoPreview } from "@/src/features/videoEditor/components/VideoPreview";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { VideoView, useVideoPlayer } from "expo-video";
+import { StatusBar } from "expo-status-bar";
+import { useVideoPlayer } from "expo-video";
 import * as VideoThumbnails from "expo-video-thumbnails";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -24,8 +26,10 @@ import {
   PickedFile,
   useVideoPostDraftStore,
 } from "@/src/features/post-editor/store/useVideoPostDraftStore";
-import { AppTheme } from "@/src/theme";
-import { useTheme } from "@/src/theme/ThemeProvider";
+import { appThemes } from "@/src/theme";
+
+/** Video thumbnail picker always uses dark chrome (matches video editor). */
+const SCREEN_THEME = appThemes.dark;
 
 function formatMs(ms: number) {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -35,8 +39,7 @@ function formatMs(ms: number) {
 }
 
 export default function PostVideoThumbnailScreen() {
-  const { theme } = useTheme();
-  const styles = createStyles(theme);
+  const styles = createStyles();
   const insets = useSafeAreaInsets();
   const { openMediaPicker } = useMediaPicker();
 
@@ -190,9 +193,15 @@ export default function PostVideoThumbnailScreen() {
 
   return (
     <View style={styles.container}>
+      <StatusBar style="light" />
+
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <Pressable onPress={handleCancel} style={styles.headerIconButton}>
-          <Ionicons name="close" size={26} color={theme.colors.textPrimary} />
+          <Ionicons
+            name="close"
+            size={26}
+            color={SCREEN_THEME.colors.textPrimary}
+          />
         </Pressable>
 
         <Text style={styles.headerTitle}>Thumbnail</Text>
@@ -209,18 +218,19 @@ export default function PostVideoThumbnailScreen() {
       <View style={styles.preview}>
         {player ? (
           <>
+            <VideoPreview
+              player={player}
+              videoUri={videoUri ?? undefined}
+              fallbackDimensions={{
+                width: video?.width,
+                height: video?.height,
+              }}
+            />
+
             <Pressable
               style={StyleSheet.absoluteFill}
               onPress={togglePlayPause}
-            >
-              <VideoView
-                player={player}
-                style={StyleSheet.absoluteFill}
-                contentFit="cover"
-                nativeControls={false}
-                allowsPictureInPicture={false}
-              />
-            </Pressable>
+            />
 
             <Pressable
               onPress={togglePlayPause}
@@ -242,19 +252,18 @@ export default function PostVideoThumbnailScreen() {
       <View
         style={[
           styles.panel,
-          { paddingBottom: insets.bottom + theme.spacing.lg },
+          { paddingBottom: insets.bottom + SCREEN_THEME.spacing.lg },
         ]}
       >
         <Text style={styles.sectionTitle}>Pick from video</Text>
 
         {isLoadingDuration || !durationMs ? (
           <View style={styles.loadingRow}>
-            <ActivityIndicator color={theme.colors.primary} />
+            <ActivityIndicator color={SCREEN_THEME.colors.primary} />
             <Text style={styles.loadingText}>Loading video…</Text>
           </View>
         ) : (
           <TimeScrubber
-            theme={theme}
             valueMs={timeMs}
             maxMs={durationMs}
             onChangeMs={setTimeMs}
@@ -296,7 +305,7 @@ export default function PostVideoThumbnailScreen() {
             <Ionicons
               name="checkmark-circle"
               size={18}
-              color={theme.colors.primary}
+              color={SCREEN_THEME.colors.primary}
             />
             <Text style={styles.chosenText}>Thumbnail selected</Text>
           </View>
@@ -307,19 +316,17 @@ export default function PostVideoThumbnailScreen() {
 }
 
 function TimeScrubber({
-  theme,
   valueMs,
   maxMs,
   onChangeMs,
   onScrubStart,
 }: {
-  theme: AppTheme;
   valueMs: number;
   maxMs: number;
   onChangeMs: (ms: number) => void;
   onScrubStart?: () => void;
 }) {
-  const styles = createStyles(theme);
+  const styles = createStyles();
   const clamp = useCallback(
     (v: number, min: number, max: number) => Math.max(min, Math.min(max, v)),
     [],
@@ -392,11 +399,12 @@ function TimeScrubber({
   );
 }
 
-const createStyles = (theme: AppTheme) =>
-  StyleSheet.create({
+const createStyles = () => {
+  const theme = SCREEN_THEME;
+  return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: "#000",
+      backgroundColor: theme.colors.background,
     },
     center: {
       justifyContent: "center",
@@ -414,9 +422,9 @@ const createStyles = (theme: AppTheme) =>
       justifyContent: "space-between",
       paddingHorizontal: theme.spacing.md,
       paddingBottom: theme.spacing.md,
-      backgroundColor: "rgba(0,0,0,0.75)",
+      backgroundColor: theme.colors.surface,
       borderBottomWidth: 1,
-      borderBottomColor: "rgba(255,255,255,0.08)",
+      borderBottomColor: theme.colors.border,
       zIndex: 10,
     },
     headerIconButton: {
@@ -443,10 +451,11 @@ const createStyles = (theme: AppTheme) =>
     },
     preview: {
       flex: 1,
-      backgroundColor: "#000",
+      minHeight: 280,
+      backgroundColor: "#000000",
     },
     previewFallback: {
-      backgroundColor: "#000",
+      backgroundColor: "#000000",
     },
     playPauseButton: {
       position: "absolute",
@@ -462,9 +471,9 @@ const createStyles = (theme: AppTheme) =>
       borderColor: "rgba(255,255,255,0.14)",
     },
     panel: {
-      backgroundColor: "rgba(20,20,20,0.95)",
+      backgroundColor: theme.colors.surface,
       borderTopWidth: 1,
-      borderTopColor: "rgba(255,255,255,0.08)",
+      borderTopColor: theme.colors.border,
       padding: theme.spacing.lg,
       gap: theme.spacing.md,
     },
@@ -548,7 +557,7 @@ const createStyles = (theme: AppTheme) =>
     scrubberTrack: {
       height: 12,
       borderRadius: theme.radius.pill,
-      backgroundColor: "rgba(255,255,255,0.14)",
+      backgroundColor: theme.colors.border,
       justifyContent: "center",
       overflow: "visible",
     },
@@ -572,3 +581,4 @@ const createStyles = (theme: AppTheme) =>
       borderColor: theme.colors.primary,
     },
   });
+};

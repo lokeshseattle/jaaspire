@@ -194,11 +194,15 @@ const VideoEditorContent: React.FC<VideoEditorContentProps> = ({
 
                 {/* Video Preview */}
                 <View style={styles.previewContainer}>
-                    <View style={styles.header}>
-                        <Pressable onPress={handleCancel}><Text style={styles.headerTitle}>Back</Text></Pressable>
-                        <Pressable onPress={handleConfirm}><Text style={styles.headerTitle}>Done</Text></Pressable>
+                    <VideoPreview player={player} videoUri={videoUri} />
+                    <View style={styles.headerOverlay} pointerEvents="box-none">
+                        <Pressable onPress={handleCancel}>
+                            <Text style={styles.headerTitle}>Back</Text>
+                        </Pressable>
+                        <Pressable onPress={handleConfirm}>
+                            <Text style={styles.headerTitle}>Done</Text>
+                        </Pressable>
                     </View>
-                    <VideoPreview player={player} />
                 </View>
 
                 {/* Trimmer Bar */}
@@ -349,7 +353,7 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: "black",
     },
-    header: {
+    headerOverlay: {
         position: "absolute",
         top: 10,
         left: 0,
@@ -358,7 +362,6 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         justifyContent: "space-between",
         paddingHorizontal: 16,
-        // paddingTop: 50, // adjust for status bar / notch
         paddingBottom: 12,
     },
     headerTitle: {
@@ -370,7 +373,7 @@ const styles = StyleSheet.create({
     previewContainer: {
         backgroundColor: COLORS.previewBackground,
         flex: 1,
-        borderRadius: 10,
+        overflow: 'hidden',
     },
     trimmerContainer: {
         marginTop: 16,

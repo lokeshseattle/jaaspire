@@ -5,6 +5,8 @@ export interface PickedFile {
   name: string;
   type: string;
   size?: number;
+  width?: number;
+  height?: number;
 }
 
 type VideoPostDraftStore = {

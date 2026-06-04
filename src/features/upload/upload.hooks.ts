@@ -15,6 +15,12 @@ import { File, Paths } from "expo-file-system/next";
 
 const DEFAULT_PREVIEW_DURATION = 6;
 
+/** Axios on Android must not stringify FormData; match working image/thumbnail uploads. */
+const multipartFormConfig = {
+  headers: { "Content-Type": "multipart/form-data" },
+  transformRequest: [(data: unknown) => data],
+};
+
 const CHUNK_SIZE = 4 * 1024 * 1024; // 5MB per chunk
 
 // Dynamic chunk size for post video uploads (2 MB–30 MB)
@@ -128,7 +134,7 @@ export async function uploadVideoInChunks(
       formData.append("videoUID", uploadId);
       formData.append("fileName", fileName);
 
-      await apiClient.post("/stories/upload-chunk", formData);
+      await apiClient.post("/stories/upload-chunk", formData, multipartFormConfig);
 
       tempFile.delete();
     }
@@ -349,9 +355,7 @@ export async function uploadThumbnailPostInChunks(
       formData.append("file_id", uploadId);
       formData.append("original_name", fileName);
 
-      await apiClient.post("/attachments/upload-chunk", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      await apiClient.post("/attachments/upload-chunk", formData, multipartFormConfig);
 
       tempFile.delete();
     }
@@ -400,6 +404,7 @@ async function processUploadedAttachment(params: {
   const { data } = await apiClient.post<ProcessUploadResponse>(
     "/attachments/process-upload",
     formData,
+    multipartFormConfig,
   );
   return data;
 }
@@ -426,7 +431,7 @@ export async function uploadImageAttachment(
   const { data } = await apiClient.post<UploadImageAttachmentResponse>(
     "/attachments/upload",
     formData,
-    { headers: { "Content-Type": "multipart/form-data" } },
+    multipartFormConfig,
   );
   return data;
 }
@@ -665,12 +670,6 @@ export async function uploadVideoPostInChunks(
   fileName: string,
   onProgress?: (progress: number) => void,
 ): Promise<UploadPostChunkResponse> {
-  if (__DEV__) {
-    // console.log("[Upload] Starting chunked upload");
-    // console.log("[Upload] File URI:", fileUri);
-    // console.log("[Upload] File Name:", fileName);
-  }
-
   const file = new File(fileUri);
   const totalSize = file.size;
   const chunkSize = getDynamicChunkSize(totalSize);
@@ -721,7 +720,12 @@ export async function uploadVideoPostInChunks(
 
       try {
         await retryWithBackoff(
-          () => apiClient.post("/attachments/upload-chunk", formData),
+          () =>
+            apiClient.post(
+              "/attachments/upload-chunk",
+              formData,
+              multipartFormConfig,
+            ),
           MAX_RETRIES,
           RETRY_DELAY_MS,
           `chunk ${i}/${totalChunks}`,

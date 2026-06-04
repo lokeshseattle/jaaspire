@@ -10,7 +10,6 @@ import {
   RegisterOptions,
 } from "react-hook-form";
 import {
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -20,7 +19,6 @@ import {
 } from "react-native";
 import DatePickerSheet from "./datepicker-sheet";
 import AndroidSelectDialog from "./android-select-dialog";
-import SelectPickerSheet from "./selectpicker-sheet";
 
 const ERROR_COLOR = "#DC2626";
 
@@ -151,39 +149,6 @@ function FormInput<T extends FieldValues>(props: FormInputProps<T>) {
               (opt) => opt.value === value
             );
 
-            if (Platform.OS === "android") {
-              return (
-                <>
-                  <Pressable
-                    onPress={() => setIsPickerOpen(true)}
-                    style={[
-                      styles.inputContainer,
-                      styles.pickerTrigger,
-                      hasError && styles.errorBorder,
-                    ]}
-                  >
-                    {Left && <View style={styles.iconWrapper}>{Left}</View>}
-                    <Text
-                      style={[
-                        styles.pickerText,
-                        !value && styles.placeholderText,
-                      ]}
-                    >
-                      {selectedOption?.label || placeholder || "Select option"}
-                    </Text>
-                  </Pressable>
-                  <AndroidSelectDialog
-                    visible={isPickerOpen}
-                    value={value}
-                    options={selectProps.options}
-                    title={label}
-                    onChange={onChange}
-                    onClose={() => setIsPickerOpen(false)}
-                  />
-                </>
-              );
-            }
-
             return (
               <>
                 <Pressable
@@ -204,15 +169,12 @@ function FormInput<T extends FieldValues>(props: FormInputProps<T>) {
                     {selectedOption?.label || placeholder || "Select option"}
                   </Text>
                 </Pressable>
-
-                <SelectPickerSheet
+                <AndroidSelectDialog
                   visible={isPickerOpen}
                   value={value}
                   options={selectProps.options}
-                  onChange={(selected) => {
-                    onChange(selected);
-                    setIsPickerOpen(false);
-                  }}
+                  title={label}
+                  onChange={onChange}
                   onClose={() => setIsPickerOpen(false)}
                 />
               </>

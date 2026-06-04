@@ -4,12 +4,12 @@ import FlickItem from "@/src/components/flicks/FlickItem";
 import FlickItemErrorBoundary from "@/src/components/flicks/FlickItemErrorBoundary";
 import { SharePostBottomSheet } from "@/src/components/share/SharePostBottomSheet";
 import {
-  type FlicksFeed,
-  useGetFlicksQuery,
+    type FlicksFeed,
+    useGetFlicksQuery,
 } from "@/src/features/flicks/flicks.hooks";
 import {
-  useDeletePostMutation,
-  useTrackPostView,
+    useDeletePostMutation,
+    useTrackPostView,
 } from "@/src/features/post/post.hooks";
 import { usePostStore } from "@/src/features/post/post.store";
 import { canViewPostMedia } from "@/src/features/post/post.utils";
@@ -21,30 +21,30 @@ import { getMediaType } from "@/src/utils/helpers";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useFocusEffect, useNavigation } from "expo-router";
 import {
-  memo,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
+    memo,
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
 } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  FlatList,
-  type LayoutChangeEvent,
-  ListRenderItemInfo,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-  PixelRatio,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  ViewabilityConfig,
-  ViewToken,
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    FlatList,
+    type LayoutChangeEvent,
+    ListRenderItemInfo,
+    type NativeScrollEvent,
+    type NativeSyntheticEvent,
+    PixelRatio,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
+    ViewabilityConfig,
+    ViewToken,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useShallow } from "zustand/react/shallow";

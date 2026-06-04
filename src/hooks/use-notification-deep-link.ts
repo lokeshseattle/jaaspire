@@ -2,14 +2,16 @@ import {
   LINKING_SAFE_FALLBACK_PATH,
   rewriteMarketingPathToRouterPath,
 } from "@/src/constants/linking.config";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
 import { type Href, router } from "expo-router";
 import { useEffect, useRef } from "react";
 
 const NAVIGATION_DELAY_MS = 100;
-const LOG_PREFIX = "[NotificationDeepLink]";
+const LAST_HANDLED_NOTIFICATION_ID_KEY =
+  "notification_deep_link_last_handled_id";
 
-/** In-app notifications / alerts screen (app/(app)/notifications.tsx). */
+/** In-app notifications screen (app/(app)/notifications.tsx). */
 export const NOTIFICATIONS_ALERT_ROUTE = "/notifications" as const;
 
 type NotificationData = Record<string, unknown>;
@@ -55,18 +57,71 @@ function isMessageNotification(data: NotificationData | undefined): boolean {
 function resolveRouterPath(rawUrl: string): string {
   try {
     return rewriteMarketingPathToRouterPath(rawUrl);
-  } catch (error) {
-    if (__DEV__) {
-      // console.warn(LOG_PREFIX, "rewriteMarketingPathToRouterPath threw", error);
-    }
+  } catch {
     return LINKING_SAFE_FALLBACK_PATH;
   }
+}
+
+/**
+ * Stable id for deduping notification taps across sessions.
+ * Android may return a stale getLastNotificationResponse with a null identifier.
+ */
+function getNotificationDedupKey(
+  response: Notifications.NotificationResponse,
+): string | null {
+  const requestId = response.notification.request.identifier?.trim();
+  if (requestId) return requestId;
+
+  const data = getNotificationData(response);
+  const dataId = data?.notification_id ?? data?.id;
+  if (typeof dataId === "string" && dataId.trim()) return dataId.trim();
+  if (typeof dataId === "number") return String(dataId);
+
+  const trigger = response.notification.request.trigger;
+  if (trigger && typeof trigger === "object" && "remoteMessage" in trigger) {
+    const messageId = (
+      trigger as { remoteMessage?: { messageId?: string | null } }
+    ).remoteMessage?.messageId;
+    if (typeof messageId === "string" && messageId.trim()) {
+      return messageId.trim();
+    }
+  }
+
+  const date = response.notification.date;
+  if (date > 0) return `date:${date}`;
+
+  return null;
+}
+
+/** Ignore Android ghost responses left in getLastNotificationResponseAsync. */
+function isActionableNotificationResponse(
+  response: Notifications.NotificationResponse,
+): boolean {
+  return getNotificationDedupKey(response) != null;
 }
 
 type UseNotificationDeepLinkOptions = {
   /** When false, skips cold-start check and tap listener (e.g. while auth is restoring). */
   enabled?: boolean;
 };
+
+async function markNotificationResponseHandled(
+  identifier: string,
+): Promise<void> {
+  try {
+    await AsyncStorage.setItem(LAST_HANDLED_NOTIFICATION_ID_KEY, identifier);
+  } catch {
+    /* non-fatal */
+  }
+}
+
+async function clearStoredNotificationResponse(): Promise<void> {
+  try {
+    await Notifications.clearLastNotificationResponseAsync();
+  } catch {
+    /* non-fatal */
+  }
+}
 
 /**
  * Handles notification taps: messages use `data.url` + {@link rewriteMarketingPathToRouterPath};
@@ -86,77 +141,61 @@ export function useNotificationDeepLink(
     const navigateFromResponse = (
       response: Notifications.NotificationResponse,
     ) => {
-      const notificationId = response.notification.request.identifier;
-      if (handledNotificationIdsRef.current.has(notificationId)) return;
-      handledNotificationIdsRef.current.add(notificationId);
+      const dedupKey = getNotificationDedupKey(response);
+      if (!dedupKey) return;
 
-      const data = getNotificationData(response);
-      const isMessage = isMessageNotification(data);
+      if (handledNotificationIdsRef.current.has(dedupKey)) return;
+      handledNotificationIdsRef.current.add(dedupKey);
 
-      let path: string;
-      if (isMessage) {
-        const rawUrl = getNotificationDeepLinkUrl(data);
-        if (!rawUrl) {
-          if (__DEV__) {
-            // console.warn(LOG_PREFIX, "Message notification missing data.url", {
-              // data,
-            // });
+      void (async () => {
+        const storedId = await AsyncStorage.getItem(
+          LAST_HANDLED_NOTIFICATION_ID_KEY,
+        ).catch(() => null);
+        if (storedId === dedupKey) return;
+
+        await markNotificationResponseHandled(dedupKey);
+        await clearStoredNotificationResponse();
+
+        const data = getNotificationData(response);
+        const isMessage = isMessageNotification(data);
+
+        let path: string;
+        if (isMessage) {
+          const rawUrl = getNotificationDeepLinkUrl(data);
+          if (!rawUrl) {
+            path = NOTIFICATIONS_ALERT_ROUTE;
+          } else {
+            path = resolveRouterPath(rawUrl);
           }
-          path = NOTIFICATIONS_ALERT_ROUTE;
         } else {
-          path = resolveRouterPath(rawUrl);
-          if (path === LINKING_SAFE_FALLBACK_PATH) {
-            if (__DEV__) {
-              // console.warn(
-                // LOG_PREFIX,
-                // "Unrecognized message URL; routing to fallback",
-                // { rawUrl, path },
-              // );
+          path = NOTIFICATIONS_ALERT_ROUTE;
+        }
+
+        setTimeout(() => {
+          try {
+            router.push(path as Href);
+          } catch {
+            try {
+              router.push(LINKING_SAFE_FALLBACK_PATH);
+            } catch {
+              /* navigation tree not ready — avoid crashing */
             }
           }
-        }
-      } else {
-        path = NOTIFICATIONS_ALERT_ROUTE;
-      }
-
-      if (__DEV__) {
-        // console.log(LOG_PREFIX, "Navigating", {
-          // isMessage,
-          // path,
-          // notification_type: data?.notification_type,
-        // });
-      }
-
-      setTimeout(() => {
-        try {
-          router.push(path as Href);
-        } catch (error) {
-          if (__DEV__) {
-            // console.warn(LOG_PREFIX, "router.push failed", { path, error });
-          }
-          try {
-            router.push(LINKING_SAFE_FALLBACK_PATH);
-          } catch {
-            /* navigation tree not ready — avoid crashing */
-          }
-        }
-      }, NAVIGATION_DELAY_MS);
+        }, NAVIGATION_DELAY_MS);
+      })();
     };
 
     if (!coldStartCheckedRef.current) {
       coldStartCheckedRef.current = true;
       void Notifications.getLastNotificationResponseAsync()
-        .then((response) => {
-          if (response) navigateFromResponse(response);
+        .then(async (response) => {
+          await clearStoredNotificationResponse();
+          if (!response) return;
+          if (!isActionableNotificationResponse(response)) return;
+          navigateFromResponse(response);
         })
-        .catch((error) => {
-          if (__DEV__) {
-            // console.warn(
-              // LOG_PREFIX,
-              // "getLastNotificationResponseAsync failed",
-              // error,
-            // );
-          }
+        .catch(() => {
+          /* getLastNotificationResponseAsync unavailable or failed */
         });
     }
 

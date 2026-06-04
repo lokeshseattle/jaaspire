@@ -8,6 +8,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 export default function Index() {
   const { isAuthenticated, isLoading } = useAuth();
   const { theme } = useTheme();
+  const destination = isAuthenticated ? "/(app)/(tabs)" : "/(auth)/login";
 
   useEffect(() => {
     if (isLoading) return;
@@ -29,7 +30,6 @@ export default function Index() {
     );
   }
 
-  const destination = isAuthenticated ? "/(app)/(tabs)" : "/(auth)/login";
   return <Redirect href={destination} />;
 }
 

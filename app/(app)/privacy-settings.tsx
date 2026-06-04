@@ -1,6 +1,5 @@
 import { useToast } from "@/src/components/toast/ToastProvider";
 import AndroidSelectDialog from "@/src/components/ui/android-select-dialog";
-import SelectPickerSheet from "@/src/components/ui/selectpicker-sheet";
 import {
     useGetProfile,
     useSetEnable2faFlagMutation,
@@ -373,24 +372,14 @@ export default function PrivacySettingsScreen() {
         </View>
       </ScrollView>
 
-      {Platform.OS === "ios" ? (
-        <SelectPickerSheet
-          visible={pricePickerOpen}
-          value={selectedTierKey}
-          options={subscriptionOptions}
-          onChange={setSelectedTierKey}
-          onClose={() => setPricePickerOpen(false)}
-        />
-      ) : (
-        <AndroidSelectDialog
-          visible={pricePickerOpen}
-          value={selectedTierKey}
-          options={subscriptionOptions}
-          title="Monthly subscription tier"
-          onChange={setSelectedTierKey}
-          onClose={() => setPricePickerOpen(false)}
-        />
-      )}
+      <AndroidSelectDialog
+        visible={pricePickerOpen}
+        value={selectedTierKey}
+        options={subscriptionOptions}
+        title="Monthly subscription tier"
+        onChange={setSelectedTierKey}
+        onClose={() => setPricePickerOpen(false)}
+      />
 
       <View
         style={[

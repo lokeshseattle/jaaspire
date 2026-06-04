@@ -1,10 +1,24 @@
+import { WEB_ORIGIN } from "@/src/constants/app-env";
 import { usePost } from "@/src/context/post-context";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useMemo, useRef, useState } from "react";
-import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useCallback, useMemo, useRef, useState } from "react";
+import {
+  Animated,
+  Platform,
+  Pressable,
+  Share,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import RichText from "../../ui/rich-text";
+
+function buildPostUrl(postId: number): string {
+  const base = WEB_ORIGIN.replace(/\/+$/, "");
+  return `${base}/posts/${postId}`;
+}
 
 const LIKED_COLOR = "#ff3040";
 const ACTION_ICON_SIZE = 24;
@@ -111,9 +125,23 @@ const Tip = ({ theme }: { theme: AppTheme }) => {
 };
 
 const ShareButton = ({ theme }: { theme: AppTheme }) => {
-  const { onPressShare } = usePost();
+  const { post } = usePost();
+
+  // In-app inbox sharing (SharePostBottomSheet) deferred — open native share instead.
+  const handleShare = useCallback(async () => {
+    const url = buildPostUrl(post.id);
+    try {
+      // URL-only payload so "Copy" in the system sheet copies just the link.
+      await Share.share(
+        Platform.OS === "ios" ? { url } : { message: url },
+      );
+    } catch {
+      /* dismissed */
+    }
+  }, [post.id]);
+
   return (
-    <Pressable onPress={onPressShare}>
+    <Pressable onPress={handleShare}>
       <Ionicons
         name="paper-plane-outline"
         size={ACTION_ICON_SIZE}

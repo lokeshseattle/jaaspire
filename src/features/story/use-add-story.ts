@@ -15,7 +15,7 @@ export function useAddStory() {
         if (file.type.startsWith("image/")) {
           router.push({
             pathname: "/story-editor",
-            params: { uri: file.uri },
+            params: { uri: file.uri, mediaType: "image" },
           });
         }
 

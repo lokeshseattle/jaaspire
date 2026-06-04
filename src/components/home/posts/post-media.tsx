@@ -926,7 +926,7 @@ const PostMediaImage = memo(function PostMediaImage({
   onRequestPurchase,
 }: Props) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  const minMediaHeight = screenHeight * 0.65;
+  const minMediaHeight = screenHeight * 0.55;
 
   const [sourceSize, setSourceSize] = useState<{
     width: number;

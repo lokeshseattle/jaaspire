@@ -1,6 +1,6 @@
 import { useEvent } from "expo";
 import { useVideoPlayer, VideoView } from "expo-video";
-import React, { forwardRef, useEffect, useImperativeHandle, useState } from "react";
+import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { ActivityIndicator, Image, StyleSheet, View } from "react-native";
 
 // ─────────────────────────────────────────────────────────────
@@ -10,6 +10,7 @@ interface Props {
   uri: string;
   type: "image" | "video";
   paused: boolean;
+  onMediaLoad?: () => void;
   onVideoLoad?: (duration: number) => void;
   onTimeUpdate?: (currentTime: number) => void;
   onVideoEnd?: () => void;
@@ -24,8 +25,16 @@ export interface StoryMediaHandle {
 // Component
 // ─────────────────────────────────────────────────────────────
 const StoryMedia = forwardRef<StoryMediaHandle, Props>(
-  ({ uri, type, paused, onVideoLoad, onTimeUpdate, onVideoEnd }, ref) => {
-    const [isBuffering, setIsBuffering] = useState(type === "video");
+  ({ uri, type, paused, onMediaLoad, onVideoLoad, onTimeUpdate, onVideoEnd }, ref) => {
+    const [isLoading, setIsLoading] = useState(true);
+    const activeUriRef = useRef(uri);
+    activeUriRef.current = uri;
+
+    const markMediaLoaded = (loadedUri: string) => {
+      if (activeUriRef.current !== loadedUri) return;
+      setIsLoading(false);
+      onMediaLoad?.();
+    };
 
     // Always call useVideoPlayer (hooks rule) - pass null for images
     const player = useVideoPlayer(type === "video" ? uri : null, (p) => {
@@ -76,20 +85,20 @@ const StoryMedia = forwardRef<StoryMediaHandle, Props>(
       if (type !== "video") return;
 
       if (status === "readyToPlay") {
-        setIsBuffering(false);
+        if (activeUriRef.current !== uri) return;
+        setIsLoading(false);
         if (player?.duration && player.duration > 0) {
           onVideoLoad?.(player.duration);
         }
+        onMediaLoad?.();
       } else if (status === "loading") {
-        setIsBuffering(true);
+        setIsLoading(true);
       }
-    }, [status, player?.duration, type, onVideoLoad]);
+    }, [status, player?.duration, type, uri, onVideoLoad, onMediaLoad]);
 
-    // Reset buffering state when uri changes
+    // Reset loading state when uri changes
     useEffect(() => {
-      if (type === "video") {
-        setIsBuffering(true);
-      }
+      setIsLoading(true);
     }, [uri, type]);
 
     // ─────────────────────────────────────────────────────────
@@ -144,11 +153,12 @@ const StoryMedia = forwardRef<StoryMediaHandle, Props>(
             source={{ uri }}
             style={styles.media}
             resizeMode="contain"
+            onLoad={() => markMediaLoaded(uri)}
+            onError={() => markMediaLoaded(uri)}
           />
         )}
 
-        {/* Buffering spinner — shown only while video is loading */}
-        {isBuffering && type === "video" && (
+        {isLoading && (
           <View style={styles.loaderOverlay}>
             <ActivityIndicator size="large" color="white" />
           </View>

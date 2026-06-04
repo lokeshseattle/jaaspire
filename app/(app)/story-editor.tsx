@@ -2,9 +2,17 @@ import StoryEditor from "@/src/components/home/story/story-editor/StoryEditor";
 import { useLocalSearchParams } from "expo-router";
 
 export default function StoryEditorScreen() {
-  const { uri } = useLocalSearchParams<{ uri: string }>();
+  const { uri, mediaType } = useLocalSearchParams<{
+    uri: string;
+    mediaType?: "image" | "video";
+  }>();
 
   if (!uri) return null;
 
-  return <StoryEditor imageUri={uri} />;
+  return (
+    <StoryEditor
+      mediaUri={uri}
+      mediaType={mediaType === "video" ? "video" : "image"}
+    />
+  );
 }

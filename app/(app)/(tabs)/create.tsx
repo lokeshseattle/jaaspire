@@ -37,8 +37,6 @@ import JaasiStar from "@/assets/svg/JaasiStar";
 import { PickedFile, useMediaPicker } from "@/hooks/use-media-picker";
 import MentionSuggestionsList from "@/src/components/mentions/MentionSuggestionsList";
 import { useToast } from "@/src/components/toast/ToastProvider";
-import AndroidSelectDialog from "@/src/components/ui/android-select-dialog";
-import SelectPickerSheet from "@/src/components/ui/selectpicker-sheet";
 import { useImageEditStore } from "@/src/features/post-editor/store/useImageEditorStore";
 import { useVideoPostDraftStore } from "@/src/features/post-editor/store/useVideoPostDraftStore";
 import { useGetProfile } from "@/src/features/profile/profile.hooks";
@@ -46,6 +44,7 @@ import {
   useUploadAndCreatePost,
   useUploadImageAndCreatePost,
 } from "@/src/features/upload/upload.hooks";
+import { useIap } from "@/src/features/wallet/iap.context";
 import { storeProductIdFromIapSku } from "@/src/features/wallet/iap.constants";
 import { useIapSkus } from "@/src/features/wallet/wallet.hooks";
 import { queryClient } from "@/src/lib/query-client";
@@ -63,6 +62,11 @@ function getCaptionForPost(htmlOrCaption: string): string {
   const trimmed = (htmlOrCaption ?? "").trim();
   const match = trimmed.match(/^<html[^>]*>([\s\S]*?)<\/html>$/i);
   return match ? match[1].trim() : trimmed;
+}
+
+function formatStars(amount: number): string {
+  if (Number.isInteger(amount)) return amount.toLocaleString();
+  return amount.toFixed(2);
 }
 
 export default function CreateScreen() {
@@ -104,12 +108,17 @@ function CreateContent() {
     isError: iapSkusError,
     refetch: refetchIapSkus,
   } = useIapSkus("consumable");
+  const {
+    connected: isIapConnected,
+    fetchProducts,
+    products,
+  } = useIap();
 
   const [postType, setPostType] = useState<PostType>("regular");
   const [caption, setCaption] = useState("");
   const [html, setHtml] = useState("");
   const [selectedPriceSku, setSelectedPriceSku] = useState("");
-  const [pricePickerOpen, setPricePickerOpen] = useState(false);
+  const [priceExpanded, setPriceExpanded] = useState(false);
   const [selectedImage, setSelectedImage] = useState<PickedFile | null>(null);
   const [stylesState, setStylesState] = useState<OnChangeStateEvent | null>(
     null,
@@ -268,14 +277,29 @@ function CreateContent() {
     [selectedPriceSku, sortedIapProducts],
   );
 
-  const priceOptions = useMemo(
-    () =>
-      sortedIapProducts.map((product) => ({
-        label: `${product.stars}`,
-        value: product.product_id,
-      })),
+  const priceStoreProductIds = useMemo(
+    () => sortedIapProducts.map((p) => p.product_id),
     [sortedIapProducts],
   );
+
+  useEffect(() => {
+    if (postType !== "paid" || !isIapConnected || priceStoreProductIds.length === 0)
+      return;
+    void fetchProducts({
+      skus: priceStoreProductIds,
+      type: "in-app",
+    });
+  }, [postType, isIapConnected, fetchProducts, priceStoreProductIds]);
+
+  const storeDisplayPriceByProductId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const product of products) {
+      if (product.displayPrice) {
+        map.set(product.id, product.displayPrice);
+      }
+    }
+    return map;
+  }, [products]);
 
   const handleChangeText = (e: NativeSyntheticEvent<OnChangeTextEvent>) => {
     setCaption(e.nativeEvent.value);
@@ -301,6 +325,12 @@ function CreateContent() {
       setSelectedPriceSku(first.product_id);
     }
   }, [postType, selectedPriceSku, sortedIapProducts]);
+
+  useEffect(() => {
+    if (postType !== "paid") {
+      setPriceExpanded(false);
+    }
+  }, [postType]);
 
   const handlePostPress = useCallback(async () => {
     try {
@@ -547,7 +577,10 @@ function CreateContent() {
                 (type) => (
                   <Pressable
                     key={type}
-                    onPress={() => setPostType(type)}
+                    onPress={() => {
+                      setPostType(type);
+                      if (type !== "paid") setPriceExpanded(false);
+                    }}
                     style={[
                       styles.typeOption,
                       postType === type && styles.typeOptionSelected,
@@ -572,42 +605,126 @@ function CreateContent() {
               <Text style={styles.sectionTitle}>Price</Text>
               <Pressable
                 onPress={() => {
-                  setPricePickerOpen(true);
-                  void refetchIapSkus();
+                  if (iapSkusError) {
+                    void refetchIapSkus();
+                    return;
+                  }
+                  setPriceExpanded((expanded) => !expanded);
                 }}
                 style={({ pressed }) => [
                   styles.inputWrapper,
                   pressed && styles.pressed,
                 ]}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: priceExpanded }}
               >
                 <View style={styles.inputValueRow}>
                   <JaasiStar
                     width={selectedPriceProduct ? 18 : 16}
                     height={selectedPriceProduct ? 18 : 16}
                   />
-                  <Text
-                    style={[
-                      styles.input,
-                      !selectedPriceProduct && styles.inputPlaceholder,
-                    ]}
-                  >
-                    {selectedPriceProduct
-                      ? `${selectedPriceProduct.stars}`
-                      : "Select"}
-                  </Text>
+                  {iapSkusPending || iapSkusFetching ? (
+                    <View style={styles.priceHeaderLoadingRow}>
+                      <ActivityIndicator
+                        size="small"
+                        color={theme.colors.primary}
+                      />
+                      <Text style={styles.inputPlaceholder}>Loading…</Text>
+                    </View>
+                  ) : iapSkusError ? (
+                    <Text style={styles.inputPlaceholder}>Tap to retry</Text>
+                  ) : (
+                    <Text
+                      style={[
+                        styles.input,
+                        !selectedPriceProduct && styles.inputPlaceholder,
+                      ]}
+                    >
+                      {selectedPriceProduct
+                        ? formatStars(selectedPriceProduct.stars)
+                        : "Select"}
+                    </Text>
+                  )}
                 </View>
                 <Ionicons
-                  name="chevron-down"
+                  name={priceExpanded ? "chevron-up" : "chevron-down"}
                   size={18}
                   color={theme.colors.textSecondary}
                 />
               </Pressable>
+              {priceExpanded &&
+              !iapSkusPending &&
+              !iapSkusError &&
+              sortedIapProducts.length > 0 ? (
+                <View style={styles.priceAccordionBody}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.chipRow}
+                    keyboardShouldPersistTaps="handled"
+                  >
+                    {sortedIapProducts.map((p) => {
+                      const selected = p.product_id === selectedPriceSku;
+                      const storePrice =
+                        storeDisplayPriceByProductId.get(p.product_id) ?? null;
+                      return (
+                        <Pressable
+                          key={p.product_id}
+                          onPress={() => {
+                            setSelectedPriceSku(p.product_id);
+                            setPriceExpanded(false);
+                          }}
+                          style={[
+                            styles.chip,
+                            selected && styles.chipSelected,
+                          ]}
+                          accessibilityRole="radio"
+                          accessibilityState={{ selected }}
+                        >
+                          <View style={styles.chipTopRow}>
+                            <JaasiStar width={16} height={16} />
+                            <Text
+                              style={[
+                                styles.chipAmount,
+                                selected && styles.chipAmountSelected,
+                              ]}
+                            >
+                              {formatStars(p.stars)}
+                            </Text>
+                          </View>
+                          {storePrice ? (
+                            <Text
+                              style={[
+                                styles.chipHint,
+                                selected && styles.chipHintSelected,
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {storePrice}
+                            </Text>
+                          ) : isIapConnected ? (
+                            <Text
+                              style={[
+                                styles.chipHint,
+                                selected && styles.chipHintSelected,
+                              ]}
+                              numberOfLines={1}
+                            >
+                              …
+                            </Text>
+                          ) : null}
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              ) : null}
               <Text style={styles.hint}>
                 {iapSkusError
                   ? "Could not load price options. Tap to retry."
                   : iapSkusPending || iapSkusFetching
                     ? "Loading price options..."
-                    : "Choose a price value for this paid post."}
+                    : "Tap to choose a different price."}
               </Text>
             </View>
           )}
@@ -655,25 +772,6 @@ function CreateContent() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-
-      {Platform.OS === "ios" ? (
-        <SelectPickerSheet
-          visible={pricePickerOpen}
-          value={selectedPriceSku}
-          options={priceOptions}
-          onChange={(value) => setSelectedPriceSku(value)}
-          onClose={() => setPricePickerOpen(false)}
-        />
-      ) : (
-        <AndroidSelectDialog
-          visible={pricePickerOpen}
-          value={selectedPriceSku}
-          options={priceOptions}
-          title="Price"
-          onChange={setSelectedPriceSku}
-          onClose={() => setPricePickerOpen(false)}
-        />
-      )}
 
       <Modal
         visible={mentionIndicator === "@"}
@@ -940,6 +1038,58 @@ const createStyles = (theme: AppTheme) =>
     inputPlaceholder: {
       color: theme.colors.textSecondary,
       fontWeight: "500",
+    },
+    priceHeaderLoadingRow: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+    },
+    priceAccordionBody: {
+      marginTop: theme.spacing.sm,
+    },
+    chipRow: {
+      flexDirection: "row",
+      alignItems: "stretch",
+      gap: theme.spacing.sm,
+      paddingVertical: theme.spacing.xs,
+    },
+    chip: {
+      minWidth: 88,
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.md,
+      borderRadius: theme.radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+      alignItems: "center",
+      gap: 4,
+    },
+    chipSelected: {
+      borderColor: theme.colors.primary,
+      borderWidth: 2,
+      backgroundColor: theme.colors.card,
+    },
+    chipTopRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+    },
+    chipAmount: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: theme.colors.textPrimary,
+    },
+    chipAmountSelected: {
+      color: theme.colors.primary,
+    },
+    chipHint: {
+      fontSize: 11,
+      fontWeight: "500",
+      color: theme.colors.textSecondary,
+    },
+    chipHintSelected: {
+      color: theme.colors.textSecondary,
     },
     uploadPlaceholder: {
       height: 200,

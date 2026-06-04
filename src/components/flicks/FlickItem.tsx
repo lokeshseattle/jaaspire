@@ -736,6 +736,17 @@ function FlickItemInner({
   const [captionExpanded, setCaptionExpanded] = useState(false);
   const captionMaxExpanded = itemHeight * 0.4;
 
+  const captionPlain = useMemo(
+    () => (post.text ?? "").replace(/<[^>]+>/g, "").trim(),
+    [post.text],
+  );
+  const hasCaption = captionPlain.length > 0;
+  const captionNeedsExpand = captionPlain.length > 90;
+
+  useEffect(() => {
+    setCaptionExpanded(false);
+  }, [post.id]);
+
   const user = post.user;
   if (!user) {
     return (
@@ -1059,7 +1070,10 @@ function FlickItemInner({
         >
           <Pressable
             onPress={navigateToUser}
-            style={styles.bottomProfileRow}
+            style={[
+              styles.bottomProfileRow,
+              !hasCaption && styles.bottomProfileRowCompact,
+            ]}
             accessibilityRole="button"
             accessibilityLabel={`${user.name}, @${user.username}`}
           >
@@ -1081,28 +1095,32 @@ function FlickItemInner({
             </View>
           </Pressable>
 
-          {captionExpanded ? (
-            <ScrollView
-              style={{ maxHeight: captionMaxExpanded }}
-              nestedScrollEnabled
-              showsVerticalScrollIndicator={false}
-            >
-              <RichText style={styles.captionText}>{captionSource}</RichText>
-              <Pressable onPress={() => setCaptionExpanded(false)}>
-                <Text style={styles.moreText}>Show less</Text>
-              </Pressable>
-            </ScrollView>
-          ) : (
-            <>
-              <RichText style={styles.captionText} numberOfLines={2}>
-                {captionSource}
-              </RichText>
-              {captionSource.replace(/<[^>]+>/g, "").trim().length > 90 && (
-                <Pressable onPress={() => setCaptionExpanded(true)}>
-                  <Text style={styles.moreText}>More</Text>
+          {hasCaption && (
+            <View>
+              {captionExpanded ? (
+                <ScrollView
+                  style={{ maxHeight: captionMaxExpanded }}
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator={false}
+                >
+                  <RichText style={styles.captionText}>{captionSource}</RichText>
+                </ScrollView>
+              ) : (
+                <RichText style={styles.captionText} numberOfLines={2}>
+                  {captionSource}
+                </RichText>
+              )}
+              {(captionNeedsExpand || captionExpanded) && (
+                <Pressable
+                  onPress={() => setCaptionExpanded((prev) => !prev)}
+                  hitSlop={8}
+                >
+                  <Text style={styles.moreText}>
+                    {captionExpanded ? "Show less" : "More"}
+                  </Text>
                 </Pressable>
               )}
-            </>
+            </View>
           )}
         </View>
 
@@ -1410,6 +1428,9 @@ function createStyles(
       gap: 10,
       marginBottom: FLICK_UI_SPACING.sm,
       maxWidth: "100%",
+    },
+    bottomProfileRowCompact: {
+      marginBottom: 0,
     },
     avatarCompactWrap: {
       transform: [{ scale: 0.88 }],

@@ -42,6 +42,7 @@ const StoryView = ({ username, onClose, isPanning = false }: TProps) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [loadedStoryKey, setLoadedStoryKey] = useState<string | null>(null);
 
   const progress = useSharedValue(0);
   const callbackRef = useRef(onClose);
@@ -73,6 +74,8 @@ const StoryView = ({ username, onClose, isPanning = false }: TProps) => {
   const currentStory = stories[safeIndex];
 
   const currentMediaType = currentStory ? getMediaType(currentStory.path) : "video";
+  const storyKey = currentStory ? `${safeIndex}-${currentStory.path}` : "";
+  const isMediaReady = loadedStoryKey === storyKey;
 
   // Go to next story
   const goNext = useCallback(() => {
@@ -96,6 +99,10 @@ const StoryView = ({ username, onClose, isPanning = false }: TProps) => {
     setVideoDuration(duration);
   }, []);
 
+  const handleMediaLoad = useCallback(() => {
+    setLoadedStoryKey(storyKey);
+  }, [storyKey]);
+
   const handleTimeUpdate = useCallback(
     (currentTime: number) => {
       if (videoDuration && videoDuration > 0) {
@@ -117,58 +124,43 @@ const StoryView = ({ username, onClose, isPanning = false }: TProps) => {
     mediaRef.current?.setPlaybackRate(1);
   }, []);
 
-  // Start/restart progress animation when story changes
+  // Reset progress when story changes
   useEffect(() => {
     if (!stories.length) return;
 
     cancelAnimation(progress);
     progress.value = 0;
     setVideoDuration(null);
+  }, [safeIndex, stories.length, progress]);
 
-    const mediaType = getMediaType(stories[safeIndex]?.path ?? "");
+  // Start/restart image timer only after media has loaded
+  useEffect(() => {
+    if (currentMediaType !== "image" || !isMediaReady) return;
 
-    // Only start timer for images
-    if (mediaType === "image") {
-      progress.value = withTiming(
-        1,
-        { duration: STORY_DURATION, easing: Easing.linear },
-        (finished) => {
-          if (finished) {
-            runOnJS(goNext)();
-          }
-        }
-      );
+    const shouldPause = isPaused || isPanning;
+
+    if (shouldPause) {
+      cancelAnimation(progress);
+      return;
     }
+
+    const remaining = 1 - progress.value;
+    if (remaining <= 0) return;
+
+    progress.value = withTiming(
+      1,
+      { duration: STORY_DURATION * remaining, easing: Easing.linear },
+      (finished) => {
+        if (finished) {
+          runOnJS(goNext)();
+        }
+      },
+    );
 
     return () => {
       cancelAnimation(progress);
     };
-  }, [safeIndex, stories.length]);
-
-  // Pause/resume on long press or panning
-  useEffect(() => {
-    const shouldPause = isPaused || isPanning;
-
-    // Only handle timer for images - videos use paused prop
-    if (currentMediaType === "image") {
-      if (shouldPause) {
-        cancelAnimation(progress);
-      } else {
-        const remaining = 1 - progress.value;
-        if (remaining > 0) {
-          progress.value = withTiming(
-            1,
-            { duration: STORY_DURATION * remaining, easing: Easing.linear },
-            (finished) => {
-              if (finished) {
-                runOnJS(goNext)();
-              }
-            }
-          );
-        }
-      }
-    }
-  }, [isPaused, isPanning, currentMediaType]);
+  }, [isMediaReady, isPaused, isPanning, currentMediaType, safeIndex, goNext, progress]);
 
   const ownStory = user?.username === loggedInUser;
 
@@ -250,7 +242,8 @@ const StoryView = ({ username, onClose, isPanning = false }: TProps) => {
         ref={mediaRef}
         uri={currentStory.path}
         type={currentMediaType}
-        paused={isPaused || isPanning}
+        paused={isPaused || isPanning || !isMediaReady}
+        onMediaLoad={handleMediaLoad}
         onVideoLoad={handleVideoLoad}
         onTimeUpdate={handleTimeUpdate}
         onVideoEnd={handleVideoEnd}

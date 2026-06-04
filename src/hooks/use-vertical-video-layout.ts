@@ -236,3 +236,124 @@ export function useVerticalVideoLayout(
     options?.cropThreshold,
   ]);
 }
+
+export type ContainMediaLayout = {
+  frameWidth: number;
+  frameHeight: number;
+  contentFit: "contain";
+};
+
+/** Fit source media inside max bounds without cropping (letterbox/pillarbox on stage). */
+export function computeContainMediaLayout(
+  maxWidth: number,
+  maxHeight: number,
+  sourceWidth: number,
+  sourceHeight: number,
+): ContainMediaLayout {
+  if (maxWidth <= 0 || maxHeight <= 0) {
+    return { frameWidth: 0, frameHeight: 0, contentFit: "contain" };
+  }
+  if (sourceWidth <= 0 || sourceHeight <= 0) {
+    return { frameWidth: 0, frameHeight: 0, contentFit: "contain" };
+  }
+
+  const scale = Math.min(maxWidth / sourceWidth, maxHeight / sourceHeight);
+  return {
+    frameWidth: roundPx(sourceWidth * scale),
+    frameHeight: roundPx(sourceHeight * scale),
+    contentFit: "contain",
+  };
+}
+
+export function useContainMediaLayout(
+  maxWidth: number,
+  maxHeight: number,
+  sourceWidth?: number | null,
+  sourceHeight?: number | null,
+): ContainMediaLayout {
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+
+  return useMemo(() => {
+    const width = maxWidth > 0 ? maxWidth : windowWidth;
+    const height = maxHeight > 0 ? maxHeight : windowHeight;
+    const srcW = sourceWidth ?? 0;
+    const srcH = sourceHeight ?? 0;
+    return computeContainMediaLayout(width, height, srcW, srcH);
+  }, [maxWidth, maxHeight, windowWidth, windowHeight, sourceWidth, sourceHeight]);
+}
+
+export type EditorPreviewLayout = {
+  frameWidth: number;
+  frameHeight: number;
+  contentFit: "contain";
+  /** True when foreground doesn't fill the stage (letterbox/pillarbox). */
+  useBackdrop: boolean;
+  /** True when source dimensions are not yet known — use cover on full stage. */
+  isOptimistic: boolean;
+};
+
+/**
+ * Editor/thumbnail preview: fit full frame inside stage, flag letterbox for backdrop.
+ * When source dims are unknown, returns full-stage optimistic layout (cover fallback).
+ */
+export function computeEditorPreviewLayout(
+  stageWidth: number,
+  stageHeight: number,
+  sourceWidth?: number | null,
+  sourceHeight?: number | null,
+): EditorPreviewLayout {
+  if (stageWidth <= 0 || stageHeight <= 0) {
+    return {
+      frameWidth: 0,
+      frameHeight: 0,
+      contentFit: "contain",
+      useBackdrop: false,
+      isOptimistic: true,
+    };
+  }
+
+  const srcW = sourceWidth ?? 0;
+  const srcH = sourceHeight ?? 0;
+
+  if (srcW <= 0 || srcH <= 0) {
+    return {
+      frameWidth: roundPx(stageWidth),
+      frameHeight: roundPx(stageHeight),
+      contentFit: "contain",
+      useBackdrop: false,
+      isOptimistic: true,
+    };
+  }
+
+  const contained = computeContainMediaLayout(
+    stageWidth,
+    stageHeight,
+    srcW,
+    srcH,
+  );
+
+  const useBackdrop =
+    contained.frameWidth < stageWidth - 1 ||
+    contained.frameHeight < stageHeight - 1;
+
+  return {
+    ...contained,
+    useBackdrop,
+    isOptimistic: false,
+  };
+}
+
+export function useEditorPreviewLayout(
+  stageWidth: number,
+  stageHeight: number,
+  sourceWidth?: number | null,
+  sourceHeight?: number | null,
+): EditorPreviewLayout {
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+
+  return useMemo(() => {
+    const width = stageWidth > 0 ? stageWidth : windowWidth;
+    const height = stageHeight > 0 ? stageHeight : windowHeight;
+    return computeEditorPreviewLayout(width, height, sourceWidth, sourceHeight);
+  }, [stageWidth, stageHeight, windowWidth, windowHeight, sourceWidth, sourceHeight]);
+}
