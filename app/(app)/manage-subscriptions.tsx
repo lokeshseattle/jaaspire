@@ -89,8 +89,6 @@ export default function ManageSubscriptionsScreen() {
     [data?.pages],
   );
 
-  const subscribersCount = data?.pages?.[0]?.data?.subscribers_count ?? 0;
-
   const handleLoadMore = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) {
       fetchNextPage();
@@ -178,35 +176,7 @@ export default function ManageSubscriptionsScreen() {
     void Linking.openURL(STORE_SUBSCRIPTIONS_URL);
   }, []);
 
-  const listFooter = useMemo(
-    () => (
-      <View style={styles.storeManageSection}>
-        <Text style={styles.storeManageTitle}>Manage in store</Text>
-        <Text style={styles.storeManageBody}>
-          Cancel or change billing for App Store / Play Store subscriptions.
-        </Text>
-        <Pressable
-          onPress={handleOpenStoreSubscriptions}
-          style={({ pressed }) => [
-            styles.storeManageButton,
-            pressed && styles.storeManageButtonPressed,
-          ]}
-        >
-          <Ionicons
-            name="open-outline"
-            size={16}
-            color={theme.colors.primary}
-          />
-          <Text style={styles.storeManageButtonLabel}>
-            {Platform.OS === "ios"
-              ? "Open App Store subscriptions"
-              : "Open Play Store subscriptions"}
-          </Text>
-        </Pressable>
-      </View>
-    ),
-    [handleOpenStoreSubscriptions, styles, theme.colors.primary],
-  );
+  const storeLabel = Platform.OS === "ios" ? "App Store" : "Play Store";
 
   return (
     <View style={styles.root}>
@@ -216,7 +186,17 @@ export default function ManageSubscriptionsScreen() {
           activeKey={activeTab}
           onTabChange={(next) => setActiveTab(next)}
         />
-        <Text style={styles.hintText}>Subscribers: {subscribersCount}</Text>
+        <Text style={styles.hintText}>
+          Manage your subscription from{" "}
+          <Text
+            style={styles.hintLink}
+            onPress={handleOpenStoreSubscriptions}
+            accessibilityRole="link"
+            accessibilityLabel={`Open ${storeLabel} subscriptions`}
+          >
+            {storeLabel}
+          </Text>
+        </Text>
       </View>
 
       {isLoading && list.length === 0 ? (
@@ -234,14 +214,11 @@ export default function ManageSubscriptionsScreen() {
           contentContainerStyle={listContentStyle}
           ListEmptyComponent={renderEmpty}
           ListFooterComponent={
-            <>
-              {isFetchingNextPage ? (
-                <View style={styles.footerLoader}>
-                  <ActivityIndicator color={theme.colors.textSecondary} />
-                </View>
-              ) : null}
-              {listFooter}
-            </>
+            isFetchingNextPage ? (
+              <View style={styles.footerLoader}>
+                <ActivityIndicator color={theme.colors.textSecondary} />
+              </View>
+            ) : null
           }
           showsVerticalScrollIndicator={false}
         />
@@ -265,6 +242,10 @@ const createStyles = (theme: AppTheme) =>
       fontSize: 13,
       paddingHorizontal: theme.spacing.lg,
       paddingVertical: theme.spacing.sm,
+    },
+    hintLink: {
+      color: theme.colors.primary,
+      fontWeight: "600",
     },
     listContent: {
       flexGrow: 1,
@@ -357,40 +338,5 @@ const createStyles = (theme: AppTheme) =>
     },
     footerLoader: {
       paddingVertical: theme.spacing.md,
-    },
-    storeManageSection: {
-      marginTop: theme.spacing.lg,
-      marginHorizontal: theme.spacing.lg,
-      padding: theme.spacing.lg,
-      borderRadius: theme.radius.md,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: theme.colors.border,
-      backgroundColor: theme.colors.surface,
-    },
-    storeManageTitle: {
-      fontSize: 15,
-      fontWeight: "600",
-      color: theme.colors.textPrimary,
-      marginBottom: theme.spacing.xs,
-    },
-    storeManageBody: {
-      fontSize: 13,
-      lineHeight: 18,
-      color: theme.colors.textSecondary,
-      marginBottom: theme.spacing.md,
-    },
-    storeManageButton: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: theme.spacing.xs,
-      alignSelf: "flex-start",
-    },
-    storeManageButtonPressed: {
-      opacity: 0.7,
-    },
-    storeManageButtonLabel: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: theme.colors.primary,
     },
   });

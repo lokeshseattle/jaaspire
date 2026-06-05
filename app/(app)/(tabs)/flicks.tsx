@@ -11,12 +11,20 @@ import {
     useTrackPostView,
 } from "@/src/features/post/post.hooks";
 import { usePostStore } from "@/src/features/post/post.store";
-import { canViewPostMedia } from "@/src/features/post/post.utils";
+import {
+  FLICKS_PRELOAD_RADIUS,
+  flickActiveIndexFromOffset,
+  flickIndexFromOffset,
+  flickScrollDirection,
+  prefetchFlickThumbnails,
+  resetFlickOnFocusChange,
+  seekOffWindowFlicks,
+  syncFlickVideoPool,
+  type FlickScrollDirection,
+} from "@/src/features/flicks/flicks-feed-video";
 import { videoManager } from "@/src/lib/video-manager";
 import { getApiErrorMessage } from "@/src/services/api/api.error";
-import type { Post } from "@/src/services/api/api.types";
 import { useTheme } from "@/src/theme/ThemeProvider";
-import { getMediaType } from "@/src/utils/helpers";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useFocusEffect, useNavigation } from "expo-router";
 import {
@@ -49,15 +57,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useShallow } from "zustand/react/shallow";
 
 const VIEWABILITY_CONFIG: ViewabilityConfig = {
-  itemVisiblePercentThreshold: 80,
-  minimumViewTime: 200,
+  itemVisiblePercentThreshold: 60,
+  minimumViewTime: 0,
 };
 const STRICT_OFFSCREEN_VIEWABILITY: ViewabilityConfig = {
   itemVisiblePercentThreshold: 1,
   minimumViewTime: 0,
 };
-
-const PRELOAD_RADIUS = 1;
 
 /** Full-bleed flick canvas (not theme.background — avoids white bars in light mode). */
 const FLICKS_CANVAS = "#000";
@@ -68,22 +74,6 @@ const FLICKS_ON_DARK_TEXT = "rgba(255,255,255,0.72)";
 /** Top row min height (label row) + `paddingBottom` on the tab bar. */
 const FEED_TABS_ROW_HEIGHT = 44;
 const FEED_TABS_CHROME_HEIGHT = FEED_TABS_ROW_HEIGHT + 10;
-
-/** URL eligible for decoder preload (full access or timed preview). */
-function flickPreloadTarget(post: Post | undefined): {
-  postId: number;
-  url: string;
-} | null {
-  if (!post?.attachments?.[0]) return null;
-  const a = post.attachments[0];
-  if (getMediaType(a.type) !== "video" || !a.path) return null;
-  const price = post.price ?? 0;
-  const isExclusive = post.is_exclusive ?? false;
-  const canView = canViewPostMedia(post.viewer, price, isExclusive);
-  const isPaidVideo = !canView && (price > 0 || isExclusive);
-  if (canView || isPaidVideo) return { postId: post.id, url: a.path };
-  return null;
-}
 
 type FlickRowProps = {
   id: number;
@@ -183,6 +173,8 @@ export default function FlicksScreen() {
 
   const [focusedIndex, setFocusedIndex] = useState(0);
   const [isScreenFocused, setIsScreenFocused] = useState(true);
+  const scrollDirectionRef = useRef<FlickScrollDirection>("none");
+  const scrollOffsetRef = useRef(0);
 
   const postsMap = usePostStore((s) => s.posts);
 
@@ -312,19 +304,37 @@ export default function FlicksScreen() {
   }, [focusedIndex, postIds]);
 
   useEffect(() => {
-    if (postIds.length === 0 || focusedIndex < 0) return;
-
-    const prevId = postIds[focusedIndex - 1];
-    const nextId = postIds[focusedIndex + 1];
-
-    const prevPost = prevId != null ? postsMap[prevId] : undefined;
-    const nextPost = nextId != null ? postsMap[nextId] : undefined;
-
-    const p = flickPreloadTarget(prevPost);
-    const n = flickPreloadTarget(nextPost);
-    if (p) videoManager.preload(p.postId, p.url);
-    if (n) videoManager.preload(n.postId, n.url);
+    syncFlickVideoPool({
+      postIds,
+      focusedIndex,
+      postsMap,
+      scrollDirection: scrollDirectionRef.current,
+    });
+    prefetchFlickThumbnails({
+      postIds,
+      focusedIndex,
+      postsMap,
+      scrollDirection: scrollDirectionRef.current,
+    });
   }, [focusedIndex, postIds, postsMap]);
+
+  const applyFocusedIndexFromScroll = useCallback(
+    (offsetY: number, direction: FlickScrollDirection) => {
+      const ids = postIdsRef.current;
+      if (ids.length === 0 || flickHeight <= 0) return;
+      const index = flickActiveIndexFromOffset(
+        offsetY,
+        flickHeight,
+        ids.length,
+        direction,
+      );
+      const prevIndex = focusedIndexRef.current;
+      if (index === prevIndex) return;
+      resetFlickOnFocusChange(ids, prevIndex, index);
+      setFocusedIndex(index);
+    },
+    [flickHeight],
+  );
 
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
@@ -339,26 +349,24 @@ export default function FlicksScreen() {
       }
       const index = token.index;
       if (index == null || index < 0) return;
-      const prevIndex = focusedIndexRef.current;
-      if (index < prevIndex) {
+      if (index !== focusedIndexRef.current) {
         const ids = postIdsRef.current;
-        const id = ids[index];
-        if (id != null) {
-          videoManager.seekToStart(id);
-        }
+        resetFlickOnFocusChange(ids, focusedIndexRef.current, index);
+        setFocusedIndex(index);
       }
-      setFocusedIndex(index);
     },
     [],
   );
 
   const onStrictVisibilityChanged = useCallback(
     ({ changed }: { changed: ViewToken[] }) => {
+      const ids = postIdsRef.current;
+      const focusIdx = focusedIndexRef.current;
       for (const token of changed) {
         if (token.isViewable) continue;
         const id = typeof token.item === "number" ? token.item : null;
         if (id == null) continue;
-        videoManager.seekToStart(id);
+        seekOffWindowFlicks(id, ids, focusIdx);
       }
     },
     [],
@@ -379,7 +387,8 @@ export default function FlicksScreen() {
     ({ item: id, index }: ListRenderItemInfo<number>) => {
       const nextPostId = postIds[index + 1];
       const isFocused = index === focusedIndex;
-      const inWindow = Math.abs(index - focusedIndex) <= PRELOAD_RADIUS;
+      const inWindow =
+        Math.abs(index - focusedIndex) <= FLICKS_PRELOAD_RADIUS;
       return (
         <FlickRow
           id={id}
@@ -456,6 +465,21 @@ export default function FlicksScreen() {
     });
   }, [feedTab, postIds.length, flickHeight]);
 
+  const onScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const y = e.nativeEvent.contentOffset.y;
+      scrollDirectionRef.current = flickScrollDirection(
+        scrollOffsetRef.current,
+        y,
+      );
+      scrollOffsetRef.current = y;
+
+      if (flickHeight <= 0) return;
+      applyFocusedIndexFromScroll(y, scrollDirectionRef.current);
+    },
+    [flickHeight, applyFocusedIndexFromScroll],
+  );
+
   const onMomentumScrollEnd = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const y = e.nativeEvent.contentOffset.y;
@@ -468,8 +492,9 @@ export default function FlicksScreen() {
           animated: false,
         });
       }
+      applyFocusedIndexFromScroll(target, "none");
     },
-    [flickHeight],
+    [flickHeight, applyFocusedIndexFromScroll],
   );
 
   const onScrollToIndexFailed = useCallback(
@@ -606,6 +631,8 @@ export default function FlicksScreen() {
               height: "100%",
               backgroundColor: FLICKS_CANVAS,
             }}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
             onMomentumScrollEnd={onMomentumScrollEnd}
             onScrollToIndexFailed={onScrollToIndexFailed}
             ListEmptyComponent={listEmpty}

@@ -9,11 +9,18 @@ import {
 } from "@/src/features/flicks/flicks.hooks";
 import { useTrackPostView } from "@/src/features/post/post.hooks";
 import { usePostStore } from "@/src/features/post/post.store";
-import { canViewPostMedia } from "@/src/features/post/post.utils";
+import {
+  FLICKS_PRELOAD_RADIUS,
+  flickActiveIndexFromOffset,
+  flickScrollDirection,
+  prefetchFlickThumbnails,
+  resetFlickOnFocusChange,
+  seekOffWindowFlicks,
+  syncFlickVideoPool,
+  type FlickScrollDirection,
+} from "@/src/features/flicks/flicks-feed-video";
 import { videoManager } from "@/src/lib/video-manager";
-import type { Post } from "@/src/services/api/api.types";
 import { useTheme } from "@/src/theme/ThemeProvider";
-import { getMediaType } from "@/src/utils/helpers";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
@@ -48,15 +55,15 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useShallow } from "zustand/react/shallow";
 
 const VIEWABILITY_CONFIG: ViewabilityConfig = {
-  itemVisiblePercentThreshold: 80,
-  minimumViewTime: 200,
+  itemVisiblePercentThreshold: 60,
+  minimumViewTime: 0,
 };
 const STRICT_OFFSCREEN_VIEWABILITY: ViewabilityConfig = {
   itemVisiblePercentThreshold: 1,
   minimumViewTime: 0,
 };
 
-const PRELOAD_RADIUS = 1;
+const PRELOAD_RADIUS = FLICKS_PRELOAD_RADIUS;
 
 /** Same glass recipe as FlickItem HUD pills — dark translucent + hairline border. */
 const FLICK_BACK_GLASS_FILL = "rgba(0,0,0,0.48)";
@@ -73,21 +80,6 @@ const COMMENT_BAR_PLACEHOLDER = "rgba(255,255,255,0.42)";
 
 /** Top band for overlay chrome — matches previous stack header row (~44pt) + touch target. */
 const FLICK_TOP_CHROME = 44;
-
-function flickPreloadTarget(post: Post | undefined): {
-  postId: number;
-  url: string;
-} | null {
-  if (!post?.attachments?.[0]) return null;
-  const a = post.attachments[0];
-  if (getMediaType(a.type) !== "video" || !a.path) return null;
-  const price = post.price ?? 0;
-  const isExclusive = post.is_exclusive ?? false;
-  const canView = canViewPostMedia(post.viewer, price, isExclusive);
-  const isPaidVideo = !canView && (price > 0 || isExclusive);
-  if (canView || isPaidVideo) return { postId: post.id, url: a.path };
-  return null;
-}
 
 type FlickRowProps = {
   id: number;
@@ -315,6 +307,8 @@ export default function FeedFlickScreen() {
 
   const [focusedIndex, setFocusedIndex] = useState(0);
   const [isScreenFocused, setIsScreenFocused] = useState(true);
+  const scrollDirectionRef = useRef<FlickScrollDirection>("none");
+  const scrollOffsetRef = useRef(0);
 
   const postsMap = usePostStore((s) => s.posts);
 
@@ -415,19 +409,37 @@ export default function FeedFlickScreen() {
   }, [focusedIndex, postIds]);
 
   useEffect(() => {
-    if (postIds.length === 0 || focusedIndex < 0) return;
-
-    const prevId = postIds[focusedIndex - 1];
-    const nextId = postIds[focusedIndex + 1];
-
-    const prevPost = prevId != null ? postsMap[prevId] : undefined;
-    const nextPost = nextId != null ? postsMap[nextId] : undefined;
-
-    const p = flickPreloadTarget(prevPost);
-    const n = flickPreloadTarget(nextPost);
-    if (p) videoManager.preload(p.postId, p.url);
-    if (n) videoManager.preload(n.postId, n.url);
+    syncFlickVideoPool({
+      postIds,
+      focusedIndex,
+      postsMap,
+      scrollDirection: scrollDirectionRef.current,
+    });
+    prefetchFlickThumbnails({
+      postIds,
+      focusedIndex,
+      postsMap,
+      scrollDirection: scrollDirectionRef.current,
+    });
   }, [focusedIndex, postIds, postsMap]);
+
+  const applyFocusedIndexFromScroll = useCallback(
+    (offsetY: number, direction: FlickScrollDirection) => {
+      const ids = postIdsRef.current;
+      if (ids.length === 0 || flickHeight <= 0) return;
+      const index = flickActiveIndexFromOffset(
+        offsetY,
+        flickHeight,
+        ids.length,
+        direction,
+      );
+      const prevIndex = focusedIndexRef.current;
+      if (index === prevIndex) return;
+      resetFlickOnFocusChange(ids, prevIndex, index);
+      setFocusedIndex(index);
+    },
+    [flickHeight],
+  );
 
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
@@ -442,18 +454,24 @@ export default function FeedFlickScreen() {
       }
       const index = token.index;
       if (index == null || index < 0) return;
-      setFocusedIndex(index);
+      if (index !== focusedIndexRef.current) {
+        const ids = postIdsRef.current;
+        resetFlickOnFocusChange(ids, focusedIndexRef.current, index);
+        setFocusedIndex(index);
+      }
     },
     [],
   );
 
   const onStrictVisibilityChanged = useCallback(
     ({ changed }: { changed: ViewToken[] }) => {
+      const ids = postIdsRef.current;
+      const focusIdx = focusedIndexRef.current;
       for (const token of changed) {
         if (token.isViewable) continue;
         const id = typeof token.item === "number" ? token.item : null;
         if (id == null) continue;
-        videoManager.seekToStart(id);
+        seekOffWindowFlicks(id, ids, focusIdx);
       }
     },
     [],
@@ -520,6 +538,21 @@ export default function FeedFlickScreen() {
     });
   }, [anchorId]);
 
+  const onScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const y = e.nativeEvent.contentOffset.y;
+      scrollDirectionRef.current = flickScrollDirection(
+        scrollOffsetRef.current,
+        y,
+      );
+      scrollOffsetRef.current = y;
+
+      if (flickHeight <= 0) return;
+      applyFocusedIndexFromScroll(y, scrollDirectionRef.current);
+    },
+    [flickHeight, applyFocusedIndexFromScroll],
+  );
+
   const onMomentumScrollEnd = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const y = e.nativeEvent.contentOffset.y;
@@ -532,8 +565,9 @@ export default function FeedFlickScreen() {
           animated: false,
         });
       }
+      applyFocusedIndexFromScroll(target, "none");
     },
-    [flickHeight],
+    [flickHeight, applyFocusedIndexFromScroll],
   );
 
   const onEndReached = useCallback(() => {
@@ -647,6 +681,8 @@ export default function FeedFlickScreen() {
                 height: "100%",
                 backgroundColor: FLICKS_CANVAS,
               }}
+              onScroll={onScroll}
+              scrollEventThrottle={16}
               onMomentumScrollEnd={onMomentumScrollEnd}
               ListEmptyComponent={listEmpty}
               showsVerticalScrollIndicator={false}

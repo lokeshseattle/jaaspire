@@ -1,4 +1,5 @@
 import { createVideoPlayer, VideoPlayer } from "expo-video";
+import { Platform } from "react-native";
 
 type PlayerEntry = {
   player: VideoPlayer;
@@ -8,14 +9,18 @@ type PlayerEntry = {
   url: string;
 };
 
+type PreloadTarget = { postId: number; url: string } | null;
+
 class VideoPlayerManager {
   private players = new Map<number, PlayerEntry>();
   private mountedPlayers = new Set<number>();
+  /** Focused + upcoming reel IDs — never evicted while reserved. */
+  private reservedPostIds = new Set<number>();
   /**
    * Hard cap (decoder budget). Flicks competes for the same pool; the visible
    * Home post is pinned on tab blur so LRU eviction does not recycle it first.
    */
-  private maxPlayers = 3;
+  private maxPlayers = Platform.OS === "android" ? 3 : 4;
   /** Last primary Home feed post — not eligible for eviction while user is away (e.g. on Flicks). */
   private pinnedFeedPostId: number | null = null;
   private currentlyPlaying: number | null = null;
@@ -87,10 +92,33 @@ class VideoPlayerManager {
       if (entry.isCleared || entry.url !== url) {
         this.getOrCreatePlayer(postId, url);
       }
+      entry.lastUsed = Date.now();
       return;
     }
 
     this.getOrCreatePlayer(postId, url);
+  }
+
+  /** Protect focused + upcoming reels from LRU eviction during warm-up. */
+  setReservedPostIds(postIds: number[]): void {
+    this.reservedPostIds = new Set(postIds);
+  }
+
+  /** Preload with scroll-direction priority (primary first, secondary if pool allows). */
+  preloadAdjacent(options: {
+    primary: PreloadTarget;
+    secondary: PreloadTarget;
+  }): void {
+    const { primary, secondary } = options;
+    if (primary) this.preload(primary.postId, primary.url);
+    if (
+      secondary &&
+      (this.players.size < this.maxPlayers ||
+        this.hasPlayer(secondary.postId) ||
+        this.reservedPostIds.has(secondary.postId))
+    ) {
+      this.preload(secondary.postId, secondary.url);
+    }
   }
 
   hasPlayer(postId: number): boolean {
@@ -226,6 +254,7 @@ class VideoPlayerManager {
     this.mountedPlayers.clear();
     this.currentlyPlaying = null;
     this.pinnedFeedPostId = null;
+    this.reservedPostIds.clear();
     this.resetSubscribers.forEach((sub) => sub());
   }
 
@@ -236,6 +265,7 @@ class VideoPlayerManager {
     this.players.forEach((entry, id) => {
       if (id === this.currentlyPlaying) return;
       if (id === reservePostId) return;
+      if (this.reservedPostIds.has(id)) return;
       if (this.pinnedFeedPostId != null && id === this.pinnedFeedPostId) return;
       if (this.mountedPlayers.has(id)) return;
       if (entry.isCleared) return;
@@ -290,6 +320,7 @@ class VideoPlayerManager {
     this.players.clear();
     this.mountedPlayers.clear();
     this.currentlyPlaying = null;
+    this.reservedPostIds.clear();
 
     if (pinnedEntry != null && pin != null) {
       this.players.set(pin, pinnedEntry);

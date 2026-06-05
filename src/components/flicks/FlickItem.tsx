@@ -211,6 +211,9 @@ function FlickItemInner({
   const isScrubbing = useSharedValue(false);
   const progressBarWidth = useSharedValue(0);
   const maxProgressRatio = useSharedValue(1);
+  const seekBarOpacity = useSharedValue(0);
+  const posterOpacity = useSharedValue(1);
+  const firstFrameRendered = useRef(false);
 
   const [timeUi, setTimeUi] = useState({ current: 0, total: 0 });
 
@@ -352,8 +355,18 @@ function FlickItemInner({
   useEffect(() => {
     progress.value = 0;
     maxProgressRatio.value = 1;
-    setTimeUi({ current: 0, total: 0 });
-  }, [post.id, progress, maxProgressRatio]);
+    seekBarOpacity.value = 0;
+    firstFrameRendered.current = false;
+    posterOpacity.value = 1;
+    setTimeUi({
+      current: 0,
+      total: parsedDuration != null && parsedDuration > 0 ? parsedDuration : 0,
+    });
+  }, [post.id, progress, maxProgressRatio, seekBarOpacity, posterOpacity, parsedDuration]);
+
+  useEffect(() => {
+    seekBarOpacity.value = withTiming(isReady ? 1 : 0, { duration: 180 });
+  }, [isReady, seekBarOpacity]);
 
   const isLiked = post.user_reaction === "love";
   const { mutate: toggleLike } = useToggleLikeMutation();
@@ -510,34 +523,42 @@ function FlickItemInner({
   const isFocusedRef = useRef(isFocused);
   isFocusedRef.current = isFocused;
 
-  const videoViewMountedRef = useRef(false);
-  if (isReady && player) videoViewMountedRef.current = true;
-  if (!player) videoViewMountedRef.current = false;
+  const showVideoView = inFlickWindow && player !== null;
 
-  const showVideoView =
-    inFlickWindow &&
-    player !== null &&
-    (isReady || videoViewMountedRef.current);
-
-  const firstFrameRendered = useRef(false);
-  const posterOpacity = useSharedValue(1);
+  const wasFocusedRef = useRef(isFocused);
 
   useEffect(() => {
-    if (!isReady) {
+    if (!player) {
       firstFrameRendered.current = false;
       posterOpacity.value = 1;
+      return;
     }
-  }, [isReady, posterOpacity]);
+    if (!isReady && !firstFrameRendered.current) {
+      posterOpacity.value = 1;
+    }
+  }, [isReady, player, posterOpacity]);
 
   useEffect(() => {
-    const shouldHide = firstFrameRendered.current && isFocused;
-    posterOpacity.value = shouldHide ? withTiming(0, { duration: 150 }) : 1;
-  }, [isFocused, isPlaying, posterOpacity]);
+    const becameFocused = isFocused && !wasFocusedRef.current;
+    wasFocusedRef.current = isFocused;
+
+    if (!isFocused) {
+      posterOpacity.value = 1;
+      return;
+    }
+
+    if (firstFrameRendered.current) {
+      posterOpacity.value = becameFocused ? 0 : posterOpacity.value;
+      return;
+    }
+
+    posterOpacity.value = 1;
+  }, [isFocused, posterOpacity]);
 
   const handleFirstFrameRender = useCallback(() => {
     firstFrameRendered.current = true;
     if (isFocusedRef.current) {
-      posterOpacity.value = withTiming(0, { duration: 150 });
+      posterOpacity.value = withTiming(0, { duration: 200 });
     }
   }, [posterOpacity]);
 
@@ -795,19 +816,22 @@ function FlickItemInner({
   const seekTotalSeconds =
     isPaidVideo && parsedDuration != null && parsedDuration > 0
       ? parsedDuration
-      : timeUi.total > 0
-        ? timeUi.total
-        : safePlayerDuration(player);
+      : parsedDuration != null && parsedDuration > 0
+        ? parsedDuration
+        : timeUi.total > 0
+          ? timeUi.total
+          : safePlayerDuration(player);
 
-  const showSeekBar =
+  const showSeekBarSlot =
     !showVideoBlockPaywall &&
     !!videoUrlForPlayer &&
     !previewEnded &&
     isFocused &&
-    showVideoView &&
-    !!player &&
-    isReady &&
     seekTotalSeconds > 0;
+
+  const seekBarAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: seekBarOpacity.value,
+  }));
 
   return (
     <View style={[styles.root, { width: itemWidth, height: itemHeight }]}>
@@ -1143,12 +1167,15 @@ function FlickItemInner({
           )}
         </View>
 
-        {showSeekBar && (
-          <View style={styles.seekBarFullWidth} pointerEvents="box-none">
+        {showSeekBarSlot && (
+          <Animated.View
+            style={[styles.seekBarFullWidth, seekBarAnimatedStyle]}
+            pointerEvents={isReady ? "box-none" : "none"}
+          >
             <View style={styles.seekBlock}>
               <Text style={styles.seekTimeText}>
                 {formatPlaybackTime(timeUi.current)} /{" "}
-                {formatPlaybackTime(timeUi.total)}
+                {formatPlaybackTime(seekTotalSeconds)}
               </Text>
               <GestureDetector gesture={seekBarGesture}>
                 <View
@@ -1170,7 +1197,7 @@ function FlickItemInner({
                 </View>
               </GestureDetector>
             </View>
-          </View>
+          </Animated.View>
         )}
       </View>
     </View>
