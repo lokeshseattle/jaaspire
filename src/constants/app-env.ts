@@ -25,6 +25,9 @@ function readWebOrigin(): string {
 
 export const WEB_ORIGIN = readWebOrigin();
 
+/** Policy pages always live on production, regardless of app environment */
+export const LEGAL_WEB_ORIGIN = "https://jaaspire.com";
+
 export const WEB_HOSTNAME: string = (() => {
   try {
     return new URL(WEB_ORIGIN).hostname;

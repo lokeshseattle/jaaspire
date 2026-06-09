@@ -27,8 +27,8 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_WEB_ORIGIN": "https://stgx.jaaspire.com",
-        "EXPO_PUBLIC_API_BASE_URL": "https://stgx.jaaspire.com/api/v1"
+        "EXPO_PUBLIC_WEB_ORIGIN": "https://jaaspire.com",
+        "EXPO_PUBLIC_API_BASE_URL": "https://jaaspire.com/api/v1"
       }
     }
   },
