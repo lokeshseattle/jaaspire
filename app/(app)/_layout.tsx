@@ -10,7 +10,7 @@ import {
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { Redirect, Stack } from "expo-router";
 import { useEffect } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 /** Deep links into this stack keep “(tabs)” as the root so Back can return home. */
 export const unstable_settings = {
@@ -47,6 +47,11 @@ function UserPostDetailHeaderTitle({ username }: { username?: string }) {
 }
 
 const styles = StyleSheet.create({
+  authLoadingRoot: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   userPostHeaderTitle: {
     alignItems: "center",
     justifyContent: "center",
@@ -91,7 +96,20 @@ export default function AppLayout() {
     };
   }, [profileData?.data?.id]);
 
-  if (!isLoading && !isAuthenticated) {
+  if (isLoading) {
+    return (
+      <View
+        style={[
+          styles.authLoadingRoot,
+          { backgroundColor: theme.colors.background },
+        ]}
+      >
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+      </View>
+    );
+  }
+
+  if (!isAuthenticated) {
     return <Redirect href="/(auth)/login" />;
   }
 

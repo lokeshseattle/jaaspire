@@ -1,3 +1,4 @@
+import { useAuthQueryReady } from "@/src/features/auth/auth.hooks";
 import { apiClient } from "@/src/services/api/api.client";
 import {
   NotificationCountsResponse,
@@ -15,8 +16,11 @@ import {
 export type TFilter = "likes" | "subscriptions" | "tips" | "";
 
 export const useGetNotifications = (filter: TFilter) => {
+  const authReady = useAuthQueryReady();
+
   return useInfiniteQuery<NotificationsAPIResponse, PossibleErrorResponse>({
     queryKey: ["notifications", filter],
+    enabled: authReady,
 
     queryFn: async ({ pageParam = 1 }) => {
       const res = await apiClient.get<NotificationsAPIResponse>(
@@ -45,6 +49,8 @@ export const useGetNotifications = (filter: TFilter) => {
 export const notificationCountsQueryKey = ["notifications", "counts"] as const;
 
 export const useNotificationCounts = () => {
+  const authReady = useAuthQueryReady();
+
   return useQuery<NotificationCountsResponse, PossibleErrorResponse>({
     queryKey: notificationCountsQueryKey,
     queryFn: async () => {
@@ -54,7 +60,8 @@ export const useNotificationCounts = () => {
       return res.data;
     },
     staleTime: 30_000,
-    refetchOnWindowFocus: true,
+    enabled: authReady,
+    refetchOnWindowFocus: authReady,
   });
 };
 
@@ -84,9 +91,12 @@ export const useMarkNotificationReadMutation = (): UseMutationResult<
 };
 
 export const useGetPendingRequests = () => {
+  const authReady = useAuthQueryReady();
+
   return useInfiniteQuery<PendingFollowRequestsResponse, PossibleErrorResponse>(
     {
       queryKey: ["pending_requests"],
+      enabled: authReady,
 
       queryFn: async ({ pageParam = 1 }) => {
         const res = await apiClient.get<PendingFollowRequestsResponse>(

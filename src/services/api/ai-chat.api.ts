@@ -127,8 +127,17 @@ async function throwForFailedResponse(response: Response): Promise<never> {
   const contentType = response.headers.get("content-type") ?? "";
   if (contentType.includes("application/json")) {
     const body = (await response.json()) as { message?: string };
-    if (body.message === "Unauthenticated.") {
-      await forceLogout();
+    if (
+      body.message === "Unauthenticated." &&
+      useAuthStore.getState().accessToken
+    ) {
+      await forceLogout({
+        notice: {
+          title: "Signed out",
+          message:
+            "Your session expired while using AI chat. Please sign in again.",
+        },
+      });
     }
     throw new ApiError(
       body.message ?? "Something went wrong",

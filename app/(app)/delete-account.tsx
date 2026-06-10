@@ -100,7 +100,7 @@ export default function DeleteAccountScreen() {
                 try {
                   await logout();
                 } catch {
-                  await forceLogout();
+                  await forceLogout({ silent: true });
                 }
               },
             },

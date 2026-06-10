@@ -35,7 +35,15 @@ import {
 } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { Alert } from "react-native";
+import { notifyLogout } from "./auth.utils";
 import { useAuthStore } from "./auth.store";
+
+/** True once SecureStore restore finished and the user has a valid in-memory session. */
+export function useAuthQueryReady(): boolean {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isLoading = useAuthStore((s) => s.isLoading);
+  return isAuthenticated && !isLoading;
+}
 
 async function runPostLoginSetup(): Promise<void> {
   try {
@@ -141,18 +149,14 @@ export const useAuth = () => {
 
   // Restore session on app start
   const restoreSession = useCallback(async (): Promise<void> => {
+    let storedToken: string | null = null;
+
     try {
       setLoading(true);
-
-      const storedToken = await tokenStorage.get();
+      storedToken = await tokenStorage.get();
 
       if (storedToken) {
         setToken(storedToken);
-        void syncIapAccountTokenFromMe().catch((error) => {
-          if (__DEV__) {
-            // console.warn("[auth] iap account token sync on restore failed", error);
-          }
-        });
       } else {
         setToken(null);
         await clearIapAccountToken();
@@ -160,9 +164,20 @@ export const useAuth = () => {
       }
     } catch (error) {
       // console.error("Restore session failed:", error);
+      notifyLogout({
+        title: "Signed out",
+        message:
+          "Could not restore your saved session from secure storage. Please sign in again.",
+      });
       setToken(null);
     } finally {
       setLoading(false);
+    }
+
+    if (storedToken) {
+      void syncIapAccountTokenFromMe().catch(() => {
+        /* non-fatal; must not affect session */
+      });
     }
   }, [setLoading, setToken]);
 

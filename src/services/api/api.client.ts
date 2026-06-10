@@ -6,6 +6,8 @@ import axios, {
   AxiosResponse,
   InternalAxiosRequestConfig,
 } from "axios";
+import type { ApiRequestConfig } from "./api.client.types";
+import "./api.client.types";
 import { normalizeApiError } from "./api.error";
 
 const baseURL = API_BASE_URL;
@@ -63,10 +65,13 @@ export const apiClient = axios.create({
 apiClient.interceptors.request.use(
   (config) => {
     const token = useAuthStore.getState().accessToken;
+    const requestConfig = config as ApiRequestConfig;
 
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    requestConfig.sentWithAuth = !!token;
 
     logger.request(config, !!token);
 
@@ -86,8 +91,31 @@ apiClient.interceptors.response.use(
   async (error) => {
     logger.error(error);
 
-    if (error.response?.data?.message === "Unauthenticated.")
-      await forceLogout();
+    const requestConfig = error.config as ApiRequestConfig | undefined;
+    const isUnauthenticated =
+      error.response?.data?.message === "Unauthenticated.";
+    const authState = useAuthStore.getState();
+
+    if (
+      isUnauthenticated &&
+      !authState.isLoading &&
+      requestConfig?.sentWithAuth &&
+      !requestConfig.skipAuthLogout
+    ) {
+      const endpoint = requestConfig.url ?? "unknown endpoint";
+      const status = error.response?.status ?? 401;
+      const serverMessage =
+        typeof error.response?.data?.message === "string"
+          ? error.response.data.message
+          : "Unauthenticated.";
+
+      await forceLogout({
+        notice: {
+          title: "Signed out",
+          message: `Your session is no longer valid (${status} ${serverMessage} on ${endpoint}). Please sign in again.`,
+        },
+      });
+    }
 
     return Promise.reject(normalizeApiError(error));
   },

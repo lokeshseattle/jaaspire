@@ -1,5 +1,6 @@
 import { iapAccountTokenStorage } from "@/src/lib/secure-storage";
 import { apiClient } from "@/src/services/api/api.client";
+import { SKIP_AUTH_LOGOUT } from "@/src/services/api/api.client.types";
 import type { ProfileResponse, TUserProfile } from "@/src/services/api/api.types";
 
 function normalizeIapAccountToken(
@@ -28,7 +29,10 @@ export async function clearIapAccountToken(): Promise<void> {
 
 /** Fetch GET /auth/me and persist `iap_account_token` to secure storage. */
 export async function syncIapAccountTokenFromMe(): Promise<string | null> {
-  const { data } = await apiClient.get<ProfileResponse>("/auth/me");
+  const { data } = await apiClient.get<ProfileResponse>(
+    "/auth/me",
+    SKIP_AUTH_LOGOUT,
+  );
   const token = extractIapAccountTokenFromProfile(data.data);
   if (token) {
     await persistIapAccountToken(token);

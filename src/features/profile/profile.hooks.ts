@@ -1,3 +1,4 @@
+import { useAuthQueryReady } from "@/src/features/auth/auth.hooks";
 import { queryClient } from "@/src/lib/query-client";
 import { apiClient } from "@/src/services/api/api.client";
 import {
@@ -37,10 +38,13 @@ export const useGetProfile = (): UseQueryResult<
   ProfileResponse,
   PossibleErrorResponse
 > => {
+  const authReady = useAuthQueryReady();
+
   return useQuery({
     queryKey: ["profile"],
     queryFn: () => apiClient.get("/auth/me").then((d) => d.data),
     staleTime: 1000 * 60 * 10, //10 min
+    enabled: authReady,
     meta: {
       persist: true,
     },

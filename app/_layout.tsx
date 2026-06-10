@@ -1,3 +1,4 @@
+import { AuthLogoutAlert } from "@/src/features/auth/AuthLogoutAlert";
 import { useAuth } from "@/src/features/auth/auth.hooks";
 import { configureForegroundNotificationHandler } from "@/src/features/push/foreground-notification-handler";
 import { useActiveChatRouteSync } from "@/src/hooks/use-active-chat-route-sync";
@@ -101,6 +102,7 @@ function RootLayoutInner() {
             </KeyboardProvider>
           </PersistQueryClientProvider>
           <NetworkListener />
+          <AuthLogoutAlert />
         </ToastProvider>
       </ActionSheetProvider>
     </>
