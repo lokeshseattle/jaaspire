@@ -2,6 +2,7 @@ import React, {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useRef,
   useState,
 } from "react";
@@ -26,7 +27,16 @@ type ToastContextType = {
   trigger: (message: string, variant?: Variant) => void;
 };
 
+type ToastTrigger = ToastContextType["trigger"];
+
 const ToastContext = createContext<ToastContextType | null>(null);
+
+let globalTrigger: ToastTrigger | null = null;
+
+/** Imperative toast for non-React code (e.g. API interceptors). */
+export function showToast(message: string, variant: Variant = "info") {
+  globalTrigger?.(message, variant);
+}
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const insets = useSafeAreaInsets();
@@ -97,6 +107,13 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       show();
     }
   }, []);
+
+  useEffect(() => {
+    globalTrigger = trigger;
+    return () => {
+      globalTrigger = null;
+    };
+  }, [trigger]);
 
   const bubbleStyle = [
     styles.bubble,

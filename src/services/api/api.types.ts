@@ -71,6 +71,24 @@ export type Verify2FAResponse = {
   data: AuthSessionPayload;
 };
 
+export type ForgotPasswordRequest = {
+  email: string;
+};
+
+export type ForgotPasswordResponse = {
+  success: boolean;
+  message: string;
+  data: {
+    email: string;
+  };
+};
+
+export type ResendEmailVerificationResponse = {
+  success: boolean;
+  message: string;
+  data?: { message?: string };
+};
+
 export type DeleteAccountRequest = {
   password: string;
 };
@@ -104,7 +122,7 @@ export type RegisterRequest = {
   username: string;
   password: string;
   password_confirmation: string;
-
+  signup_source: string;
   country?: string;
   utm_source?: string;
   utm_medium?: string;
@@ -563,7 +581,7 @@ export type FollowUser = {
     all_viewed: boolean;
     story_count: number;
   };
-  follow_status: "follow" | "following" | "requested";
+  follow_status: "follow" | "following" | "requested" | "unfollow";
 };
 
 export type FollowersResponse = {
@@ -1027,6 +1045,11 @@ export type SendAiChatMessageResult = {
   fullContent: string;
 };
 
+export type NewAiChatResponse = {
+  status: string;
+  message?: string;
+};
+
 export type MarkMessengerMessagesReadResponse = {
   status: string;
   data: {
@@ -1316,6 +1339,37 @@ export type PaymentsResponse = {
   data: {
     payments: Payment[];
     pagination: Pagination;
+  };
+};
+
+export type VerificationFile = {
+  id: string;
+  path: string;
+  type: "image" | "document";
+  thumbnail: string | null;
+};
+
+export type VerificationStatusData = {
+  email_confirmed: boolean;
+  birthdate_set: boolean;
+  status: string;
+  rejection_reason: string | null;
+  files: VerificationFile[];
+  can_submit: boolean;
+};
+
+export type VerificationStatusResponse = {
+  success: boolean;
+  message: string;
+  data: VerificationStatusData;
+};
+
+export type SubmitVerificationResponse = {
+  success: boolean;
+  message: string;
+  data: {
+    status: string;
+    files: VerificationFile[];
   };
 };
 

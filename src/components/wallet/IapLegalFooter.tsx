@@ -1,4 +1,7 @@
-import { LEGAL_LINKS } from "@/src/constants/legal-links";
+import {
+  APPLE_STANDARD_EULA_URL,
+  LEGAL_LINKS,
+} from "@/src/constants/legal-links";
 import { AppTheme } from "@/src/theme";
 import { openWebUrl } from "@/src/utils/open-web-url";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
@@ -47,12 +50,17 @@ export function VirtualCurrencyDisclaimer({
   );
 }
 
+function iapTermsOfUseEulaUrl(): string {
+  if (Platform.OS === "ios") return APPLE_STANDARD_EULA_URL;
+  return LEGAL_LINKS.termsOfService;
+}
+
 export function IapLegalLinksRow({ theme }: { theme: AppTheme }) {
   const styles = createStyles(theme);
   return (
     <View style={styles.linksRow}>
       <Pressable
-        onPress={() => void openWebUrl(LEGAL_LINKS.termsOfService)}
+        onPress={() => void openWebUrl(iapTermsOfUseEulaUrl())}
         accessibilityRole="link"
         accessibilityLabel="Terms of Use EULA"
         hitSlop={4}

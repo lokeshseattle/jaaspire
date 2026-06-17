@@ -369,6 +369,15 @@ export default function AppLayout() {
         />
 
         <Stack.Screen
+          name="account-verification"
+          options={{
+            headerShown: true,
+            headerTitle: "Account verification",
+            headerBackButtonDisplayMode: "minimal",
+          }}
+        />
+
+        <Stack.Screen
           name="delete-account"
           options={{
             headerShown: true,

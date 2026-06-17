@@ -1,7 +1,7 @@
 import FormInput from "@/src/components/ui/input";
 import {
-  useAuth,
-  useDeleteAccountMutation,
+    useAuth,
+    useDeleteAccountMutation,
 } from "@/src/features/auth/auth.hooks";
 import { forceLogout } from "@/src/features/auth/auth.utils";
 import { AppTheme } from "@/src/theme";
@@ -12,12 +12,12 @@ import { useNavigation } from "expo-router";
 import { useLayoutEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
+    ActivityIndicator,
+    Alert,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -164,8 +164,8 @@ export default function DeleteAccountScreen() {
           </View>
           <Text style={styles.warningTitle}>This action is permanent</Text>
           <Text style={styles.warningSubtitle}>
-            Once the grace window passes, your account and personal data will
-            be permanently removed. Before continuing, please understand:
+            Once the grace window passes, your account and personal data will be
+            permanently removed. Before continuing, please understand:
           </Text>
         </View>
       </View>

@@ -6,6 +6,7 @@ import {
   useResend2FA,
   useVerify2FA,
 } from "@/src/features/auth/auth.hooks";
+import { isNetworkError } from "@/src/services/api/api.error";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { Redirect, useLocalSearchParams } from "expo-router";
@@ -64,6 +65,7 @@ export default function Verify2FAScreen() {
           void authStore.login(r.data.token);
         },
         onError: (e) => {
+          if (isNetworkError(e)) return;
           setErrorText(e.message || "Invalid OTP");
         },
       },
@@ -80,6 +82,7 @@ export default function Verify2FAScreen() {
           setErrorText(null);
         },
         onError: (e) => {
+          if (isNetworkError(e)) return;
           setErrorText(e.message || "Could not resend code");
         },
       },

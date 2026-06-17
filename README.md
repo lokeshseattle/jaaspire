@@ -35,6 +35,35 @@ npm run reset-project
 
 This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
 
+## OTA updates (EAS Update)
+
+This app uses [EAS Update](https://docs.expo.dev/eas-update/introduction/) for over-the-air JavaScript updates.
+
+### Prerequisites
+
+1. Log in: `npx eas-cli@latest login`
+2. Confirm channel mapping: `npm run channel:list` (`preview` and `production` channels should point to matching branches)
+3. Test OTA with an EAS-built binary (preview or production profile), not a local dev client
+
+### Publish an update
+
+```bash
+# Staging / preview builds
+npm run update:preview
+
+# Production builds
+npm run update:production
+```
+
+Updates are downloaded in the background and applied on the next cold launch. Runtime version follows `app.json` `expo.version` (`runtimeVersion.policy: appVersion`), so bump `expo.version` and ship a new native build when native dependencies change.
+
+### Inspect updates
+
+```bash
+npm run update:list
+npm run channel:list
+```
+
 ## Learn more
 
 To learn more about developing your project with Expo, look at the following resources:

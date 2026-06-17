@@ -1,21 +1,22 @@
 import JaasiStar from "@/assets/svg/JaasiStar";
 import { PickedFile, useMediaPicker } from "@/hooks/use-media-picker";
-import PaymentConfirmSheet from "@/src/components/payment/PaymentConfirmSheet";
 import ReportModal from "@/src/components/home/posts/ReportModal";
+import PaymentConfirmSheet from "@/src/components/payment/PaymentConfirmSheet";
 import {
-    appendGiftedMessages,
-    GiftedChat,
-    type GiftedIMessage,
+  appendGiftedMessages,
+  GiftedChat,
+  type GiftedIMessage,
 } from "@/src/features/messenger/gifted-chat-bridge";
 import { MessageMediaStack } from "@/src/features/messenger/messenger-message-media";
 import { messengerMessagesQueryKey } from "@/src/features/messenger/messenger-query-keys";
 import {
-    messengerUserFromProfile,
-    useGetMessengerContacts,
-    useInfiniteMessengerMessages,
-    useMarkMessageAsRead,
-    useSendAiChatMessage,
-    useSendMessengerMessage,
+  messengerUserFromProfile,
+  useGetMessengerContacts,
+  useInfiniteMessengerMessages,
+  useMarkMessageAsRead,
+  useResetAiChat,
+  useSendAiChatMessage,
+  useSendMessengerMessage,
 } from "@/src/features/messenger/messenger.hooks";
 import {
   useBlockUserMutation,
@@ -24,8 +25,8 @@ import {
   useUnblockUserMutation,
 } from "@/src/features/profile/profile.hooks";
 import {
-    uploadAndProcessMessageAttachment,
-    uploadImageAttachment,
+  uploadAndProcessMessageAttachment,
+  uploadImageAttachment,
 } from "@/src/features/upload/upload.hooks";
 import {
   formatIapUsdAmount,
@@ -39,11 +40,11 @@ import {
 } from "@/src/features/wallet/wallet.hooks";
 import { useChatRealtime } from "@/src/lib/pusher";
 import type {
-    IapSkuListItem,
-    MessengerMessage,
-    MessengerMessagesResponse,
-    MessengerUser,
-    ReportTarget,
+  IapSkuListItem,
+  MessengerMessage,
+  MessengerMessagesResponse,
+  MessengerUser,
+  ReportTarget,
 } from "@/src/services/api/api.types";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
@@ -54,40 +55,40 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import { useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import {
-    router,
-    useFocusEffect,
-    useLocalSearchParams,
-    useNavigation,
+  router,
+  useFocusEffect,
+  useLocalSearchParams,
+  useNavigation,
 } from "expo-router";
 import React, {
-    useCallback,
-    useEffect,
-    useLayoutEffect,
-    useMemo,
-    useRef,
-    useState,
-    type ComponentProps,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
 } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Modal,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    useColorScheme,
-    View,
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useColorScheme,
+  View,
 } from "react-native";
-import type { ScrollEvent } from "react-native-reanimated";
 import {
-    Bubble,
-    InputToolbar,
-    Send,
-    type BubbleProps,
-    type SendProps,
+  Bubble,
+  InputToolbar,
+  Send,
+  type BubbleProps,
+  type SendProps,
 } from "react-native-gifted-chat";
+import type { ScrollEvent } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 /** WhatsApp-style blue for “read” double-ticks (outgoing bubble). */
@@ -152,9 +153,7 @@ function AttachmentLockPricePicker({
         <Text style={styles.lockPriceUnavailableTitle}>
           No price options available
         </Text>
-        <Text style={styles.lockPriceUnavailableBody}>
-          Try again later.
-        </Text>
+        <Text style={styles.lockPriceUnavailableBody}>Try again later.</Text>
       </View>
     );
   }
@@ -207,7 +206,9 @@ function AttachmentLockPricePicker({
           );
         })}
       </ScrollView>
-      <Text style={styles.lockPriceHint}>Select an unlock price for this attachment.</Text>
+      <Text style={styles.lockPriceHint}>
+        Select an unlock price for this attachment.
+      </Text>
     </>
   );
 }
@@ -341,13 +342,17 @@ function ChatPeerHeaderTitle({
 
 const headerTitleStyles = StyleSheet.create({
   pressable: {
-    maxWidth: 240,
-    alignItems: "center",
+    // maxWidth: 240,
+    alignItems: "flex-start",
+    // backgroundColor: "blue",
+    width: "100%",
   },
   row: {
     flexDirection: "row",
-    alignItems: "center",
-    maxWidth: 240,
+    // alignItems: "flex-start",
+    // backgroundColor: "red",
+    // maxWidth: 240,
+    width: "100%",
   },
   avatar: {
     width: 36,
@@ -364,11 +369,11 @@ const headerTitleStyles = StyleSheet.create({
     minWidth: 0,
   },
   name: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "600",
   },
   username: {
-    fontSize: 13,
+    fontSize: 12,
     marginTop: 1,
   },
 });
@@ -661,6 +666,7 @@ export default function MessengerChatScreen() {
 
   const sendMutation = useSendMessengerMessage(peerId);
   const sendAiChatMutation = useSendAiChatMessage();
+  const resetAiChatMutation = useResetAiChat(peerId);
   const markMessageAsReadMutation = useMarkMessageAsRead();
   const unlockMessageMutation = useUnlockMessage();
   const blockMutation = useBlockUserMutation();
@@ -696,7 +702,9 @@ export default function MessengerChatScreen() {
 
   const selectedLockProduct = useMemo(
     () =>
-      lockPriceOptions.find((product) => product.sku_key === selectedLockSkuKey),
+      lockPriceOptions.find(
+        (product) => product.sku_key === selectedLockSkuKey,
+      ),
     [selectedLockSkuKey, lockPriceOptions],
   );
 
@@ -933,8 +941,7 @@ export default function MessengerChatScreen() {
   const { data: peerProfile, refetch: refetchPeerProfile } =
     useGetProfileByUsername(peerUsername);
 
-  const isBlockedByYou =
-    peerProfile?.data?.blocked_status === "blocked_by_you";
+  const isBlockedByYou = peerProfile?.data?.blocked_status === "blocked_by_you";
   const isBlockedByUser =
     peerProfile?.data?.blocked_status === "blocked_by_user";
   const isMessagingBlocked = isBlockedByYou || isBlockedByUser;
@@ -954,6 +961,36 @@ export default function MessengerChatScreen() {
     closeMenu();
     setReportTarget({ kind: "user", userId: peerId });
   }, [closeMenu, peerId]);
+
+  const handleResetChat = useCallback(() => {
+    closeMenu();
+    Alert.alert(
+      "Reset Chat",
+      "Start a fresh conversation with JaasiAI? Your current chat history will be cleared.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Reset",
+          style: "destructive",
+          onPress: () => {
+            resetAiChatMutation.mutate(undefined, {
+              onSuccess: async () => {
+                setPending([]);
+                setStreamingAi(null);
+                await refetch();
+              },
+              onError: () => {
+                Alert.alert(
+                  "Couldn't reset chat",
+                  "Something went wrong. Try again.",
+                );
+              },
+            });
+          },
+        },
+      ],
+    );
+  }, [closeMenu, resetAiChatMutation, refetch]);
 
   const handleBlock = useCallback(() => {
     if (!peerUsername) {
@@ -1291,6 +1328,7 @@ export default function MessengerChatScreen() {
 
   useLayoutEffect(() => {
     navigation.setOptions({
+      headerTitleAlign: "left",
       headerTitle: () => (
         <ChatPeerHeaderTitle peer={peerDisplay} theme={theme} />
       ),
@@ -1368,96 +1406,96 @@ export default function MessengerChatScreen() {
       }
 
       return (
-      <View
-        style={[
-          styles.inputToolbarOuter,
-          { paddingBottom: Math.min(insets.bottom, 6) },
-        ]}
-      >
-        {canAttachMedia ? (
-          <AttachmentPreview
-            attachment={attachments}
-            onRemove={removeAttachment}
-            isUploading={isUploadingAttachment}
-            theme={theme}
-          />
-        ) : null}
-        {canAttachMedia && attachments && !isAiConversation && (
-          <>
-            <Pressable
-              onPress={handleToggleLock}
-              hitSlop={8}
-              style={[
-                styles.lockToggleBar,
-                {
-                  backgroundColor: isLockEnabled
-                    ? theme.colors.primary + "18"
-                    : theme.colors.surface,
-                  borderColor: isLockEnabled
-                    ? theme.colors.primary
-                    : theme.colors.border,
-                },
-              ]}
-            >
-              <Ionicons
-                name={isLockEnabled ? "lock-closed" : "lock-open-outline"}
-                size={16}
-                color={
-                  isLockEnabled
-                    ? theme.colors.primary
-                    : theme.colors.textSecondary
-                }
-              />
-              <Text
+        <View
+          style={[
+            styles.inputToolbarOuter,
+            { paddingBottom: Math.min(insets.bottom, 6) },
+          ]}
+        >
+          {canAttachMedia ? (
+            <AttachmentPreview
+              attachment={attachments}
+              onRemove={removeAttachment}
+              isUploading={isUploadingAttachment}
+              theme={theme}
+            />
+          ) : null}
+          {canAttachMedia && attachments && !isAiConversation && (
+            <>
+              <Pressable
+                onPress={handleToggleLock}
+                hitSlop={8}
                 style={[
-                  styles.lockToggleLabel,
+                  styles.lockToggleBar,
                   {
-                    color: isLockEnabled
+                    backgroundColor: isLockEnabled
+                      ? theme.colors.primary + "18"
+                      : theme.colors.surface,
+                    borderColor: isLockEnabled
                       ? theme.colors.primary
-                      : theme.colors.textSecondary,
+                      : theme.colors.border,
                   },
                 ]}
               >
-                {isLockEnabled && selectedLockProduct
-                  ? `Locked · ${formatLockStars(lockPrice)} stars`
-                  : isLockEnabled
-                    ? "Locked · select price"
-                    : "Lock attachment"}
-              </Text>
-              <Ionicons
-                name={isLockEnabled ? "close-circle" : "chevron-forward"}
-                size={14}
-                color={
-                  isLockEnabled
-                    ? theme.colors.primary
-                    : theme.colors.textSecondary
-                }
-              />
-            </Pressable>
-            {isLockEnabled && (
-              <View style={styles.lockPriceSection}>
-                <AttachmentLockPricePicker
-                  options={lockPriceOptions}
-                  selectedSkuKey={selectedLockSkuKey}
-                  onSelectSkuKey={setSelectedLockSkuKey}
-                  isPending={iapSkusPending}
-                  isError={iapSkusError}
-                  onRetry={() => void refetchIapSkus()}
-                  theme={theme}
-                  styles={styles}
+                <Ionicons
+                  name={isLockEnabled ? "lock-closed" : "lock-open-outline"}
+                  size={16}
+                  color={
+                    isLockEnabled
+                      ? theme.colors.primary
+                      : theme.colors.textSecondary
+                  }
                 />
-              </View>
-            )}
-          </>
-        )}
-        <InputToolbar<GiftedIMessage>
-          {...toolbarProps}
-          containerStyle={[
-            styles.inputToolbarInner,
-            toolbarProps.containerStyle,
-          ]}
-        />
-      </View>
+                <Text
+                  style={[
+                    styles.lockToggleLabel,
+                    {
+                      color: isLockEnabled
+                        ? theme.colors.primary
+                        : theme.colors.textSecondary,
+                    },
+                  ]}
+                >
+                  {isLockEnabled && selectedLockProduct
+                    ? `Locked · ${formatLockStars(lockPrice)} stars`
+                    : isLockEnabled
+                      ? "Locked · select price"
+                      : "Lock attachment"}
+                </Text>
+                <Ionicons
+                  name={isLockEnabled ? "close-circle" : "chevron-forward"}
+                  size={14}
+                  color={
+                    isLockEnabled
+                      ? theme.colors.primary
+                      : theme.colors.textSecondary
+                  }
+                />
+              </Pressable>
+              {isLockEnabled && (
+                <View style={styles.lockPriceSection}>
+                  <AttachmentLockPricePicker
+                    options={lockPriceOptions}
+                    selectedSkuKey={selectedLockSkuKey}
+                    onSelectSkuKey={setSelectedLockSkuKey}
+                    isPending={iapSkusPending}
+                    isError={iapSkusError}
+                    onRetry={() => void refetchIapSkus()}
+                    theme={theme}
+                    styles={styles}
+                  />
+                </View>
+              )}
+            </>
+          )}
+          <InputToolbar<GiftedIMessage>
+            {...toolbarProps}
+            containerStyle={[
+              styles.inputToolbarInner,
+              toolbarProps.containerStyle,
+            ]}
+          />
+        </View>
       );
     },
     [
@@ -1587,228 +1625,245 @@ export default function MessengerChatScreen() {
   // Set price row: was renderAccessory + Pressable "Set price" — restore when monetization ships.
   return (
     <>
-    <View style={styles.root}>
-      <GiftedChat
-        messages={displayMessages}
-        extraData={streamingAi?.text}
-        listProps={giftedListProps}
-        onSend={onSend}
-        user={currentUser}
-        renderBubble={renderBubble}
-        renderCustomView={(bubbleProps: BubbleProps<GiftedIMessage>) => {
-          const msg = bubbleProps.currentMessage;
-          const atts = msg?.messengerAttachments;
-          if (!atts?.length) return null;
+      <View style={styles.root}>
+        <GiftedChat
+          messages={displayMessages}
+          extraData={streamingAi?.text}
+          listProps={giftedListProps}
+          onSend={onSend}
+          user={currentUser}
+          renderBubble={renderBubble}
+          renderCustomView={(bubbleProps: BubbleProps<GiftedIMessage>) => {
+            const msg = bubbleProps.currentMessage;
+            const atts = msg?.messengerAttachments;
+            if (!atts?.length) return null;
 
-          const isMessageLocked =
-            (msg?.price ?? 0) > 0 && !msg?.hasUserUnlockedMessage;
-          const isSender = msg?.user._id === myId;
+            const isMessageLocked =
+              (msg?.price ?? 0) > 0 && !msg?.hasUserUnlockedMessage;
+            const isSender = msg?.user._id === myId;
 
-          return (
-            <MessageMediaStack
-              attachments={atts}
-              theme={theme}
-              isLocked={isMessageLocked}
-              isSender={isSender}
-              price={msg?.price}
-              hasUserUnlockedMessage={msg?.hasUserUnlockedMessage ?? false}
-              onUnlockPress={() => {
-                if (!msg?.originalMessageId || isSender) return;
-                setUnlockTarget({
-                  messageId: msg.originalMessageId,
-                  price: msg.price ?? 0,
-                  username: peerDisplay.username || peerDisplay.name,
-                });
+            return (
+              <MessageMediaStack
+                attachments={atts}
+                theme={theme}
+                isLocked={isMessageLocked}
+                isSender={isSender}
+                price={msg?.price}
+                hasUserUnlockedMessage={msg?.hasUserUnlockedMessage ?? false}
+                onUnlockPress={() => {
+                  if (!msg?.originalMessageId || isSender) return;
+                  setUnlockTarget({
+                    messageId: msg.originalMessageId,
+                    price: msg.price ?? 0,
+                    username: peerDisplay.username || peerDisplay.name,
+                  });
+                }}
+              />
+            );
+          }}
+          renderInputToolbar={renderInputToolbar}
+          isUsernameVisible={false}
+          colorScheme={colorScheme}
+          isInverted
+          keyboardProviderProps={
+            Platform.OS === "android"
+              ? {
+                  statusBarTranslucent: true,
+                  navigationBarTranslucent: true,
+                }
+              : undefined
+          }
+          keyboardAvoidingViewProps={keyboardAvoidingViewProps}
+          loadEarlierMessagesProps={{
+            isAvailable: Boolean(hasNextPage),
+            isLoading: isFetchingNextPage,
+            onPress: loadEarlier,
+            label: "Load earlier messages",
+            isInfiniteScrollEnabled: true,
+          }}
+          renderActions={
+            canAttachMedia
+              ? () => (
+                  <View style={styles.attachActionsWrap}>
+                    <Pressable
+                      onPress={handleAttachMedia}
+                      disabled={isUploadingAttachment}
+                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                      style={styles.attachButton}
+                      accessibilityRole="button"
+                      accessibilityLabel="Attach photo or video"
+                    >
+                      <Ionicons
+                        name={attachments ? "refresh-outline" : "add-outline"}
+                        size={28}
+                        color={
+                          attachments
+                            ? theme.colors.primary
+                            : theme.colors.textSecondary
+                        }
+                      />
+                    </Pressable>
+                  </View>
+                )
+              : undefined
+          }
+          messagesContainerStyle={{
+            backgroundColor: theme.colors.background,
+          }}
+          // minInputToolbarHeight={78}
+          primaryStyle={styles.inputToolbarPrimary}
+          textInputProps={{
+            placeholder: "Message",
+            placeholderTextColor: theme.colors.textSecondary,
+            multiline: true,
+            numberOfLines: 4,
+          }}
+          // renderComposer={(props: ComposerProps) => {
+          //   const { text, textInputProps, onSend } =
+          //     props as GiftedComposerToolbarProps;
+          //   return (
+          //     <MergedComposerRow
+          //       text={text}
+          //       textInputProps={textInputProps}
+          //       onSend={onSend}
+          //       styles={styles}
+          //       theme={theme}
+          //     />
+          //   );
+          // }}
+          renderSend={(props: SendProps<GiftedIMessage>) => (
+            <Send
+              {...props}
+              containerStyle={styles.mergedSendWrap}
+              isSendButtonAlwaysVisible={Boolean(
+                canAttachMedia && attachments && processedAttachmentId,
+              )}
+              isTextOptional={Boolean(canAttachMedia && attachments)}
+              sendButtonProps={{
+                accessibilityLabel: "Send message",
+                style: styles.sendButton,
               }}
-            />
-          );
-        }}
-        renderInputToolbar={renderInputToolbar}
-        isUsernameVisible={false}
-        colorScheme={colorScheme}
-        isInverted
-        keyboardProviderProps={
-          Platform.OS === "android"
-            ? {
-                statusBarTranslucent: true,
-                navigationBarTranslucent: true,
-              }
-            : undefined
-        }
-        keyboardAvoidingViewProps={keyboardAvoidingViewProps}
-        loadEarlierMessagesProps={{
-          isAvailable: Boolean(hasNextPage),
-          isLoading: isFetchingNextPage,
-          onPress: loadEarlier,
-          label: "Load earlier messages",
-          isInfiniteScrollEnabled: true,
-        }}
-        renderActions={
-          canAttachMedia
-            ? () => (
-                <View style={styles.attachActionsWrap}>
+            >
+              <Ionicons name="send" size={18} color={theme.colors.primary} />
+            </Send>
+          )}
+        />
+
+        {unlockTarget && (
+          <PaymentConfirmSheet
+            visible={Boolean(unlockTarget)}
+            onClose={() => setUnlockTarget(null)}
+            onConfirm={handleUnlockConfirm}
+            onConfirmIap={handleConfirmIapUnlock}
+            action="unlock_message"
+            username={unlockTarget.username}
+            amount={unlockTarget.price}
+            iapSku={messageIapSku}
+            starsPerUsd={iapSkusResponse?.currency?.stars_per_usd}
+            iapStarsAmount={messageIapStars}
+            loading={unlockMessageMutation.isPending || isIapUnlockProcessing}
+          />
+        )}
+      </View>
+
+      {showChatMenu && (
+        <Modal
+          visible={menuVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={closeMenu}
+        >
+          <Pressable style={styles.menuOverlay} onPress={closeMenu}>
+            <View />
+          </Pressable>
+          <View
+            style={[styles.menuPanel, { top: headerHeight + 6 }]}
+            pointerEvents="box-none"
+          >
+            {isAiConversation ? (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.menuRow,
+                  pressed && styles.menuRowPressed,
+                  resetAiChatMutation.isPending && styles.menuRowDisabled,
+                ]}
+                onPress={handleResetChat}
+                disabled={resetAiChatMutation.isPending}
+              >
+                <Ionicons
+                  name="refresh-outline"
+                  size={22}
+                  color={theme.colors.textPrimary}
+                />
+                <Text style={styles.menuRowLabel}>Reset Chat</Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.menuRow,
+                  pressed && styles.menuRowPressed,
+                ]}
+                onPress={handleReportUser}
+              >
+                <Ionicons name="flag-outline" size={22} color="#EF4444" />
+                <Text
+                  style={[styles.menuRowLabel, styles.menuRowLabelDestructive]}
+                >
+                  Report user
+                </Text>
+              </Pressable>
+            )}
+            {!isAiConversation && (
+              <>
+                <View style={styles.menuDivider} />
+                {isBlockedByUser || isBlockedByYou ? (
                   <Pressable
-                    onPress={handleAttachMedia}
-                    disabled={isUploadingAttachment}
-                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                    style={styles.attachButton}
-                    accessibilityRole="button"
-                    accessibilityLabel="Attach photo or video"
+                    style={({ pressed }) => [
+                      styles.menuRow,
+                      pressed && styles.menuRowPressed,
+                    ]}
+                    onPress={handleUnblock}
+                    disabled={unblockMutation.isPending || !peerUsername}
                   >
                     <Ionicons
-                      name={attachments ? "refresh-outline" : "add-outline"}
-                      size={28}
-                      color={
-                        attachments
-                          ? theme.colors.primary
-                          : theme.colors.textSecondary
-                      }
+                      name="checkmark-circle-outline"
+                      size={22}
+                      color={theme.colors.textPrimary}
                     />
+                    <Text style={styles.menuRowLabel}>Unblock</Text>
                   </Pressable>
-                </View>
-              )
-            : undefined
-        }
-        messagesContainerStyle={{
-          backgroundColor: theme.colors.background,
-        }}
-        // minInputToolbarHeight={78}
-        primaryStyle={styles.inputToolbarPrimary}
-        textInputProps={{
-          placeholder: "Message",
-          placeholderTextColor: theme.colors.textSecondary,
-          multiline: true,
-          numberOfLines: 4,
-        }}
-        // renderComposer={(props: ComposerProps) => {
-        //   const { text, textInputProps, onSend } =
-        //     props as GiftedComposerToolbarProps;
-        //   return (
-        //     <MergedComposerRow
-        //       text={text}
-        //       textInputProps={textInputProps}
-        //       onSend={onSend}
-        //       styles={styles}
-        //       theme={theme}
-        //     />
-        //   );
-        // }}
-        renderSend={(props: SendProps<GiftedIMessage>) => (
-          <Send
-            {...props}
-            containerStyle={styles.mergedSendWrap}
-            isSendButtonAlwaysVisible={Boolean(
-              canAttachMedia && attachments && processedAttachmentId,
-            )}
-            isTextOptional={Boolean(canAttachMedia && attachments)}
-            sendButtonProps={{
-              accessibilityLabel: "Send message",
-              style: styles.sendButton,
-            }}
-          >
-            <Ionicons name="send" size={18} color={theme.colors.primary} />
-          </Send>
-        )}
-      />
-
-      {unlockTarget && (
-        <PaymentConfirmSheet
-          visible={Boolean(unlockTarget)}
-          onClose={() => setUnlockTarget(null)}
-          onConfirm={handleUnlockConfirm}
-          onConfirmIap={handleConfirmIapUnlock}
-          action="unlock_message"
-          username={unlockTarget.username}
-          amount={unlockTarget.price}
-          iapSku={messageIapSku}
-          starsPerUsd={iapSkusResponse?.currency?.stars_per_usd}
-          iapStarsAmount={messageIapStars}
-          loading={
-            unlockMessageMutation.isPending || isIapUnlockProcessing
-          }
-        />
-      )}
-    </View>
-
-    {showChatMenu && (
-      <Modal
-        visible={menuVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={closeMenu}
-      >
-        <Pressable style={styles.menuOverlay} onPress={closeMenu}>
-          <View />
-        </Pressable>
-        <View
-          style={[styles.menuPanel, { top: headerHeight + 6 }]}
-          pointerEvents="box-none"
-        >
-          <Pressable
-            style={({ pressed }) => [
-              styles.menuRow,
-              pressed && styles.menuRowPressed,
-            ]}
-            onPress={handleReportUser}
-          >
-            <Ionicons name="flag-outline" size={22} color="#EF4444" />
-            <Text
-              style={[styles.menuRowLabel, styles.menuRowLabelDestructive]}
-            >
-              Report user
-            </Text>
-          </Pressable>
-          {!isAiConversation && (
-            <>
-              <View style={styles.menuDivider} />
-              {isBlockedByUser || isBlockedByYou ? (
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.menuRow,
-                    pressed && styles.menuRowPressed,
-                  ]}
-                  onPress={handleUnblock}
-                  disabled={unblockMutation.isPending || !peerUsername}
-                >
-                  <Ionicons
-                    name="checkmark-circle-outline"
-                    size={22}
-                    color={theme.colors.textPrimary}
-                  />
-                  <Text style={styles.menuRowLabel}>Unblock</Text>
-                </Pressable>
-              ) : (
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.menuRow,
-                    pressed && styles.menuRowPressed,
-                    !peerUsername && styles.menuRowDisabled,
-                  ]}
-                  onPress={handleBlock}
-                  disabled={blockMutation.isPending}
-                >
-                  <Ionicons name="ban-outline" size={22} color="#EF4444" />
-                  <Text
-                    style={[
-                      styles.menuRowLabel,
-                      styles.menuRowLabelDestructive,
+                ) : (
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.menuRow,
+                      pressed && styles.menuRowPressed,
+                      !peerUsername && styles.menuRowDisabled,
                     ]}
+                    onPress={handleBlock}
+                    disabled={blockMutation.isPending}
                   >
-                    Block
-                  </Text>
-                </Pressable>
-              )}
-            </>
-          )}
-        </View>
-      </Modal>
-    )}
+                    <Ionicons name="ban-outline" size={22} color="#EF4444" />
+                    <Text
+                      style={[
+                        styles.menuRowLabel,
+                        styles.menuRowLabelDestructive,
+                      ]}
+                    >
+                      Block
+                    </Text>
+                  </Pressable>
+                )}
+              </>
+            )}
+          </View>
+        </Modal>
+      )}
 
-    <ReportModal
-      visible={reportTarget != null}
-      onClose={() => setReportTarget(null)}
-      target={reportTarget}
-    />
+      <ReportModal
+        visible={reportTarget != null}
+        onClose={() => setReportTarget(null)}
+        target={reportTarget}
+      />
     </>
   );
 }

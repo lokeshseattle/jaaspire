@@ -6,6 +6,7 @@ import {
   CountriesResponse,
   FollowersResponse,
   FollowingResponse,
+  FollowUser,
   FollowUserResponse,
   GendersResponse,
   MentionSearchResponse,
@@ -32,7 +33,54 @@ import {
   useQuery,
   useQueryClient,
   UseQueryResult,
+  InfiniteData,
 } from "@tanstack/react-query";
+
+function patchFollowStatusInConnectionLists(
+  targetUsername: string,
+  followStatus: FollowUser["follow_status"],
+) {
+  const normalizedTarget = targetUsername.trim().toLowerCase();
+
+  const patchUser = (user: FollowUser) =>
+    user.username.trim().toLowerCase() === normalizedTarget
+      ? { ...user, follow_status: followStatus }
+      : user;
+
+  queryClient.setQueriesData<InfiniteData<FollowersResponse>>(
+    { queryKey: ["followers"] },
+    (old) => {
+      if (!old) return old;
+      return {
+        ...old,
+        pages: old.pages.map((page) => ({
+          ...page,
+          data: {
+            ...page.data,
+            followers: page.data.followers.map(patchUser),
+          },
+        })),
+      };
+    },
+  );
+
+  queryClient.setQueriesData<InfiniteData<FollowingResponse>>(
+    { queryKey: ["following"] },
+    (old) => {
+      if (!old) return old;
+      return {
+        ...old,
+        pages: old.pages.map((page) => ({
+          ...page,
+          data: {
+            ...page.data,
+            following: page.data.following.map(patchUser),
+          },
+        })),
+      };
+    },
+  );
+}
 
 export const useGetProfile = (): UseQueryResult<
   ProfileResponse,
@@ -243,6 +291,55 @@ export const useGetFollowingQuery = (username: string, enabled: boolean) => {
   });
 };
 
+export const useRemoveFollowerMutation = (profileUsername: string) => {
+  return useMutation({
+    mutationFn: (followerUserId: number) =>
+      apiClient.delete(`/followers/${followerUserId}`).then((d) => d.data),
+
+    onMutate: (followerUserId) => {
+      queryClient.cancelQueries({ queryKey: ["followers", profileUsername] });
+      const previous = queryClient.getQueryData(["followers", profileUsername]);
+
+      queryClient.setQueryData(
+        ["followers", profileUsername],
+        (old: { pages: FollowersResponse[] } | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              data: {
+                ...page.data,
+                followers: page.data.followers.filter(
+                  (follower) => follower.id !== followerUserId,
+                ),
+              },
+            })),
+          };
+        },
+      );
+
+      return { previous };
+    },
+
+    onError: (_err, _followerUserId, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(
+          ["followers", profileUsername],
+          context.previous,
+        );
+      }
+    },
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["followers", profileUsername],
+      });
+      queryClient.invalidateQueries({ queryKey: ["profile"] });
+    },
+  });
+};
+
 export const useBlockedUsersQuery = () => {
   return useInfiniteQuery({
     queryKey: ["blocked-users"],
@@ -327,7 +424,9 @@ export const useFollowToggleMutation = () => {
     },
 
     onSuccess: (data, username) => {
-      // ✅ Full intellisense here
+      const followStatus = data.data.follow_status as FollowUser["follow_status"];
+      patchFollowStatusInConnectionLists(username, followStatus);
+
       queryClient.invalidateQueries({ queryKey: ["followers"] });
       queryClient.invalidateQueries({ queryKey: ["following"] });
       queryClient.invalidateQueries({ queryKey: ["profile", username] });

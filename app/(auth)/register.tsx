@@ -1,8 +1,7 @@
 import { LEGAL_LINKS } from "@/src/constants/legal-links";
-import { StyleSheet, Text, View, Pressable } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useDebounce } from "@/hooks/use-debounce";
-import { AuthScreenLayout } from "@/src/features/auth/AuthScreenLayout";
 import Button from "@/src/components/ui/button";
 import FormInput from "@/src/components/ui/input";
 import {
@@ -10,6 +9,7 @@ import {
   useCheckUsername,
   useRegister,
 } from "@/src/features/auth/auth.hooks";
+import { AuthScreenLayout } from "@/src/features/auth/AuthScreenLayout";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { setServerErrors } from "@/src/utils/form-errors";
@@ -20,9 +20,9 @@ import {
   hasUppercase,
   minLength,
 } from "@/src/utils/validators";
+import { Ionicons } from "@expo/vector-icons";
 import FontAwesome5 from "@expo/vector-icons/FontAwesome5";
 import Fontisto from "@expo/vector-icons/Fontisto";
-import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
@@ -108,6 +108,7 @@ export default function Register() {
         password: data.password,
         password_confirmation: data.confirmPassword,
         username: data.username,
+        signup_source: Platform.OS === "android" ? "android" : "ios",
       },
       {
         onSuccess: (data) => {
@@ -128,7 +129,7 @@ export default function Register() {
         onError: (e) => {
           setServerErrors<FormData>(e.data?.errors, setError, FIELD_MAP);
         },
-      }
+      },
     );
   };
 
@@ -147,14 +148,23 @@ export default function Register() {
   return (
     <AuthScreenLayout
       title="Create an Account"
-      footerLink={{ label: "Already have an account? Sign In", href: "/(auth)/login" }}
+      footerLink={{
+        label: "Already have an account? Sign In",
+        href: "/(auth)/login",
+      }}
     >
       <FormInput
         control={control}
         name="name"
         label="Name"
         placeholder="Enter your name"
-        Left={<FontAwesome5 name="user-circle" size={24} color={theme.colors.icon} />}
+        Left={
+          <FontAwesome5
+            name="user-circle"
+            size={24}
+            color={theme.colors.icon}
+          />
+        }
         rules={{ required: "Name is required" }}
         accessibilityLabel="Full name"
       />
@@ -163,7 +173,13 @@ export default function Register() {
         name="username"
         label="Username"
         placeholder="Enter your username"
-        Left={<FontAwesome5 name="user-circle" size={24} color={theme.colors.icon} />}
+        Left={
+          <FontAwesome5
+            name="user-circle"
+            size={24}
+            color={theme.colors.icon}
+          />
+        }
         rules={{
           required: "Username is required",
           minLength: {
@@ -171,7 +187,8 @@ export default function Register() {
             message: "Username must be at least 3 characters",
           },
           validate: () => {
-            if (isCheckingUsername) return "Please wait while we check availability";
+            if (isCheckingUsername)
+              return "Please wait while we check availability";
             if (usernameUnavailable) return "Username already taken";
             return true;
           },
@@ -224,7 +241,9 @@ export default function Register() {
             hasNumber: (value: string | boolean) =>
               typeof value === "string" ? hasNumber(value) : "Invalid value",
             hasSpecialChar: (value: string | boolean) =>
-              typeof value === "string" ? hasSpecialChar(value) : "Invalid value",
+              typeof value === "string"
+                ? hasSpecialChar(value)
+                : "Invalid value",
           },
         }}
         accessibilityLabel="Password"
@@ -282,9 +301,7 @@ export default function Register() {
                 , and confirm that I am at least 18 years old
               </Text>
             </View>
-            {error && (
-              <Text style={styles.errorText}>{error.message}</Text>
-            )}
+            {error && <Text style={styles.errorText}>{error.message}</Text>}
           </View>
         )}
       />
@@ -292,8 +309,7 @@ export default function Register() {
         control={control}
         name="acceptPolicy"
         rules={{
-          required:
-            "You must agree to the Acceptable Use Policy to continue",
+          required: "You must agree to the Acceptable Use Policy to continue",
         }}
         render={({ field: { value, onChange }, fieldState: { error } }) => (
           <View>
@@ -325,9 +341,7 @@ export default function Register() {
                 will result in immediate account termination.
               </Text>
             </View>
-            {error && (
-              <Text style={styles.errorText}>{error.message}</Text>
-            )}
+            {error && <Text style={styles.errorText}>{error.message}</Text>}
           </View>
         )}
       />

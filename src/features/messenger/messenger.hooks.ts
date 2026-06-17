@@ -1,5 +1,5 @@
 import { apiClient } from "@/src/services/api/api.client";
-import { sendAiChatMessageStream } from "@/src/services/api/ai-chat.api";
+import { startNewAiChat, sendAiChatMessageStream } from "@/src/services/api/ai-chat.api";
 import {
   MarkMessengerMessagesReadResponse,
   MessengerContactsResponse,
@@ -112,6 +112,15 @@ function firstNonEmptyString(
   return undefined;
 }
 
+/** Backend sends id:0 / empty rows when a thread has no real messages yet. */
+function isRenderableMessengerMessage(m: MessengerMessage): boolean {
+  const id = Number(m.id);
+  if (!Number.isFinite(id) || id <= 0) return false;
+  const hasText = (m.message ?? "").trim().length > 0;
+  const hasAttachments = (m.attachments?.length ?? 0) > 0;
+  return hasText || hasAttachments;
+}
+
 /** Coerce message ids to numbers so deduping across pages is stable. */
 function normalizeMessengerMessagesPage(
   body: MessengerMessagesResponse,
@@ -122,12 +131,14 @@ function normalizeMessengerMessagesPage(
     ...body,
     data: {
       ...body.data,
-      messages: list.map((m) => ({
-        ...m,
-        id: Number(m.id),
-        message: m.message ?? "",
-        attachments: m.attachments?.map(normalizeMessengerAttachment),
-      })),
+      messages: list
+        .filter(isRenderableMessengerMessage)
+        .map((m) => ({
+          ...m,
+          id: Number(m.id),
+          message: m.message ?? "",
+          attachments: m.attachments?.map(normalizeMessengerAttachment),
+        })),
     },
   };
 }
@@ -457,6 +468,22 @@ export const useSendAiChatMessage = (): UseMutationResult<
             { message: data.full_content },
           );
         },
+      });
+    },
+  });
+};
+
+export const useResetAiChat = (
+  peerUserId: number,
+): UseMutationResult<void, PossibleErrorResponse, void> => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      await startNewAiChat();
+    },
+    onSuccess: () => {
+      queryClient.resetQueries({
+        queryKey: messengerMessagesQueryKey(peerUserId),
       });
     },
   });

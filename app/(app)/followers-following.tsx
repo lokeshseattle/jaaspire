@@ -3,13 +3,15 @@ import {
     useFollowToggleMutation,
     useGetFollowersQuery,
     useGetFollowingQuery,
+    useGetProfile,
+    useRemoveFollowerMutation,
 } from "@/src/features/profile/profile.hooks";
 import { FollowUser } from "@/src/services/api/api.types";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
-import { capitalize } from "@/src/utils/helpers";
+import { capitalize, isFollowingFromFollowStatus } from "@/src/utils/helpers";
 import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams, useNavigation } from "expo-router";
+import { router, useLocalSearchParams, useNavigation } from "expo-router";
 import React, { useCallback, useLayoutEffect, useMemo, useState } from "react";
 import {
     ActivityIndicator,
@@ -106,7 +108,13 @@ const FollowersFollowingScreen = () => {
   const initialTab: TFilter =
     typeRaw === "following" ? "following" : "followers";
 
+  const { data: profileData } = useGetProfile();
+  const myUsername = profileData?.data?.username?.trim().toLowerCase() ?? "";
+  const isOwnProfile =
+    myUsername.length > 0 && username.toLowerCase() === myUsername;
+
   const toggleFollowMutation = useFollowToggleMutation();
+  const removeFollowerMutation = useRemoveFollowerMutation(username);
 
   const opacity = useSharedValue(1);
   const [activeTab, setActiveTab] = useState<TFilter>(initialTab);
@@ -205,78 +213,203 @@ const FollowersFollowingScreen = () => {
     opacity: opacity.value,
   }));
 
-  const toggleFollow = (username: string) => {
-    toggleFollowMutation.mutate(username);
-  };
-
-  const dispatchAlert = (
-    username: string,
-    type: "follow" | "unfollow",
-    name: string,
-  ) => {
-    Alert.alert(
-      type === "follow" ? "Follow" : "Unfollow",
-      type === "follow"
-        ? `Are you sure you want to follow ${name}?`
-        : `Are you sure you want to unfollow ${name}?`,
-      [
-        {
-          text: "Cancel",
-          onPress: () => {
-            if (__DEV__) console.log("Cancel Pressed");
+  const dispatchFollowAlert = useCallback(
+    (targetUsername: string, type: "follow" | "unfollow", name: string) => {
+      Alert.alert(
+        type === "follow" ? "Follow" : "Unfollow",
+        type === "follow"
+          ? `Are you sure you want to follow ${name}?`
+          : `Are you sure you want to unfollow ${name}?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: type === "follow" ? "Follow" : "Unfollow",
+            style: "destructive",
+            onPress: () => toggleFollowMutation.mutate(targetUsername),
           },
-          style: "cancel",
-        },
-        {
-          text: type === "follow" ? "Follow" : "Unfollow",
-          style: "destructive",
-          onPress: () => toggleFollow(username),
-        },
-      ],
-    );
-  };
+        ],
+      );
+    },
+    [toggleFollowMutation],
+  );
 
-  const renderItem = ({ item }: { item: FollowUser }) => (
-    <View style={styles.row}>
-      <Image source={{ uri: item.avatar }} style={styles.avatar} />
+  const confirmRemoveFollower = useCallback(
+    (item: FollowUser) => {
+      Alert.alert(
+        "Remove follower",
+        `Remove @${item.username.trim()} from your followers?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Remove",
+            style: "destructive",
+            onPress: () =>
+              removeFollowerMutation.mutate(item.id, {
+                onError: () => {
+                  Alert.alert("Error", "Couldn't remove follower. Try again.");
+                },
+              }),
+          },
+        ],
+        { cancelable: true },
+      );
+    },
+    [removeFollowerMutation],
+  );
 
-      <View style={styles.userInfo}>
-        <View style={styles.nameRow}>
-          <Text style={styles.name}>{item.name}</Text>
-          {item.verified_user && (
-            <Ionicons
-              name="checkmark-circle"
-              size={14}
-              color={theme.colors.primary}
-            />
+  const renderItem = useCallback(
+    ({ item }: { item: FollowUser }) => {
+      const trimmedUsername = item.username.trim();
+      const isRemoving =
+        removeFollowerMutation.isPending &&
+        removeFollowerMutation.variables === item.id;
+      const isFollowing =
+        toggleFollowMutation.isPending &&
+        toggleFollowMutation.variables === trimmedUsername;
+      const showOwnFollowerActions = activeTab === "followers" && isOwnProfile;
+
+      return (
+        <View style={styles.row}>
+          <Pressable
+            onPress={() => router.push(`/user/${trimmedUsername}`)}
+            style={styles.rowMain}
+          >
+            <Image source={{ uri: item.avatar }} style={styles.avatar} />
+
+            <View style={styles.userInfo}>
+              <View style={styles.nameRow}>
+                <Text style={styles.name} numberOfLines={1}>
+                  {item.name}
+                </Text>
+                {item.verified_user && (
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={14}
+                    color={theme.colors.primary}
+                  />
+                )}
+              </View>
+              <Text style={styles.username} numberOfLines={1}>
+                @{trimmedUsername}
+              </Text>
+            </View>
+          </Pressable>
+
+          {showOwnFollowerActions ? (
+            <View style={styles.rowActions}>
+              {isFollowingFromFollowStatus(item.follow_status) ? (
+                <Pressable
+                  onPress={() =>
+                    router.push({
+                      pathname: "/chat/[senderId]",
+                      params: {
+                        senderId: String(item.id),
+                        name: item.name,
+                        username: trimmedUsername,
+                        avatar: item.avatar,
+                      },
+                    })
+                  }
+                  style={({ pressed }) => [
+                    styles.followButton,
+                    styles.followingButton,
+                    styles.messageButton,
+                    pressed && styles.actionButtonPressed,
+                  ]}
+                >
+                  <Text style={[styles.followText, styles.followingText]}>
+                    Message
+                  </Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  onPress={() => toggleFollowMutation.mutate(trimmedUsername)}
+                  disabled={item.follow_status === "requested" || isFollowing}
+                  style={({ pressed }) => [
+                    styles.followButton,
+                    item.follow_status === "requested" &&
+                      styles.requestedButton,
+                    pressed && styles.actionButtonPressed,
+                    isFollowing && styles.actionButtonDisabled,
+                  ]}
+                >
+                  {isFollowing ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.followText}>
+                      {item.follow_status === "requested"
+                        ? "Requested"
+                        : "Follow"}
+                    </Text>
+                  )}
+                </Pressable>
+              )}
+
+              <Pressable
+                onPress={() => confirmRemoveFollower(item)}
+                disabled={isRemoving}
+                accessibilityLabel="Remove follower"
+                style={({ pressed }) => [
+                  styles.removeIconButton,
+                  pressed && styles.actionButtonPressed,
+                  isRemoving && styles.actionButtonDisabled,
+                ]}
+              >
+                {isRemoving ? (
+                  <ActivityIndicator
+                    color={theme.colors.textSecondary}
+                    size="small"
+                  />
+                ) : (
+                  <Ionicons
+                    name="close"
+                    size={18}
+                    color={theme.colors.textSecondary}
+                  />
+                )}
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable
+              onPress={() =>
+                dispatchFollowAlert(
+                  item.username,
+                  item.follow_status === "follow" ? "follow" : "unfollow",
+                  item.name,
+                )
+              }
+              style={[
+                styles.followButton,
+                isFollowingFromFollowStatus(item.follow_status) &&
+                  styles.followingButton,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.followText,
+                  isFollowingFromFollowStatus(item.follow_status) &&
+                    styles.followingText,
+                ]}
+              >
+                {capitalize(item.follow_status)}
+              </Text>
+            </Pressable>
           )}
         </View>
-        <Text style={styles.username}>@{item.username}</Text>
-      </View>
-
-      <Pressable
-        onPress={() =>
-          dispatchAlert(
-            item.username,
-            item.follow_status === "follow" ? "follow" : "unfollow",
-            item.name,
-          )
-        }
-        style={[
-          styles.followButton,
-          item.follow_status === "following" && styles.followingButton,
-        ]}
-      >
-        <Text
-          style={[
-            styles.followText,
-            item.follow_status === "following" && styles.followingText,
-          ]}
-        >
-          {capitalize(item.follow_status)}
-        </Text>
-      </Pressable>
-    </View>
+      );
+    },
+    [
+      activeTab,
+      confirmRemoveFollower,
+      dispatchFollowAlert,
+      isOwnProfile,
+      removeFollowerMutation.isPending,
+      removeFollowerMutation.variables,
+      styles,
+      theme.colors.primary,
+      theme.colors.textSecondary,
+      toggleFollowMutation,
+    ],
   );
 
   if (!username) {
@@ -477,6 +610,13 @@ const createStyles = (theme: AppTheme) =>
       paddingHorizontal: theme.spacing.lg,
     },
 
+    rowMain: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      minWidth: 0,
+    },
+
     avatar: {
       width: 44,
       height: 44,
@@ -524,5 +664,37 @@ const createStyles = (theme: AppTheme) =>
 
     followingText: {
       color: theme.colors.textPrimary,
+    },
+
+    rowActions: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+    },
+
+    messageButton: {
+      minWidth: 88,
+    },
+
+    requestedButton: {
+      opacity: 0.6,
+    },
+
+    actionButtonPressed: {
+      opacity: 0.7,
+    },
+
+    actionButtonDisabled: {
+      opacity: 0.5,
+    },
+
+    removeIconButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      alignItems: "center",
+      justifyContent: "center",
     },
   });

@@ -44,8 +44,8 @@ import {
   useUploadAndCreatePost,
   useUploadImageAndCreatePost,
 } from "@/src/features/upload/upload.hooks";
-import { useIap } from "@/src/features/wallet/iap.context";
 import { storeProductIdFromIapSku } from "@/src/features/wallet/iap.constants";
+import { useIap } from "@/src/features/wallet/iap.context";
 import { useIapSkus } from "@/src/features/wallet/wallet.hooks";
 import { queryClient } from "@/src/lib/query-client";
 import type { IapSkuListItem, MentionUser } from "@/src/services/api/api.types";
@@ -108,11 +108,7 @@ function CreateContent() {
     isError: iapSkusError,
     refetch: refetchIapSkus,
   } = useIapSkus("consumable");
-  const {
-    connected: isIapConnected,
-    fetchProducts,
-    products,
-  } = useIap();
+  const { connected: isIapConnected, fetchProducts, products } = useIap();
 
   const [postType, setPostType] = useState<PostType>("regular");
   const [caption, setCaption] = useState("");
@@ -283,7 +279,11 @@ function CreateContent() {
   );
 
   useEffect(() => {
-    if (postType !== "paid" || !isIapConnected || priceStoreProductIds.length === 0)
+    if (
+      postType !== "paid" ||
+      !isIapConnected ||
+      priceStoreProductIds.length === 0
+    )
       return;
     void fetchProducts({
       skus: priceStoreProductIds,
@@ -674,10 +674,7 @@ function CreateContent() {
                             setSelectedPriceSku(p.product_id);
                             setPriceExpanded(false);
                           }}
-                          style={[
-                            styles.chip,
-                            selected && styles.chipSelected,
-                          ]}
+                          style={[styles.chip, selected && styles.chipSelected]}
                           accessibilityRole="radio"
                           accessibilityState={{ selected }}
                         >
@@ -730,7 +727,7 @@ function CreateContent() {
           )}
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Media</Text>
+            <Text style={styles.sectionTitle}>Select Media</Text>
             {selectedImage || selectedVideo ? (
               <View style={styles.imagePreviewContainer}>
                 <Image

@@ -1,21 +1,24 @@
-import { WEB_ORIGIN } from "@/src/constants/app-env";
 import {
   safePlayerDuration,
   useManagedVideoPlayer,
 } from "@/hooks/use-video-player";
-import { useVerticalVideoLayout } from "@/src/hooks/use-vertical-video-layout";
-import { useVideoTrackSize } from "@/src/hooks/use-video-track-size";
-import { VerticalVideoFrame } from "@/src/components/video/VerticalVideoFrame";
 import ReportModal from "@/src/components/home/posts/ReportModal";
 import StoryAvatar from "@/src/components/home/story/StoryAvatar";
 import RichText from "@/src/components/ui/rich-text";
+import { VerticalVideoFrame } from "@/src/components/video/VerticalVideoFrame";
+import { WEB_ORIGIN } from "@/src/constants/app-env";
 import {
-    useBookmarkPostMutation,
-    useDeletePostMutation,
-    useToggleLikeMutation,
+  useBookmarkPostMutation,
+  useDeletePostMutation,
+  useToggleLikeMutation,
 } from "@/src/features/post/post.hooks";
-import { canViewPostMedia, parseDuration } from "@/src/features/post/post.utils";
+import {
+  canViewPostMedia,
+  parseDuration,
+} from "@/src/features/post/post.utils";
 import { useGetProfile } from "@/src/features/profile/profile.hooks";
+import { useVerticalVideoLayout } from "@/src/hooks/use-vertical-video-layout";
+import { useVideoTrackSize } from "@/src/hooks/use-video-track-size";
 import { getApiErrorMessage } from "@/src/services/api/api.error";
 import type { Post } from "@/src/services/api/api.types";
 import { getMediaType } from "@/src/utils/helpers";
@@ -27,28 +30,28 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    findNodeHandle,
-    Modal,
-    Platform,
-    Pressable,
-    ScrollView,
-    Share,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    UIManager,
-    View,
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  findNodeHandle,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  UIManager,
+  View,
 } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
-    runOnJS,
-    useAnimatedStyle,
-    useSharedValue,
-    withSpring,
-    withTiming,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -139,7 +142,6 @@ function FlickItemInner({
     () => createStyles(itemHeight, safeTopInset, insets.bottom),
     [itemHeight, safeTopInset, insets.bottom],
   );
-
 
   const { data: profileData } = useGetProfile();
   const me = profileData?.data;
@@ -362,7 +364,14 @@ function FlickItemInner({
       current: 0,
       total: parsedDuration != null && parsedDuration > 0 ? parsedDuration : 0,
     });
-  }, [post.id, progress, maxProgressRatio, seekBarOpacity, posterOpacity, parsedDuration]);
+  }, [
+    post.id,
+    progress,
+    maxProgressRatio,
+    seekBarOpacity,
+    posterOpacity,
+    parsedDuration,
+  ]);
 
   useEffect(() => {
     seekBarOpacity.value = withTiming(isReady ? 1 : 0, { duration: 180 });
@@ -763,9 +772,7 @@ function FlickItemInner({
     const url = buildPostUrl(post.id);
     try {
       // URL-only payload so "Copy" in the system sheet copies just the link.
-      await Share.share(
-        Platform.OS === "ios" ? { url } : { message: url },
-      );
+      await Share.share(Platform.OS === "ios" ? { url } : { message: url });
     } catch {
       /* dismissed */
     }
@@ -857,13 +864,11 @@ function FlickItemInner({
           onFirstFrameRender={handleFirstFrameRender}
           posterFallbackStyle={styles.posterFallback}
         >
-          {isFocused &&
-            (isBuffering || !isReady) &&
-            !showVideoBlockPaywall && (
-              <View style={styles.loadingOverlay} pointerEvents="none">
-                <ActivityIndicator size="large" color={FLICK_TEXT} />
-              </View>
-            )}
+          {isFocused && (isBuffering || !isReady) && !showVideoBlockPaywall && (
+            <View style={styles.loadingOverlay} pointerEvents="none">
+              <ActivityIndicator size="large" color={FLICK_TEXT} />
+            </View>
+          )}
         </VerticalVideoFrame>
       )}
 
@@ -1146,7 +1151,9 @@ function FlickItemInner({
                   nestedScrollEnabled
                   showsVerticalScrollIndicator={false}
                 >
-                  <RichText style={styles.captionText}>{captionSource}</RichText>
+                  <RichText style={styles.captionText}>
+                    {captionSource}
+                  </RichText>
                 </ScrollView>
               ) : (
                 <RichText style={styles.captionText} numberOfLines={2}>

@@ -6,10 +6,14 @@
     "start": "expo start",
     "mock:upload-api": "node ./scripts/mock-upload-api.js",
     "reset-project": "node ./scripts/reset-project.js",
-    "android": "expo run:android",
-    "ios": "expo run:ios",
+    "android": "npx expo run:android --device",
+    "ios": "npx expo run:ios --device",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "update:preview": "EXPO_PUBLIC_WEB_ORIGIN=https://stgx.jaaspire.com EXPO_PUBLIC_API_BASE_URL=https://stgx.jaaspire.com/api/v1 eas update --channel preview",
+    "update:production": "EXPO_PUBLIC_WEB_ORIGIN=https://jaaspire.com EXPO_PUBLIC_API_BASE_URL=https://jaaspire.com/api/v1 eas update --channel production",
+    "update:list": "eas update:list",
+    "channel:list": "eas channel:list"
   },
   "dependencies": {
     "@expo/react-native-action-sheet": "^4.1.1",
@@ -33,6 +37,7 @@
     "expo-crypto": "~15.0.9",
     "expo-dev-client": "~6.0.21",
     "expo-device": "~8.0.10",
+    "expo-document-picker": "~14.0.8",
     "expo-file-system": "~19.0.23",
     "expo-font": "~14.0.12",
     "expo-haptics": "~15.0.8",

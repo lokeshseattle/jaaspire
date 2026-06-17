@@ -1,3 +1,4 @@
+import { VerificationSettingsItem } from "@/src/components/settings/VerificationSettingsItem";
 import { useAuth } from "@/src/features/auth/auth.hooks";
 import { useRestorePurchases } from "@/src/features/wallet/use-restore-purchases";
 import { AppTheme, ThemeMode } from "@/src/theme";
@@ -147,6 +148,7 @@ export default function SettingsScreen() {
           label="Balance"
           onPress={() => router.push("/wallet")}
         />
+        <VerificationSettingsItem />
         {/* Dev: subscription IAP event log (re-enable for local debugging) */}
         {/* <Item
           theme={theme}

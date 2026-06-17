@@ -1,9 +1,5 @@
 import { Image } from "expo-image";
-import {
-  VideoView,
-  type VideoContentFit,
-  type VideoPlayer,
-} from "expo-video";
+import { VideoView, type VideoContentFit, type VideoPlayer } from "expo-video";
 import type { ReactNode } from "react";
 import { StyleSheet, View, type ViewStyle } from "react-native";
 import Animated from "react-native-reanimated";
@@ -48,14 +44,21 @@ export function VerticalVideoFrame({
 
   const stageStyle = fillParent
     ? [styles.mediaStageFill, { backgroundColor: canvasColor }]
-    : [styles.mediaStageInline, { height: frameHeight, backgroundColor: canvasColor }];
+    : [
+        styles.mediaStageInline,
+        { height: frameHeight, backgroundColor: canvasColor },
+      ];
 
   return (
     <View style={stageStyle}>
       <View
         style={[
           styles.videoFrame,
-          { width: frameWidth, height: frameHeight, backgroundColor: canvasColor },
+          {
+            width: frameWidth,
+            height: frameHeight,
+            backgroundColor: canvasColor,
+          },
         ]}
       >
         {showVideo && player ? (

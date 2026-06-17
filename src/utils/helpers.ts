@@ -149,9 +149,9 @@ export const getNextButtonStatus = (
   return status;
 };
 
-/** Matches backend: only "unfollow" means the viewer is an accepted follower. */
-export function isFollowingFromFollowStatus(status: TButtonStatus): boolean {
-  return status === "unfollow";
+/** Matches backend: "unfollow" (profile API) or "following" (connections lists) = viewer follows this user. */
+export function isFollowingFromFollowStatus(status: string): boolean {
+  return status === "unfollow" || status === "following";
 }
 
 export const getMentionQuery = (text: string, cursorPosition: number) => {

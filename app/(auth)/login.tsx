@@ -1,13 +1,16 @@
 import { useTheme } from "@/src/theme/ThemeProvider";
+import { AppTheme } from "@/src/theme";
 
 import Button from "@/src/components/ui/button";
 import FormInput from "@/src/components/ui/input";
 import { useAuth, useLogin } from "@/src/features/auth/auth.hooks";
 import { AuthScreenLayout } from "@/src/features/auth/AuthScreenLayout";
+import { isNetworkError } from "@/src/services/api/api.error";
 import { setServerErrors } from "@/src/utils/form-errors";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { Link, router } from "expo-router";
 import { useForm } from "react-hook-form";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 type FormData = {
   email: string;
@@ -16,6 +19,7 @@ type FormData = {
 
 export default function Login() {
   const { theme } = useTheme();
+  const styles = createStyles(theme);
 
   const { control, handleSubmit, setError } = useForm<FormData>();
 
@@ -40,6 +44,7 @@ export default function Login() {
         }
       },
       onError: (e) => {
+        if (isNetworkError(e)) return;
         if (e.data?.errors) {
           setServerErrors<FormData>(e.data.errors, setError);
         } else {
@@ -56,14 +61,7 @@ export default function Login() {
   };
 
   return (
-    <AuthScreenLayout
-      title="Sign In"
-      centerVertically
-      footerLink={{
-        label: "Don't have an account? Register",
-        href: "/(auth)/register",
-      }}
-    >
+    <AuthScreenLayout title="Sign In" centerVertically>
       <FormInput
         control={control}
         name="email"
@@ -94,11 +92,50 @@ export default function Login() {
         rules={{ required: __DEV__ ? false : "Password is required" }}
         accessibilityLabel="Password"
       />
+      <Pressable
+        onPress={() => router.push("/(auth)/forgot-password")}
+        accessibilityRole="button"
+        accessibilityLabel="Forgot password"
+        style={styles.forgotLink}
+      >
+        <Text style={styles.forgotLinkText}>Forgot password?</Text>
+      </Pressable>
       <Button
         title="Sign In"
         loading={login.isPending}
         onPress={handleSubmit(onSubmit)}
       />
+      <View style={styles.footerRow}>
+        <Text style={styles.footerText}>Don&apos;t have an account? </Text>
+        <Link href="/(auth)/register" style={styles.footerLink}>
+          Register
+        </Link>
+      </View>
     </AuthScreenLayout>
   );
 }
+
+const createStyles = (theme: AppTheme) =>
+  StyleSheet.create({
+    forgotLink: {
+      alignSelf: "flex-end",
+      marginTop: -theme.spacing.md,
+    },
+    forgotLinkText: {
+      fontSize: 14,
+      color: theme.colors.primary,
+    },
+    footerRow: {
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    footerText: {
+      fontSize: 14,
+      color: theme.colors.textSecondary,
+    },
+    footerLink: {
+      fontSize: 14,
+      color: theme.colors.primary,
+    },
+  });

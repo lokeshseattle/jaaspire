@@ -3,55 +3,54 @@ import { useFeedController } from "@/src/components/feed/use-feed-controller";
 import FlickItem from "@/src/components/flicks/FlickItem";
 import FlickItemErrorBoundary from "@/src/components/flicks/FlickItemErrorBoundary";
 import {
-    type FlicksFeed,
-    useGetFlicksQuery,
-} from "@/src/features/flicks/flicks.hooks";
-import {
-    useDeletePostMutation,
-    useTrackPostView,
-} from "@/src/features/post/post.hooks";
-import { usePostStore } from "@/src/features/post/post.store";
-import {
-  FLICKS_PRELOAD_RADIUS,
   flickActiveIndexFromOffset,
-  flickIndexFromOffset,
+  FLICKS_PRELOAD_RADIUS,
   flickScrollDirection,
+  type FlickScrollDirection,
   prefetchFlickThumbnails,
   resetFlickOnFocusChange,
   seekOffWindowFlicks,
   syncFlickVideoPool,
-  type FlickScrollDirection,
 } from "@/src/features/flicks/flicks-feed-video";
+import {
+  type FlicksFeed,
+  useGetFlicksQuery,
+} from "@/src/features/flicks/flicks.hooks";
+import {
+  useDeletePostMutation,
+  useTrackPostView,
+} from "@/src/features/post/post.hooks";
+import { usePostStore } from "@/src/features/post/post.store";
 import { videoManager } from "@/src/lib/video-manager";
 import { getApiErrorMessage } from "@/src/services/api/api.error";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useFocusEffect, useNavigation } from "expo-router";
 import {
-    memo,
-    useCallback,
-    useEffect,
-    useLayoutEffect,
-    useMemo,
-    useRef,
-    useState,
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
 } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    FlatList,
-    type LayoutChangeEvent,
-    ListRenderItemInfo,
-    type NativeScrollEvent,
-    type NativeSyntheticEvent,
-    PixelRatio,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
-    ViewabilityConfig,
-    ViewToken,
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  FlatList,
+  type LayoutChangeEvent,
+  ListRenderItemInfo,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  PixelRatio,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  ViewabilityConfig,
+  ViewToken,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useShallow } from "zustand/react/shallow";
@@ -387,8 +386,7 @@ export default function FlicksScreen() {
     ({ item: id, index }: ListRenderItemInfo<number>) => {
       const nextPostId = postIds[index + 1];
       const isFocused = index === focusedIndex;
-      const inWindow =
-        Math.abs(index - focusedIndex) <= FLICKS_PRELOAD_RADIUS;
+      const inWindow = Math.abs(index - focusedIndex) <= FLICKS_PRELOAD_RADIUS;
       return (
         <FlickRow
           id={id}

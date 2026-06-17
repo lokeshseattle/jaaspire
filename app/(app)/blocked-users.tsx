@@ -1,6 +1,6 @@
 import {
-  useBlockedUsersQuery,
-  useUnblockUserMutation,
+    useBlockedUsersQuery,
+    useUnblockUserMutation,
 } from "@/src/features/profile/profile.hooks";
 import { BlockedUser } from "@/src/services/api/api.types";
 import { AppTheme } from "@/src/theme";
@@ -10,15 +10,15 @@ import { Image } from "expo-image";
 import { router, useNavigation } from "expo-router";
 import { useCallback, useLayoutEffect, useMemo } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Platform,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  View,
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    Platform,
+    Pressable,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
 
 /** Parses API datetime like "2026-03-19 22:54:54" and formats for display. */

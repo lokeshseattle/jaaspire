@@ -17,12 +17,15 @@ import {
 import {
   DeleteAccountRequest,
   DeleteAccountResponse,
+  ForgotPasswordRequest,
+  ForgotPasswordResponse,
   LoginRequest,
   LoginResponse,
   PossibleErrorResponse,
   RegisterRequest,
   Resend2FARequest,
   Resend2FAResponse,
+  ResendEmailVerificationResponse,
   ValidateUsernameResponse,
   Verify2FARequest,
   Verify2FAResponse,
@@ -111,6 +114,28 @@ export const useVerify2FA = (): UseMutationResult<
   return useMutation({
     mutationFn: (body) =>
       apiClient.post("/auth/verify-2fa", body).then((r) => r.data),
+  });
+};
+
+export const useForgotPassword = (): UseMutationResult<
+  ForgotPasswordResponse,
+  PossibleErrorResponse,
+  ForgotPasswordRequest
+> => {
+  return useMutation({
+    mutationFn: (body) =>
+      apiClient.post("/auth/password/forgot", body).then((r) => r.data),
+  });
+};
+
+export const useResendEmailVerification = (): UseMutationResult<
+  ResendEmailVerificationResponse,
+  PossibleErrorResponse,
+  void
+> => {
+  return useMutation({
+    mutationFn: () =>
+      apiClient.post("/auth/email/resend-verification").then((r) => r.data),
   });
 };
 

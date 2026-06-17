@@ -2,7 +2,7 @@
   "expo": {
     "name": "Jaaspire",
     "slug": "jaaspire",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "jaaspire",
@@ -13,8 +13,8 @@
       "bundleIdentifier": "com.convoia.jaaspire",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSPhotoLibraryUsageDescription": "This app needs access to your photos so you can upload images.",
-        "NSCameraUsageDescription": "This app needs access to your camera to take photos and record videos.",
+        "NSPhotoLibraryUsageDescription": "Jaaspire accesses your photo library to select photos and videos for your profile, posts, stories, and chat messages.",
+        "NSCameraUsageDescription": "Jaaspire uses your camera to capture photos and videos for your profile, posts, stories, and chat messages.",
         "NSPhotoLibraryAddUsageDescription": "This app needs permission to save photos to your library."
       },
       "appleTeamId": "T6Y9862AD6"
@@ -28,9 +28,7 @@
       },
       "edgeToEdgeEnabled": false,
       "predictiveBackGestureEnabled": false,
-      "permissions": [
-        "com.android.vending.BILLING"
-      ],
+      "permissions": ["com.android.vending.BILLING"],
       "googleServicesFile": "./google-services.json"
     },
     "web": {
@@ -68,9 +66,9 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "The app accesses your photos to let you share them with your friends.",
-          "cameraPermission": "Jaaspire needs camera access to take photos and record videos.",
-          "microphonePermission": "Jaaspire needs microphone access to record audio when you capture videos with the camera."
+          "photosPermission": "Jaaspire accesses your photo library to select photos and videos for your profile, posts, stories, and chat messages.",
+          "cameraPermission": "Jaaspire uses your camera to capture photos and videos for your profile, posts, stories, and chat messages.",
+          "microphonePermission": "Jaaspire uses your microphone to record audio when you capture videos for posts, stories, and chat messages."
         }
       ],
       "@react-native-community/datetimepicker",

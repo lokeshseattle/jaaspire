@@ -1,10 +1,12 @@
 import { API_BASE_URL } from "@/src/constants/app-env";
 import { useAuthStore } from "@/src/features/auth/auth.store";
 import { forceLogout } from "@/src/features/auth/auth.utils";
+import { apiClient } from "@/src/services/api/api.client";
 import { ApiError } from "@/src/services/api/api.error";
 import type {
   AiChatStreamCompleteData,
   AiChatStreamStartData,
+  NewAiChatResponse,
   SendAiChatMessageResult,
 } from "@/src/services/api/api.types";
 import { fetch } from "expo/fetch";
@@ -179,4 +181,9 @@ export async function sendAiChatMessageStream(
   }
 
   return readSseResponse(response, handlers);
+}
+
+export async function startNewAiChat(): Promise<NewAiChatResponse> {
+  const response = await apiClient.post<NewAiChatResponse>("/ai-chat/new-chat");
+  return response.data;
 }

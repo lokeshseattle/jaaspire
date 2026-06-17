@@ -1,6 +1,9 @@
 import { AnimatedTabBar } from "@/src/components/ui/animated-tabbar";
 import { useSubscriptionsQuery } from "@/src/features/settings/settings.hooks";
-import { Subscription, SubscriptionActiveTab } from "@/src/services/api/api.types";
+import {
+  Subscription,
+  SubscriptionActiveTab,
+} from "@/src/services/api/api.types";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
@@ -62,7 +65,8 @@ export default function ManageSubscriptionsScreen() {
   const { theme } = useTheme();
   const navigation = useNavigation();
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const [activeTab, setActiveTab] = useState<SubscriptionActiveTab>("subscriptions");
+  const [activeTab, setActiveTab] =
+    useState<SubscriptionActiveTab>("subscriptions");
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -98,7 +102,8 @@ export default function ManageSubscriptionsScreen() {
   const renderItem = useCallback(
     ({ item }: { item: Subscription }) => {
       const statusTone = getStatusTone(theme, item.status);
-      const statusLabel = item.status.charAt(0).toUpperCase() + item.status.slice(1);
+      const statusLabel =
+        item.status.charAt(0).toUpperCase() + item.status.slice(1);
 
       return (
         <View style={styles.row}>
@@ -115,13 +120,16 @@ export default function ManageSubscriptionsScreen() {
                 @{item.user.username}
               </Text>
               <Text style={styles.meta}>
-                ${formatAmount(item.amount)} · Expires {formatDate(item.expires_at)}
+                ${formatAmount(item.amount)} · Expires{" "}
+                {formatDate(item.expires_at)}
               </Text>
             </View>
           </Pressable>
 
           <View style={styles.rightColumn}>
-            <View style={[styles.statusPill, { backgroundColor: statusTone.bg }]}>
+            <View
+              style={[styles.statusPill, { backgroundColor: statusTone.bg }]}
+            >
               <Text style={[styles.statusText, { color: statusTone.text }]}>
                 {statusLabel}
               </Text>

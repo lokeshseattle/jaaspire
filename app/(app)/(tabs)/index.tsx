@@ -1,6 +1,7 @@
 // Android home feed: viewability picks a single primary post; FlatList tuned for smooth scroll.
 import { FeedContainer } from "@/src/components/feed/FeedContainer";
 import { useFeedController } from "@/src/components/feed/use-feed-controller";
+import JaasiAiFloatingAvatar from "@/src/components/home/JaasiAiFloatingAvatar";
 import Stories from "@/src/components/home/story";
 import { useNotificationBadgeStore } from "@/src/features/notifications/notification-badge.store";
 import { useGetFeedQuery } from "@/src/features/post/post.hooks";
@@ -14,21 +15,20 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { router, useFocusEffect, useNavigation } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
-  FlatList,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  ViewabilityConfig,
+    FlatList,
+    NativeScrollEvent,
+    NativeSyntheticEvent,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
+    ViewabilityConfig,
 } from "react-native";
 import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
+    useAnimatedStyle,
+    useSharedValue,
 } from "react-native-reanimated";
-
-const HEADER_HEIGHT = 56;
+const HEADER_HEIGHT = 44;
 
 /** One primary visible item; slightly higher minimumViewTime reduces play/pause churn while scrolling. */
 const VIEWABILITY_CONFIG: ViewabilityConfig = {
@@ -39,6 +39,7 @@ const VIEWABILITY_CONFIG: ViewabilityConfig = {
 export default function Home() {
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const headerTotalHeight = HEADER_HEIGHT;
 
   const flatListRef = useRef<FlatList<number>>(null);
   const scrollOffsetRef = useRef(0);
@@ -207,7 +208,7 @@ export default function Home() {
         ListHeaderComponent={ListHeader}
         onRefresh={handleRefresh}
         isRefreshing={isRefetching}
-        refreshProgressViewOffset={HEADER_HEIGHT}
+        refreshProgressViewOffset={headerTotalHeight}
         onEndReached={handleEndReached}
         isFetchingNextPage={isFetchingNextPage}
         flatListProps={{
@@ -219,6 +220,7 @@ export default function Home() {
           updateCellsBatchingPeriod: 100,
         }}
       />
+      <JaasiAiFloatingAvatar />
     </View>
   );
 }
@@ -240,7 +242,6 @@ const createStyles = (theme: AppTheme) =>
       alignItems: "center",
       justifyContent: "space-between",
       paddingHorizontal: theme.spacing.lg,
-      paddingVertical: theme.spacing.md,
       backgroundColor: theme.colors.background,
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.border,

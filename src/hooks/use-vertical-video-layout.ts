@@ -1,6 +1,6 @@
+import type { VideoContentFit } from "expo-video";
 import { useMemo } from "react";
 import { PixelRatio, useWindowDimensions } from "react-native";
-import type { VideoContentFit } from "expo-video";
 
 /** Portrait reel width / height (9:16). */
 export const VERTICAL_VIDEO_ASPECT = 9 / 16;
@@ -215,10 +215,8 @@ export function useVerticalVideoLayout(
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   return useMemo(() => {
-    const width =
-      availableWidth > 0 ? availableWidth : windowWidth;
-    const height =
-      availableHeight > 0 ? availableHeight : windowHeight;
+    const width = availableWidth > 0 ? availableWidth : windowWidth;
+    const height = availableHeight > 0 ? availableHeight : windowHeight;
 
     return computeVerticalVideoLayout(width, height, options);
   }, [
@@ -279,7 +277,14 @@ export function useContainMediaLayout(
     const srcW = sourceWidth ?? 0;
     const srcH = sourceHeight ?? 0;
     return computeContainMediaLayout(width, height, srcW, srcH);
-  }, [maxWidth, maxHeight, windowWidth, windowHeight, sourceWidth, sourceHeight]);
+  }, [
+    maxWidth,
+    maxHeight,
+    windowWidth,
+    windowHeight,
+    sourceWidth,
+    sourceHeight,
+  ]);
 }
 
 export type EditorPreviewLayout = {
@@ -355,5 +360,12 @@ export function useEditorPreviewLayout(
     const width = stageWidth > 0 ? stageWidth : windowWidth;
     const height = stageHeight > 0 ? stageHeight : windowHeight;
     return computeEditorPreviewLayout(width, height, sourceWidth, sourceHeight);
-  }, [stageWidth, stageHeight, windowWidth, windowHeight, sourceWidth, sourceHeight]);
+  }, [
+    stageWidth,
+    stageHeight,
+    windowWidth,
+    windowHeight,
+    sourceWidth,
+    sourceHeight,
+  ]);
 }

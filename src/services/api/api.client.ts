@@ -8,6 +8,7 @@ import axios, {
 } from "axios";
 import type { ApiRequestConfig } from "./api.client.types";
 import "./api.client.types";
+import { showToast } from "@/src/components/toast/ToastProvider";
 import { normalizeApiError } from "./api.error";
 
 const baseURL = API_BASE_URL;
@@ -117,6 +118,10 @@ apiClient.interceptors.response.use(
       });
     }
 
-    return Promise.reject(normalizeApiError(error));
+    const apiError = normalizeApiError(error);
+    if (apiError.isNetworkError) {
+      showToast(apiError.message, "info");
+    }
+    return Promise.reject(apiError);
   },
 );

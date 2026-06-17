@@ -99,7 +99,8 @@ export default Stories;
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: 10,
+    paddingTop: 6,
+    paddingBottom: 8,
   },
   storyItem: {
     alignItems: "center",

@@ -28,7 +28,7 @@ import { UpdateProfileRequest } from "@/src/services/api/api.types";
 import { setServerErrors } from "@/src/utils/form-errors";
 import { getDirtyValues } from "@/src/utils/helpers";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 
 type EditProfileFormValues = {
   email: string;
@@ -63,6 +63,7 @@ export default function EditProfileScreen() {
   const styles = createStyles(theme);
   const updateProfile = useUpdateProfile();
   const { data, isLoading, isError } = useGetProfile();
+  const params = useLocalSearchParams<{ returnTo?: string }>();
 
   const countryQuery = useGetCountries();
   const genderQuery = useGetGenders();
@@ -122,6 +123,17 @@ export default function EditProfileScreen() {
     }
   }, [profile, reset]);
 
+  const returnTo =
+    typeof params.returnTo === "string" ? params.returnTo : undefined;
+
+  const handleGoBack = React.useCallback(() => {
+    if (returnTo) {
+      router.dismissTo(returnTo as Parameters<typeof router.dismissTo>[0]);
+      return;
+    }
+    router.back();
+  }, [returnTo]);
+
   const handlePickProfileImage = () => {
     openMediaPicker({
       circular: true,
@@ -150,7 +162,7 @@ export default function EditProfileScreen() {
     updateProfile.mutate(changedData, {
       onSuccess: () => {
         toast.trigger("Profile updated", "success");
-        router.back();
+        handleGoBack();
       },
       onError: (e) => {
         setServerErrors<EditProfileFormValues>(
@@ -198,7 +210,7 @@ export default function EditProfileScreen() {
       >
         <View style={styles.header}>
           <Pressable
-            onPress={router.back}
+            onPress={handleGoBack}
             style={styles.headerBack}
             accessibilityRole="button"
             accessibilityLabel="Go back"
@@ -242,7 +254,7 @@ export default function EditProfileScreen() {
         >
           <View style={styles.header}>
             <Pressable
-              onPress={router.back}
+              onPress={handleGoBack}
               style={styles.headerBack}
               accessibilityRole="button"
               accessibilityLabel="Go back"

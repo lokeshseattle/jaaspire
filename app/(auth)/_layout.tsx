@@ -42,6 +42,15 @@ export default function AuthLayout() {
           title: "",
         }}
       />
+      <Stack.Screen
+        name="forgot-password"
+        options={{
+          headerBackVisible: true,
+          headerShown: true,
+          headerBackTitle: "Back",
+          title: "",
+        }}
+      />
     </Stack>
   );
 }
