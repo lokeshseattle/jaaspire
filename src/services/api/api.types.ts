@@ -107,6 +107,21 @@ export type PushDeviceRegisterResponse = {
   data?: unknown;
 };
 
+export type InstallTrackRequest = {
+  device_id: string;
+  platform: "ios" | "android";
+  app_version: string;
+  utm_source: string;
+  utm_medium?: string | null;
+  utm_campaign?: string | null;
+  utm_term?: string | null;
+  utm_content?: string | null;
+  fbclid?: string | null;
+  gclid?: string | null;
+  referrer?: string | null;
+  country?: string | null;
+};
+
 export type DeleteAccountResponse = {
   success: boolean;
   message: string;

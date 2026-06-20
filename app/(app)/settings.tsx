@@ -16,7 +16,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  useSafeAreaInsets
+} from "react-native-safe-area-context";
 
 type ItemProps = {
   icon: keyof typeof Ionicons.glyphMap;
@@ -70,6 +72,7 @@ export default function SettingsScreen() {
     Platform.OS === "ios" || Platform.OS === "android";
 
   return (
+    // <SafeAreaView style={{ flex: 1 }}>
     <ScrollView
       style={styles.scroll}
       contentContainerStyle={[
@@ -79,6 +82,12 @@ export default function SettingsScreen() {
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator
     >
+      {/* <StatusBar
+        hidden={false}
+        // translucent
+        
+        backgroundColor={theme.colors.background}
+      /> */}
       <View style={styles.section}>
         <Item
           theme={theme}
@@ -219,6 +228,7 @@ export default function SettingsScreen() {
         />
       </View>
     </ScrollView>
+    // </SafeAreaView>
   );
 }
 

@@ -1,8 +1,10 @@
+import { useAttributionCapture } from "@/src/features/attribution/attribution.hooks";
 import { AuthLogoutAlert } from "@/src/features/auth/AuthLogoutAlert";
 import { useAuth } from "@/src/features/auth/auth.hooks";
 import { configureForegroundNotificationHandler } from "@/src/features/push/foreground-notification-handler";
 import { useActiveChatRouteSync } from "@/src/hooks/use-active-chat-route-sync";
 import { useAndroidNavigationBarSync } from "@/src/hooks/use-android-navigation-bar-sync";
+import { useAppTrackingTransparency } from "@/src/hooks/use-app-tracking-transparency";
 import { useExpoUpdates } from "@/src/hooks/use-expo-updates";
 import { useNotificationDeepLink } from "@/src/hooks/use-notification-deep-link";
 import { asyncStoragePersister } from "@/src/lib/persister";
@@ -33,6 +35,8 @@ configureForegroundNotificationHandler();
 
 // Inner layout that can use theme hooks
 function RootLayoutInner() {
+  useAppTrackingTransparency();
+  useAttributionCapture();
   const { restoreSession, isLoading: authLoading } = useAuth();
   const { theme } = useTheme();
 
@@ -67,10 +71,9 @@ function RootLayoutInner() {
   return (
     <>
       <StatusBar
-        hidden={false}
-        translucent
-        backgroundColor="transparent"
         style={isDark ? "light" : "dark"}
+        translucent={true}
+        backgroundColor={theme.colors.background}
       />
       <ActionSheetProvider>
         <ToastProvider>

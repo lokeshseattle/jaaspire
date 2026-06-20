@@ -1,9 +1,10 @@
-import { useTheme } from "@/src/theme/ThemeProvider";
 import { AppTheme } from "@/src/theme";
+import { useTheme } from "@/src/theme/ThemeProvider";
 
 import Button from "@/src/components/ui/button";
 import FormInput from "@/src/components/ui/input";
 import { useAuth, useLogin } from "@/src/features/auth/auth.hooks";
+import { useInstallTrack } from "@/src/features/attribution/attribution.hooks";
 import { AuthScreenLayout } from "@/src/features/auth/AuthScreenLayout";
 import { isNetworkError } from "@/src/services/api/api.error";
 import { setServerErrors } from "@/src/utils/form-errors";
@@ -18,6 +19,8 @@ type FormData = {
 };
 
 export default function Login() {
+  useInstallTrack();
+
   const { theme } = useTheme();
   const styles = createStyles(theme);
 
@@ -123,6 +126,7 @@ const createStyles = (theme: AppTheme) =>
     },
     forgotLinkText: {
       fontSize: 14,
+      
       color: theme.colors.primary,
     },
     footerRow: {

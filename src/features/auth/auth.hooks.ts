@@ -40,6 +40,7 @@ import { useCallback } from "react";
 import { Alert } from "react-native";
 import { notifyLogout } from "./auth.utils";
 import { useAuthStore } from "./auth.store";
+import { logRegistrationAttribution } from "@/src/features/attribution/attribution.analytics";
 
 /** True once SecureStore restore finished and the user has a valid in-memory session. */
 export function useAuthQueryReady(): boolean {
@@ -207,9 +208,15 @@ export const useAuth = () => {
   }, [setLoading, setToken]);
 
   const login = useCallback(
-    async (token: string): Promise<void> => {
+    async (
+      token: string,
+      options?: { isRegistration?: boolean },
+    ): Promise<void> => {
       await tokenStorage.save(token);
       setToken(token);
+      if (options?.isRegistration) {
+        void logRegistrationAttribution();
+      }
       void runPostLoginSetup();
     },
     [setToken],

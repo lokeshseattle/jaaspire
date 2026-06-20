@@ -137,6 +137,7 @@ export default function AppLayout() {
             headerShown: true,
             headerTitle: "Settings",
             headerBackButtonDisplayMode: "minimal",
+            // headerShadowVisible: true,
           }}
         />
 

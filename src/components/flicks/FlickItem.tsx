@@ -32,7 +32,6 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
   findNodeHandle,
   Modal,
   Platform,
@@ -42,7 +41,6 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  UIManager,
   View,
 } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -56,8 +54,6 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const DOUBLE_TAP_DELAY = 300;
-/** Play / mute HUD visibility after single tap (ms). */
-const FLICK_TOOLS_HIDE_MS = 1000;
 
 /** Edge-to-edge flick surface — always black so letterboxing matches TikTok/IG (not theme.background). */
 const FLICKS_CANVAS = "#000";
@@ -384,7 +380,11 @@ function FlickItemInner({
 
   const [flickMenuOpen, setFlickMenuOpen] = useState(false);
   const [flickReportOpen, setFlickReportOpen] = useState(false);
-  const [flickMenuPos, setFlickMenuPos] = useState({ top: 0, left: 0 });
+  // const [flickMenuPos, setFlickMenuPos] = useState({
+  //   top: 0,
+  //   left: 0,
+  //   right: 0,
+  // });
   const flickMenuBtnRef = useRef<View>(null);
 
   const closeFlickMenu = useCallback(() => setFlickMenuOpen(false), []);
@@ -395,18 +395,20 @@ function FlickItemInner({
     if (!node) return;
     const handle = findNodeHandle(node);
     if (!handle) return;
-    UIManager.measureInWindow(handle, (x, y, width, height) => {
-      const screenW = Dimensions.get("window").width;
-      const left = Math.min(
-        Math.max(8, x + width - FLICK_MENU_WIDTH),
-        screenW - FLICK_MENU_WIDTH - 8,
-      );
-      setFlickMenuPos({
-        top: y + height + 6,
-        left,
-      });
-      setFlickMenuOpen(true);
-    });
+    // UIManager.measureInWindow(handle, (x, y, width, height) => {
+    //   const screenW = Dimensions.get("window").width;
+    //   const left = Math.min(
+    //     Math.max(8, x + width + FLICK_MENU_WIDTH),
+    //     screenW - FLICK_MENU_WIDTH - 8,
+    //   );
+    //   const right = FLICK_MENU_WIDTH - 8;
+    //   setFlickMenuPos({
+    //     top: 6,
+    //     left,
+    //     right: 58,
+    //   });
+    setFlickMenuOpen(true);
+    // });
   }, []);
 
   const onBookmarkFromMenu = useCallback(() => {
@@ -468,55 +470,10 @@ function FlickItemInner({
     post.user?.id,
   ]);
 
-  /** While playing: brief flash after resume/mute. While user-paused: persistent HUD (see `playbackEverStarted` + isReady/!isBuffering). */
-  const [playingHudFlash, setPlayingHudFlash] = useState(false);
-  const playingHudFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
-
-  const clearPlayingHudFlashTimer = useCallback(() => {
-    if (playingHudFlashTimerRef.current != null) {
-      clearTimeout(playingHudFlashTimerRef.current);
-      playingHudFlashTimerRef.current = null;
-    }
-  }, []);
-
-  /** During playback only: show HUD briefly then hide (after resume or while interacting with mute). */
-  const schedulePlayingHudHide = useCallback(() => {
-    clearPlayingHudFlashTimer();
-    setPlayingHudFlash(true);
-    playingHudFlashTimerRef.current = setTimeout(() => {
-      setPlayingHudFlash(false);
-      playingHudFlashTimerRef.current = null;
-    }, FLICK_TOOLS_HIDE_MS);
-  }, [clearPlayingHudFlashTimer]);
-
-  useEffect(
-    () => () => clearPlayingHudFlashTimer(),
-    [clearPlayingHudFlashTimer],
-  );
-
-  useEffect(() => {
-    if (!isFocused) {
-      clearPlayingHudFlashTimer();
-      setPlayingHudFlash(false);
-    }
-  }, [isFocused, clearPlayingHudFlashTimer]);
-
-  useEffect(() => {
-    if (!isPlaying) {
-      clearPlayingHudFlashTimer();
-      setPlayingHudFlash(false);
-    }
-  }, [isPlaying, clearPlayingHudFlashTimer]);
-
   const handleMuteFromHud = useCallback(() => {
     toggleMute();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (isPlaying) {
-      schedulePlayingHudHide();
-    }
-  }, [toggleMute, isPlaying, schedulePlayingHudHide]);
+  }, [toggleMute]);
 
   const heartScale = useSharedValue(0);
   const heartOpacity = useSharedValue(0);
@@ -688,12 +645,8 @@ function FlickItemInner({
     const wasPaused = !isPlaying;
     togglePlayPause();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (wasPaused) {
-      schedulePlayingHudHide();
-    } else {
-      setUserPaused(true);
-    }
-  }, [togglePlayPause, isPlaying, schedulePlayingHudHide]);
+    setUserPaused(!wasPaused);
+  }, [togglePlayPause, isPlaying]);
 
   const handleTap = useCallback(() => {
     const now = Date.now();
@@ -818,7 +771,8 @@ function FlickItemInner({
     videoUrlForPlayer &&
     !previewEnded &&
     isFocused &&
-    (playingHudFlash || (userPaused && !isPlaying));
+    userPaused &&
+    !isPlaying;
 
   const seekTotalSeconds =
     isPaidVideo && parsedDuration != null && parsedDuration > 0
@@ -885,44 +839,42 @@ function FlickItemInner({
 
       {showFlickHud && (
         <View style={styles.flickToolsOverlay} pointerEvents="box-none">
-          <Pressable
-            style={styles.flickToolsCenterHit}
-            onPress={() => {
-              const wasPaused = !isPlaying;
-              togglePlayPause();
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              if (wasPaused) {
-                schedulePlayingHudHide();
-              } else {
-                setUserPaused(true);
-              }
-            }}
-            hitSlop={32}
-          >
-            <View style={styles.flickToolsPlayGlass}>
-              <Ionicons
-                name={isPlaying ? "pause" : "play"}
-                size={48}
-                color="#fff"
-                style={styles.flickToolsPlayIcon}
-              />
-            </View>
-          </Pressable>
-          <Pressable
-            accessibilityLabel={isMuted ? "Unmute" : "Mute"}
-            style={[styles.flickToolsMuteBtn, { bottom: 10, right: 10 }]}
-            onPress={handleMuteFromHud}
-            hitSlop={12}
-          >
-            <View style={styles.flickToolsVolumeGlass}>
-              <Ionicons
-                name={isMuted ? "volume-mute" : "volume-high"}
-                size={26}
-                color="#fff"
-                style={styles.flickToolsHudIconShadow}
-              />
-            </View>
-          </Pressable>
+          <View style={styles.flickToolsCenterStack}>
+            <Pressable
+              accessibilityLabel={isMuted ? "Unmute" : "Mute"}
+              onPress={handleMuteFromHud}
+              hitSlop={12}
+            >
+              <View style={styles.flickToolsVolumeGlass}>
+                <Ionicons
+                  name={isMuted ? "volume-mute" : "volume-high"}
+                  size={22}
+                  color="#fff"
+                  style={styles.flickToolsHudIconShadow}
+                />
+              </View>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setUserPaused(false);
+                play();
+              }}
+              hitSlop={16}
+            >
+              <View style={styles.flickToolsPlayGlass}>
+                <Ionicons
+                  name="play"
+                  size={36}
+                  color="#fff"
+                  style={[
+                    styles.flickToolsPlayIcon,
+                    styles.flickToolsPlayIconPlay,
+                  ]}
+                />
+              </View>
+            </Pressable>
+          </View>
         </View>
       )}
 
@@ -1035,7 +987,12 @@ function FlickItemInner({
           <View
             style={[
               styles.flickMenuCard,
-              { top: flickMenuPos.top, left: flickMenuPos.left },
+              {
+                // top: flickMenuPos.top,
+                // left: flickMenuPos.left,
+                right: 60,
+                bottom: 120,
+              },
             ]}
             accessibilityViewIsModal
           >
@@ -1421,15 +1378,16 @@ function createStyles(
       ...StyleSheet.absoluteFillObject,
       zIndex: 11,
     },
-    flickToolsCenterHit: {
+    flickToolsCenterStack: {
       ...StyleSheet.absoluteFillObject,
       justifyContent: "center",
       alignItems: "center",
+      gap: 12,
     },
     flickToolsPlayGlass: {
-      width: 88,
-      height: 88,
-      borderRadius: 44,
+      width: 68,
+      height: 68,
+      borderRadius: 34,
       backgroundColor: HUD_GLASS_FILL,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: HUD_GLASS_BORDER,
@@ -1437,9 +1395,9 @@ function createStyles(
       justifyContent: "center",
     },
     flickToolsVolumeGlass: {
-      width: 52,
-      height: 52,
-      borderRadius: 26,
+      width: 44,
+      height: 44,
+      borderRadius: 22,
       backgroundColor: HUD_GLASS_FILL,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: HUD_GLASS_BORDER,
@@ -1450,11 +1408,10 @@ function createStyles(
       textShadowColor: VIDEO_OVERLAY_HALO,
       textShadowOffset: { width: 0, height: 2 },
       textShadowRadius: 8,
+      textAlign: "center",
     },
-    flickToolsMuteBtn: {
-      position: "absolute",
-      right: 14,
-      zIndex: 12,
+    flickToolsPlayIconPlay: {
+      marginLeft: 3,
     },
     flickToolsHudIconShadow: {
       textShadowColor: VIDEO_OVERLAY_HALO,
@@ -1515,10 +1472,11 @@ function createStyles(
     rightActions: {
       position: "absolute",
       right: 8,
-      bottom: itemHeight * 0.14,
+      bottom: itemHeight * 0.06,
       zIndex: 20,
       alignItems: "center",
       gap: FLICK_ACTION_GLASS_GAP,
+      // backgroundColor: "red",
     },
     actionColumn: {
       alignItems: "center",

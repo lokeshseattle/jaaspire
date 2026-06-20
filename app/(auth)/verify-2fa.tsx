@@ -62,7 +62,7 @@ export default function Verify2FAScreen() {
       { two_fa_token: twoFaToken, code },
       {
         onSuccess: (r) => {
-          void authStore.login(r.data.token);
+          void authStore.login(r.data.token, { isRegistration: true });
         },
         onError: (e) => {
           if (isNetworkError(e)) return;

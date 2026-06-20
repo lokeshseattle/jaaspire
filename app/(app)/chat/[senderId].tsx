@@ -1555,6 +1555,28 @@ export default function MessengerChatScreen() {
     [myId, styles],
   );
 
+  const peerBubbleStyles = useMemo(
+    () =>
+      colorScheme === "dark"
+        ? {
+            wrapperStyle: {
+              left: { backgroundColor: theme.colors.card },
+            },
+            textStyle: {
+              left: { color: theme.colors.textPrimary },
+            },
+          }
+        : {
+            wrapperStyle: {
+              left: { backgroundColor: theme.colors.surface },
+            },
+            textStyle: {
+              left: { color: theme.colors.textPrimary },
+            },
+          },
+    [colorScheme, theme.colors.card, theme.colors.surface, theme.colors.textPrimary],
+  );
+
   const renderBubble = useCallback(
     (bubbleProps: BubbleProps<GiftedIMessage>) => {
       const msg = bubbleProps.currentMessage;
@@ -1573,6 +1595,7 @@ export default function MessengerChatScreen() {
       return (
         <Bubble
           {...bubbleProps}
+          {...(bubbleProps.position === "left" ? peerBubbleStyles : undefined)}
           currentMessage={displayMessage}
           renderTicks={renderTicks}
           onLongPressMessage={
@@ -1592,7 +1615,7 @@ export default function MessengerChatScreen() {
         />
       );
     },
-    [myId, peerId, renderTicks, handleLongPressMessage, streamingAi],
+    [myId, peerId, renderTicks, handleLongPressMessage, streamingAi, peerBubbleStyles],
   );
 
   if (!Number.isFinite(peerId) || peerId <= 0) {

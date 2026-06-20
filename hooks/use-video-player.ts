@@ -44,7 +44,7 @@ export function useManagedVideoPlayer(
   const [isReady, setIsReady] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(videoManager.getGlobalMuted());
+  const [isMuted, setIsMuted] = useState(videoManager.getUserMuted());
 
   const isFocusedRef = useRef(isFocused);
   const postIdRef = useRef(postId);
@@ -231,7 +231,7 @@ export function useManagedVideoPlayer(
   }, []);
 
   const toggleMute = useCallback(() => {
-    videoManager.setGlobalMuted(!videoManager.getGlobalMuted());
+    videoManager.setUserMuted(!videoManager.getUserMuted());
   }, []);
 
   const pause = useCallback(() => {

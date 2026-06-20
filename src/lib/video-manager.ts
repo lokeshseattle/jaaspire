@@ -24,9 +24,63 @@ class VideoPlayerManager {
   /** Last primary Home feed post — not eligible for eviction while user is away (e.g. on Flicks). */
   private pinnedFeedPostId: number | null = null;
   private currentlyPlaying: number | null = null;
-  private globalMuted: boolean = true;
+  /** Child mute button intent — drives UI icon state. */
+  private userMutedPreference = false;
+  /** Parent device volume is zero — blocks playback regardless of child UI. */
+  private systemVolumeZero = true;
   private muteSubscribers = new Set<(muted: boolean) => void>();
   private resetSubscribers = new Set<() => void>();
+
+  /** Playback: muted when child wants mute OR parent volume is zero. */
+  getEffectiveMuted(): boolean {
+    return this.userMutedPreference || this.systemVolumeZero;
+  }
+
+  /** UI: child button state only. */
+  getUserMuted(): boolean {
+    return this.userMutedPreference;
+  }
+
+  setUserMuted(muted: boolean): void {
+    if (this.userMutedPreference === muted) return;
+    this.userMutedPreference = muted;
+    this.syncPlayerMute();
+    this.notifyMuteSubscribers();
+  }
+
+  applySystemVolume(volume: number, prevVolume: number | null): void {
+    const wasAboveZero = prevVolume != null && prevVolume > 0;
+    const isZero = volume <= 0;
+
+    this.systemVolumeZero = isZero;
+
+    if (isZero && wasAboveZero) {
+      this.userMutedPreference = true;
+    } else if (prevVolume != null && volume > prevVolume) {
+      this.userMutedPreference = false;
+    }
+
+    this.syncPlayerMute();
+    this.notifyMuteSubscribers();
+  }
+
+  private syncPlayerMute(): void {
+    const muted = this.getEffectiveMuted();
+    this.players.forEach(({ player, isCleared }) => {
+      if (!isCleared) {
+        try {
+          player.muted = muted;
+        } catch {
+          /* native player may be gone */
+        }
+      }
+    });
+  }
+
+  private notifyMuteSubscribers(): void {
+    const uiMuted = this.userMutedPreference;
+    this.muteSubscribers.forEach((sub) => sub(uiMuted));
+  }
 
   /** Call when Home blurs: protect this post's player from eviction. Clear on Home focus (`null`). */
   setPinnedFeedPostId(postId: number | null): void {
@@ -44,7 +98,7 @@ class VideoPlayerManager {
           existing.url = url;
           existing.isCleared = false;
           existing.player.loop = true;
-          existing.player.muted = this.globalMuted;
+          existing.player.muted = this.getEffectiveMuted();
         } catch (e) {
           // console.warn(`[VM] Failed to replace source ${postId}:`, e);
           this.players.delete(postId);
@@ -72,7 +126,7 @@ class VideoPlayerManager {
 
     const player = createVideoPlayer(url);
     player.loop = true;
-    player.muted = this.globalMuted;
+    player.muted = this.getEffectiveMuted();
 
     this.players.set(postId, {
       player,
@@ -213,22 +267,14 @@ class VideoPlayerManager {
     }
   }
 
+  /** @deprecated Use setUserMuted — kept for any legacy callers. */
   setGlobalMuted(muted: boolean): void {
-    this.globalMuted = muted;
-    this.players.forEach(({ player, isCleared }, postId) => {
-      if (!isCleared) {
-        try {
-          player.muted = muted;
-        } catch (e) {
-          // console.warn(`[VM] Failed to set muted ${postId}:`, e);
-        }
-      }
-    });
-    this.muteSubscribers.forEach((sub) => sub(muted));
+    this.setUserMuted(muted);
   }
 
+  /** @deprecated Use getUserMuted — kept for any legacy callers. */
   getGlobalMuted(): boolean {
-    return this.globalMuted;
+    return this.getUserMuted();
   }
 
   subscribeToMute(callback: (muted: boolean) => void): () => void {

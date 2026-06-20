@@ -9,6 +9,7 @@ import {
   useCheckUsername,
   useRegister,
 } from "@/src/features/auth/auth.hooks";
+import { getStoredAttribution } from "@/src/features/attribution/attribution.storage";
 import { AuthScreenLayout } from "@/src/features/auth/AuthScreenLayout";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
@@ -100,7 +101,9 @@ export default function Register() {
     }
   }, [checkUsername.isSuccess, checkUsername.data, setError, clearErrors]);
 
-  const onSubmit = (data: FormData) => {
+  const onSubmit = async (data: FormData) => {
+    const attribution = await getStoredAttribution();
+
     register.mutate(
       {
         email: data.email,
@@ -109,6 +112,11 @@ export default function Register() {
         password_confirmation: data.confirmPassword,
         username: data.username,
         signup_source: Platform.OS === "android" ? "android" : "ios",
+        utm_source: attribution.utm_source,
+        ...(attribution.utm_medium && { utm_medium: attribution.utm_medium }),
+        ...(attribution.utm_campaign && {
+          utm_campaign: attribution.utm_campaign,
+        }),
       },
       {
         onSuccess: (data) => {
@@ -123,7 +131,7 @@ export default function Register() {
             return;
           }
           if ("token" in data.data) {
-            authStore.login(data.data.token);
+            authStore.login(data.data.token, { isRegistration: true });
           }
         },
         onError: (e) => {

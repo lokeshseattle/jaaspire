@@ -6,8 +6,10 @@ import { videoManager } from "@/src/lib/video-manager";
 let lastSystemVolume: number | null = null;
 
 /**
- * Keeps feed video mute state aligned with the hardware volume keys: when clips
- * are globally muted, raising the device volume unmutes (similar to TikTok / IG).
+ * Keeps video mute state aligned with hardware volume keys:
+ * - volume → 0: mutes playback (+ UI when dropping from above 0)
+ * - volume up while muted: unmutes (TikTok / IG pattern)
+ * Bootstrap getVolume() fixes initial state when listener does not fire on iOS.
  * Safe no-op on web; requires a dev/production native build (not Expo Go).
  */
 export function startSystemVolumeUnmuteSync(): () => void {
@@ -19,6 +21,7 @@ export function startSystemVolumeUnmuteSync(): () => void {
 
   void getVolume()
     .then(({ volume }) => {
+      videoManager.applySystemVolume(volume, null);
       lastSystemVolume = volume;
     })
     .catch(() => {
@@ -28,17 +31,8 @@ export function startSystemVolumeUnmuteSync(): () => void {
   try {
     subscription = addVolumeListener((result) => {
       const v = result.volume;
-      if (lastSystemVolume === null) {
-        lastSystemVolume = v;
-        return;
-      }
-      if (!videoManager.getGlobalMuted()) {
-        lastSystemVolume = v;
-        return;
-      }
-      if (v > lastSystemVolume) {
-        videoManager.setGlobalMuted(false);
-      }
+      const prev = lastSystemVolume;
+      videoManager.applySystemVolume(v, prev);
       lastSystemVolume = v;
     });
   } catch {
@@ -49,4 +43,16 @@ export function startSystemVolumeUnmuteSync(): () => void {
     subscription?.remove();
     subscription = null;
   };
+}
+
+/** Re-read device volume without resetting user mute preference (e.g. Flicks tab focus). */
+export function syncSystemVolumeFromDevice(): void {
+  if (Platform.OS === "web") return;
+
+  void getVolume()
+    .then(({ volume }) => {
+      videoManager.applySystemVolume(volume, null);
+      lastSystemVolume = volume;
+    })
+    .catch(() => {});
 }

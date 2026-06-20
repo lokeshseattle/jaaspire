@@ -15,18 +15,18 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { router, useFocusEffect, useNavigation } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
-    FlatList,
-    NativeScrollEvent,
-    NativeSyntheticEvent,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
-    ViewabilityConfig,
+  FlatList,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  ViewabilityConfig,
 } from "react-native";
 import Animated, {
-    useAnimatedStyle,
-    useSharedValue,
+  useAnimatedStyle,
+  useSharedValue,
 } from "react-native-reanimated";
 const HEADER_HEIGHT = 44;
 
@@ -39,14 +39,11 @@ const VIEWABILITY_CONFIG: ViewabilityConfig = {
 export default function Home() {
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const headerTotalHeight = HEADER_HEIGHT;
 
   const flatListRef = useRef<FlatList<number>>(null);
   const scrollOffsetRef = useRef(0);
   const lastScrollY = useRef(0);
 
-  // ✅ Use Reanimated shared value — all header animation math runs on the UI
-  // thread via worklets, eliminating JS bridge calls every scroll frame.
   const headerTranslateY = useSharedValue(0);
   const currentHeaderTranslate = useRef(0);
   const navigation = useNavigation();
@@ -75,9 +72,9 @@ export default function Home() {
     [headerTranslateY],
   );
 
-  // ✅ Animated style driven by shared value — runs on the UI thread.
   const headerAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: headerTranslateY.value }],
+    marginBottom: headerTranslateY.value,
   }));
 
   const {
@@ -208,13 +205,11 @@ export default function Home() {
         ListHeaderComponent={ListHeader}
         onRefresh={handleRefresh}
         isRefreshing={isRefetching}
-        refreshProgressViewOffset={headerTotalHeight}
         onEndReached={handleEndReached}
         isFetchingNextPage={isFetchingNextPage}
         flatListProps={{
           onScroll: handleScroll,
           scrollEventThrottle: 32,
-          contentContainerStyle: styles.listContent,
           maxToRenderPerBatch: 2,
           initialNumToRender: 2,
           updateCellsBatchingPeriod: 100,
@@ -229,15 +224,11 @@ const createStyles = (theme: AppTheme) =>
   StyleSheet.create({
     container: {
       flex: 1,
+      overflow: "hidden",
       backgroundColor: theme.colors.background,
     },
     header: {
-      position: "absolute",
-      top: 0,
-      left: 0,
-      right: 0,
       height: HEADER_HEIGHT,
-      zIndex: 10,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
@@ -254,9 +245,6 @@ const createStyles = (theme: AppTheme) =>
       flexDirection: "row",
       alignItems: "center",
       gap: 4,
-    },
-    listContent: {
-      paddingTop: HEADER_HEIGHT,
     },
     headerTitle: {
       fontSize: 20,
