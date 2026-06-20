@@ -2,6 +2,9 @@ import IapRecoveryBanner from "@/src/components/wallet/IapRecoveryBanner";
 import { useAuth } from "@/src/features/auth/auth.hooks";
 import { useGetProfile } from "@/src/features/profile/profile.hooks";
 import { IapProvider } from "@/src/features/wallet/IapProvider";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { getHeaderTitle } from "@react-navigation/elements";
+import type { NativeStackHeaderProps } from "@react-navigation/native-stack";
 import {
   initializePusher,
   subscribeUserChannel,
@@ -10,7 +13,14 @@ import {
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { Redirect, Stack } from "expo-router";
 import { useEffect } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 /** Deep links into this stack keep “(tabs)” as the root so Back can return home. */
 export const unstable_settings = {
@@ -46,6 +56,60 @@ function UserPostDetailHeaderTitle({ username }: { username?: string }) {
   );
 }
 
+function AndroidStackHeader({
+  back,
+  navigation,
+  options,
+  route,
+  theme,
+}: NativeStackHeaderProps & {
+  theme: ReturnType<typeof useTheme>["theme"];
+}) {
+  const resolvedTitle = getHeaderTitle(options, route.name);
+  const headerTitle =
+    typeof options.headerTitle === "function"
+      ? options.headerTitle({
+          children: resolvedTitle,
+          tintColor: theme.colors.textPrimary,
+        })
+      : (options.headerTitle ?? resolvedTitle);
+
+  return (
+    <View
+      style={[
+        styles.androidHeaderContainer,
+        { backgroundColor: theme.colors.background },
+      ]}
+    >
+      {back ? (
+        <Pressable
+          onPress={navigation.goBack}
+          style={styles.androidBackButton}
+          hitSlop={12}
+        >
+          <Ionicons
+            name="chevron-back"
+            size={24}
+            color={theme.colors.textPrimary}
+          />
+        </Pressable>
+      ) : null}
+      <View style={styles.androidHeaderTitleWrap}>
+        {typeof headerTitle === "string" ? (
+          <Text
+            numberOfLines={1}
+            style={[styles.androidHeaderTitle, { color: theme.colors.textPrimary }]}
+          >
+            {headerTitle}
+          </Text>
+        ) : (
+          headerTitle
+        )}
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   authLoadingRoot: {
     flex: 1,
@@ -65,6 +129,30 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "400",
     marginTop: 2,
+  },
+  androidHeaderContainer: {
+    height: 76,
+    paddingTop: 20,
+    paddingHorizontal: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  androidBackButton: {
+    minWidth: 44,
+    height: 44,
+    justifyContent: "center",
+    alignItems: "flex-start",
+  },
+  androidHeaderTitleWrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 44,
+  },
+  androidHeaderTitle: {
+    fontSize: 17,
+    fontWeight: "600",
   },
 });
 
@@ -123,7 +211,15 @@ export default function AppLayout() {
             backgroundColor: theme.colors.background,
           },
           headerTintColor: theme.colors.textPrimary,
-          headerShadowVisible: false,
+          ...(Platform.OS === "android"
+            ? {
+                header: (props: NativeStackHeaderProps) =>
+                  props.options.headerShown === false ? null : (
+                    <AndroidStackHeader {...props} theme={theme} />
+                  ),
+              }
+            : {}),
+          // headerShadowVisible: false,
           contentStyle: {
             backgroundColor: theme.colors.background,
           },

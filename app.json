@@ -2,7 +2,7 @@
   "expo": {
     "name": "Jaaspire",
     "slug": "jaaspire",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "jaaspire",
@@ -15,8 +15,7 @@
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryUsageDescription": "Jaaspire accesses your photo library to select photos and videos for your profile, posts, stories, and chat messages.",
         "NSCameraUsageDescription": "Jaaspire uses your camera to capture photos and videos for your profile, posts, stories, and chat messages.",
-        "NSPhotoLibraryAddUsageDescription": "This app needs permission to save photos to your library.",
-        "NSUserTrackingUsageDescription": "This identifier will be used to deliver a more personalized experience and track ad campaign performance."
+        "NSPhotoLibraryAddUsageDescription": "This app needs permission to save photos to your library."
       },
       "googleServicesFile": "./GoogleService-Info.plist",
       "appleTeamId": "T6Y9862AD6"
@@ -81,18 +80,12 @@
       "@react-native-community/datetimepicker",
       "expo-iap",
       "expo-notifications",
-      [
-        "expo-tracking-transparency",
-        {
-          "userTrackingPermission": "This identifier will be used to deliver a more personalized experience and track ad campaign performance."
-        }
-      ],
       "@react-native-firebase/app/app.plugin.js",
       [
         "@react-native-firebase/analytics/app.plugin.js",
         {
           "ios": {
-            "withoutAdIdSupport": false,
+            "withoutAdIdSupport": true,
             "googleAppMeasurementOnDeviceConversion": true
           }
         }
