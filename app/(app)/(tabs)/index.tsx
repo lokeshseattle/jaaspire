@@ -3,12 +3,20 @@ import { FeedContainer } from "@/src/components/feed/FeedContainer";
 import { useFeedController } from "@/src/components/feed/use-feed-controller";
 import JaasiAiFloatingAvatar from "@/src/components/home/JaasiAiFloatingAvatar";
 import Stories from "@/src/components/home/story";
+import { flickPreloadTarget } from "@/src/features/flicks/flicks-feed-video";
 import { useNotificationBadgeStore } from "@/src/features/notifications/notification-badge.store";
 import { useGetFeedQuery } from "@/src/features/post/post.hooks";
+import { usePostStore } from "@/src/features/post/post.store";
 import { useUnreadMessengerCount } from "@/src/features/profile/notification.hooks";
 import { useGetAllStories } from "@/src/features/story/story.hooks";
 import { useUnreadMessengerBadgeRealtime } from "@/src/lib/pusher";
+import { applyHomeTabFocusVolume } from "@/src/lib/system-volume-unmute-sync";
 import { videoManager } from "@/src/lib/video-manager";
+import {
+  isVideoNetworkDebugEnabled,
+  logVideoFeedWindow,
+  setVideoNetworkDebugScreen,
+} from "@/src/lib/video-network-debug";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -29,6 +37,8 @@ import Animated, {
   useSharedValue,
 } from "react-native-reanimated";
 const HEADER_HEIGHT = 44;
+/** Matches PostItem preload radius — videos within ±1 of primary post mount a player. */
+const HOME_VIDEO_PRELOAD_RADIUS = 1;
 
 /** One primary visible item; slightly higher minimumViewTime reduces play/pause churn while scrolling. */
 const VIEWABILITY_CONFIG: ViewabilityConfig = {
@@ -94,13 +104,16 @@ export default function Home() {
   const controller = useFeedController({
     postIds,
     viewabilityConfig: VIEWABILITY_CONFIG,
+    onScreenBlur: applyHomeTabFocusVolume,
   });
 
   const { refetch: storyRefetch } = useGetAllStories();
 
   useFocusEffect(
     useCallback(() => {
+      setVideoNetworkDebugScreen("home");
       videoManager.setPinnedFeedPostId(null);
+      applyHomeTabFocusVolume();
       return () => {
         const visibleId = controller.visiblePostIdRef.current;
         if (typeof visibleId === "number") {
@@ -110,6 +123,39 @@ export default function Home() {
       };
     }, [controller.visiblePostIdRef]),
   );
+
+  useEffect(() => {
+    if (!isVideoNetworkDebugEnabled()) return;
+
+    const visibleIndex = controller.visibleFeedIndex;
+    const visibleId = controller.visiblePostId;
+    if (visibleIndex < 0 || postIds.length === 0) return;
+
+    const postsMap = usePostStore.getState().posts;
+    const videos: { postId: number; url: string; role: string }[] = [];
+    for (
+      let offset = -HOME_VIDEO_PRELOAD_RADIUS;
+      offset <= HOME_VIDEO_PRELOAD_RADIUS;
+      offset++
+    ) {
+      const idx = visibleIndex + offset;
+      const id = postIds[idx];
+      if (id == null) continue;
+      const target = flickPreloadTarget(postsMap[id]);
+      if (!target) continue;
+      videos.push({
+        postId: target.postId,
+        url: target.url,
+        role: offset === 0 ? "focused" : offset > 0 ? "next" : "prev",
+      });
+    }
+
+    logVideoFeedWindow("home", {
+      focusedPostId: visibleId,
+      focusedIndex: visibleIndex,
+      videos,
+    });
+  }, [controller.visibleFeedIndex, controller.visiblePostId, postIds]);
 
   const handleRefresh = useCallback(async () => {
     await Promise.all([refetch(), storyRefetch()]);

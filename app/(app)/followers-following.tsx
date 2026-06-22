@@ -1,10 +1,10 @@
 import { AnimatedTabBar } from "@/src/components/ui/animated-tabbar";
 import {
-    useFollowToggleMutation,
-    useGetFollowersQuery,
-    useGetFollowingQuery,
-    useGetProfile,
-    useRemoveFollowerMutation,
+  useFollowToggleMutation,
+  useGetFollowersQuery,
+  useGetFollowingQuery,
+  useGetProfile,
+  useRemoveFollowerMutation,
 } from "@/src/features/profile/profile.hooks";
 import { FollowUser } from "@/src/services/api/api.types";
 import { AppTheme } from "@/src/theme";
@@ -14,18 +14,18 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams, useNavigation } from "expo-router";
 import React, { useCallback, useLayoutEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    Image,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import Animated, {
-    useAnimatedStyle,
-    useSharedValue,
+  useAnimatedStyle,
+  useSharedValue,
 } from "react-native-reanimated";
 
 // const { width } = Dimensions.get("window");
@@ -109,6 +109,7 @@ const FollowersFollowingScreen = () => {
     typeRaw === "following" ? "following" : "followers";
 
   const { data: profileData } = useGetProfile();
+  const myUserId = profileData?.data?.id;
   const myUsername = profileData?.data?.username?.trim().toLowerCase() ?? "";
   const isOwnProfile =
     myUsername.length > 0 && username.toLowerCase() === myUsername;
@@ -257,6 +258,18 @@ const FollowersFollowingScreen = () => {
     [removeFollowerMutation],
   );
 
+  const navigateToUser = useCallback(
+    (item: FollowUser) => {
+      const trimmedUsername = item.username.trim();
+      if (myUserId != null && item.id === myUserId) {
+        router.push({ pathname: "/(app)/(tabs)/profile" });
+        return;
+      }
+      router.push(`/user/${trimmedUsername}`);
+    },
+    [myUserId],
+  );
+
   const renderItem = useCallback(
     ({ item }: { item: FollowUser }) => {
       const trimmedUsername = item.username.trim();
@@ -267,11 +280,12 @@ const FollowersFollowingScreen = () => {
         toggleFollowMutation.isPending &&
         toggleFollowMutation.variables === trimmedUsername;
       const showOwnFollowerActions = activeTab === "followers" && isOwnProfile;
+      const isSelf = myUserId != null && item.id === myUserId;
 
       return (
         <View style={styles.row}>
           <Pressable
-            onPress={() => router.push(`/user/${trimmedUsername}`)}
+            onPress={() => navigateToUser(item)}
             style={styles.rowMain}
           >
             <Image source={{ uri: item.avatar }} style={styles.avatar} />
@@ -295,7 +309,8 @@ const FollowersFollowingScreen = () => {
             </View>
           </Pressable>
 
-          {showOwnFollowerActions ? (
+          {!isSelf &&
+            (showOwnFollowerActions ? (
             <View style={styles.rowActions}>
               {isFollowingFromFollowStatus(item.follow_status) ? (
                 <Pressable
@@ -394,7 +409,7 @@ const FollowersFollowingScreen = () => {
                 {capitalize(item.follow_status)}
               </Text>
             </Pressable>
-          )}
+          ))}
         </View>
       );
     },
@@ -403,6 +418,8 @@ const FollowersFollowingScreen = () => {
       confirmRemoveFollower,
       dispatchFollowAlert,
       isOwnProfile,
+      myUserId,
+      navigateToUser,
       removeFollowerMutation.isPending,
       removeFollowerMutation.variables,
       styles,

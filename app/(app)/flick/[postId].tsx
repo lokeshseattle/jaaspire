@@ -19,6 +19,7 @@ import {
   syncFlickVideoPool,
   type FlickScrollDirection,
 } from "@/src/features/flicks/flicks-feed-video";
+import { applyFlicksTabFocusVolume, applyHomeTabFocusVolume } from "@/src/lib/system-volume-unmute-sync";
 import { videoManager } from "@/src/lib/video-manager";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
@@ -387,9 +388,13 @@ export default function FeedFlickScreen() {
           videoManager.seekToStart(id);
         }
       }
+      applyFlicksTabFocusVolume();
       setIsScreenFocused(true);
       return () => {
         setIsScreenFocused(false);
+        if (!videoManager.getHasInteracted()) {
+          applyHomeTabFocusVolume();
+        }
         if (Platform.OS === "android") {
           videoManager.resetAll();
         } else {

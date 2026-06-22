@@ -35,9 +35,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
-  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
@@ -75,9 +73,16 @@ interface Props {
 
 const DOUBLE_TAP_DELAY = 300;
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
 // ─── Utilities ───────────────────────────────────────────────────────────────
+
+/** mm:ss with zero-padded minutes (e.g. 00:03 / 03:00) for paid preview labels. */
+function formatPreviewTime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return "00:00";
+  const total = Math.floor(seconds);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
 
 // ─── Error Boundary ───────────────────────────────────────────────────────────
 
@@ -332,14 +337,8 @@ function PostMediaInnerMain({
   // ── Animation shared values ────────────────────────────────────────────────
   const heartScale = useSharedValue(0);
   const heartOpacity = useSharedValue(0);
-  const muteOpacity = useSharedValue(0);
   const progress = useSharedValue(0);
   const maxProgressRatio = useSharedValue(1);
-  const progressBarWidth = useSharedValue(0);
-  const isScrubbing = useSharedValue(false);
-
-  // ── Mute icon timer ────────────────────────────────────────────────────────
-  const muteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Access control ─────────────────────────────────────────────────────────
   const canView = useMemo(
@@ -358,6 +357,7 @@ function PostMediaInnerMain({
   // ── Preview-ended state ────────────────────────────────────────────────────
   const [previewEnded, setPreviewEnded] = useState(false);
   const previewEndedRef = useRef(false);
+  const [previewCurrentTime, setPreviewCurrentTime] = useState(0);
 
   const isPaidVideo =
     !canView && type === "video" && (price > 0 || isExclusive);
@@ -400,11 +400,17 @@ function PostMediaInnerMain({
   const posterOpacity = useSharedValue(1);
 
   useEffect(() => {
+    setPreviewCurrentTime(0);
+    previewEndedRef.current = false;
+    setPreviewEnded(false);
+  }, [postId]);
+
+  useEffect(() => {
     if (!isReady) {
       firstFrameRendered.current = false;
       posterOpacity.value = 1;
     }
-  }, [isReady]);
+  }, [isReady, posterOpacity]);
 
   useEffect(() => {
     if (!canView) return;
@@ -441,105 +447,6 @@ function PostMediaInnerMain({
     opacity: heartOpacity.value,
   }));
 
-  const animatedMuteStyle = useAnimatedStyle(() => ({
-    opacity: muteOpacity.value,
-  }));
-
-  const progressStyle = useAnimatedStyle(() => ({
-    width: `${progress.value * 100}%`,
-  }));
-
-  const thumbAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: progress.value * progressBarWidth.value - 5 },
-      { scale: withTiming(isScrubbing.value ? 1.4 : 0.8) },
-    ],
-    opacity: withTiming(isScrubbing.value ? 1 : 0),
-  }));
-
-  const progressBarAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: isScrubbing.value ? 1 : muteOpacity.value,
-  }));
-
-  const lockedSegmentStyle = useAnimatedStyle(() => {
-    const ratio = maxProgressRatio.value;
-    return {
-      left: `${ratio * 100}%`,
-      width: `${(1 - ratio) * 100}%`,
-      opacity: ratio < 1 ? 1 : 0,
-    };
-  });
-
-  // ─── Seek logic ────────────────────────────────────────────────────────────
-
-  const seekTo = useCallback(
-    (value: number) => {
-      if (!player?.duration) return;
-
-      if (isPaidVideo && parsedDuration) {
-        const cap = player.duration;
-        const targetTime = Math.min(value * parsedDuration, cap);
-        player.currentTime = targetTime;
-        progress.value = targetTime / parsedDuration;
-
-        const reachedEnd = targetTime >= cap - 0.08;
-        if (reachedEnd) {
-          pause();
-          if (!previewEndedRef.current) {
-            previewEndedRef.current = true;
-            setPreviewEnded(true);
-          }
-        } else if (previewEndedRef.current) {
-          previewEndedRef.current = false;
-          setPreviewEnded(false);
-        }
-      } else {
-        player.currentTime = value * player.duration;
-      }
-    },
-    [player, isPaidVideo, parsedDuration, pause, progress],
-  );
-
-  // ─── Gesture handlers ──────────────────────────────────────────────────────
-
-  const tapSeekGesture = Gesture.Tap()
-    .maxDistance(14)
-    .onEnd((e) => {
-      "worklet";
-      const w = progressBarWidth.value;
-      if (w <= 0) return;
-      const raw = Math.max(0, Math.min(e.x / w, 1));
-      const clamped =
-        maxProgressRatio.value < 1
-          ? Math.min(raw, maxProgressRatio.value)
-          : raw;
-      progress.value = clamped;
-      runOnJS(seekTo)(clamped);
-    });
-
-  const panGesture = Gesture.Pan()
-    .activeOffsetX([-14, 14])
-    .onBegin(() => {
-      isScrubbing.value = true;
-    })
-    .onUpdate((e) => {
-      const w = progressBarWidth.value;
-      if (w <= 0) return;
-      const raw = Math.max(0, Math.min(e.x / w, 1));
-      progress.value =
-        maxProgressRatio.value < 1
-          ? Math.min(raw, maxProgressRatio.value)
-          : raw;
-    })
-    .onEnd(() => {
-      runOnJS(seekTo)(progress.value);
-    })
-    .onFinalize(() => {
-      isScrubbing.value = false;
-    });
-
-  const barGesture = Gesture.Simultaneous(tapSeekGesture, panGesture);
-
   // ─── Effects ───────────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -555,7 +462,7 @@ function PostMediaInnerMain({
       "timeUpdate" as any,
       ({ currentTime }: { currentTime: number }) => {
         try {
-          if (isScrubbing.value || !player.duration) return;
+          if (!player.duration) return;
 
           if (isPaidVideo && parsedDuration) {
             const cap = player.duration;
@@ -564,12 +471,14 @@ function PostMediaInnerMain({
             if (currentTime >= cap - 0.1) {
               pause();
               progress.value = cap / parsedDuration;
+              setPreviewCurrentTime(cap);
               if (!previewEndedRef.current) {
                 previewEndedRef.current = true;
                 setPreviewEnded(true);
               }
             } else {
               progress.value = currentTime / parsedDuration;
+              setPreviewCurrentTime(currentTime);
             }
           } else {
             progress.value = currentTime / player.duration;
@@ -629,6 +538,7 @@ function PostMediaInnerMain({
     if (!isPrimaryFeedPost && previewEndedRef.current) {
       previewEndedRef.current = false;
       setPreviewEnded(false);
+      setPreviewCurrentTime(0);
     }
   }, [isPrimaryFeedPost]);
 
@@ -648,14 +558,6 @@ function PostMediaInnerMain({
     heartOpacity.value = withTiming(0, { duration: 600 }, undefined);
   }, []);
 
-  const showMuteIcon = useCallback(() => {
-    muteOpacity.value = withTiming(1, { duration: 200 });
-    if (muteTimerRef.current) clearTimeout(muteTimerRef.current);
-    muteTimerRef.current = setTimeout(() => {
-      muteOpacity.value = withTiming(0, { duration: 500 });
-    }, 1000);
-  }, []);
-
   const handleDoubleTap = useCallback(() => {
     triggerHeartAnimation();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -664,12 +566,9 @@ function PostMediaInnerMain({
 
   const handleSingleTap = useCallback(() => {
     if (type !== "video") return;
-    if (!canView) {
-      showMuteIcon();
-      return;
-    }
+    if (!canView) return;
     router.push(`/(app)/flick/${postId}`);
-  }, [type, postId, canView, showMuteIcon]);
+  }, [type, postId, canView]);
 
   const handleTap = useCallback(() => {
     const now = Date.now();
@@ -713,8 +612,7 @@ function PostMediaInnerMain({
   const handleMutePress = useCallback(() => {
     toggleMute?.();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    showMuteIcon();
-  }, [toggleMute, showMuteIcon]);
+  }, [toggleMute]);
 
   const handlePayPress = useCallback(() => {
     // console.log("handlePayPress");
@@ -728,6 +626,7 @@ function PostMediaInnerMain({
   const handleWatchAgain = useCallback(() => {
     previewEndedRef.current = false;
     setPreviewEnded(false);
+    setPreviewCurrentTime(0);
     progress.value = 0;
 
     // Mark poster as "already rendered" so the poster-visibility effects
@@ -775,6 +674,12 @@ function PostMediaInnerMain({
   const showLoadingOverlay =
     type === "video" && isFocused && (isBuffering || !isReady);
   const showPremiumBadge = price > 0 || isExclusive;
+  const showPaidPreviewTime =
+    isPaidVideo &&
+    isFocused &&
+    parsedDuration != null &&
+    parsedDuration > 0 &&
+    !previewEnded;
 
   const containerHeight = useMemo(() => {
     if (type === "video") {
@@ -829,38 +734,22 @@ function PostMediaInnerMain({
                 )}
               </VerticalVideoFrame>
 
-              {showVideoView && player && isFocused && (
-                <GestureDetector gesture={barGesture}>
-                  <Animated.View
-                    style={[styles.progressContainer, progressBarAnimatedStyle]}
-                    hitSlop={{ top: 10, bottom: 10 }}
-                    onLayout={(e) => {
-                      progressBarWidth.value = e.nativeEvent.layout.width;
-                    }}
-                  >
-                    <Animated.View
-                      style={[styles.progressFill, progressStyle]}
-                    />
-                    <Animated.View
-                      style={[styles.progressLockedSegment, lockedSegmentStyle]}
-                    />
-                    <Animated.View style={[styles.thumb, thumbAnimatedStyle]} />
-                  </Animated.View>
-                </GestureDetector>
-              )}
-
-              {isFocused && (
-                <AnimatedPressable
+              {isFocused &&
+                type === "video" &&
+                (canView || isPaidVideo) &&
+                !previewEnded && (
+                <Pressable
                   onPress={handleMutePress}
-                  style={[styles.muteButton, animatedMuteStyle]}
+                  style={styles.muteButton}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityLabel={isMuted ? "Unmute" : "Mute"}
                 >
                   <Ionicons
                     name={isMuted ? "volume-mute" : "volume-high"}
                     size={18}
                     color="white"
                   />
-                </AnimatedPressable>
+                </Pressable>
               )}
             </>
           )}
@@ -896,16 +785,24 @@ function PostMediaInnerMain({
           style={styles.premiumBadge}
           pointerEvents="none"
           accessible
-          accessibilityRole="image"
+          accessibilityRole="text"
           accessibilityLabel={
-            price > 0 && isExclusive
-              ? "Premium paid exclusive content"
-              : price > 0
-                ? "Premium paid content"
-                : "Premium exclusive content"
+            showPaidPreviewTime && parsedDuration
+              ? `Premium preview ${formatPreviewTime(previewCurrentTime)} of ${formatPreviewTime(parsedDuration)}`
+              : price > 0 && isExclusive
+                ? "Premium paid exclusive content"
+                : price > 0
+                  ? "Premium paid content"
+                  : "Premium exclusive content"
           }
         >
-          <Ionicons name="heart" size={18} color="#f5c542" />
+          <Ionicons name="heart" size={16} color="#f5c542" />
+          {showPaidPreviewTime && parsedDuration != null && (
+            <Text style={styles.previewTimeText}>
+              {formatPreviewTime(previewCurrentTime)} /{" "}
+              {formatPreviewTime(parsedDuration)}
+            </Text>
+          )}
         </View>
       )}
     </View>
@@ -1064,12 +961,15 @@ const styles = StyleSheet.create({
     top: 10,
     right: 10,
     zIndex: 12,
-    padding: 6,
-    borderRadius: 18,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderRadius: 16,
+    backgroundColor: "rgba(0,0,0,0.55)",
     borderWidth: 1,
     borderColor: "rgba(245, 197, 66, 0.55)",
-    // elevation removed — creates expensive bitmap layer on Android during scroll
   },
   errorFallback: {
     width: "100%",
@@ -1096,14 +996,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     // backgroundColor: "rgba(0, 0, 0, 0.3)",
   },
-  thumb: {
-    position: "absolute",
-    top: -2,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "#fff",
-  },
   playIndicator: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: "center",
@@ -1118,23 +1010,12 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 20,
   },
-  progressContainer: {
-    position: "absolute",
-    bottom: 5,
-    left: 0,
-    right: 0,
-    height: 6,
-    backgroundColor: "rgba(255,255,255,0.3)",
-  },
-  progressFill: {
-    height: "100%",
-    backgroundColor: "#fff",
-  },
-  progressLockedSegment: {
-    position: "absolute",
-    top: 0,
-    height: "100%",
-    backgroundColor: "rgba(0,0,0,0.35)",
+  previewTimeText: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "600",
+    fontVariant: ["tabular-nums"],
+    letterSpacing: 0.2,
   },
   videoPaywallOverlay: {
     ...StyleSheet.absoluteFillObject,

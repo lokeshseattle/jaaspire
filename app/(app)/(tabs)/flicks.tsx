@@ -3,55 +3,64 @@ import { useFeedController } from "@/src/components/feed/use-feed-controller";
 import FlickItem from "@/src/components/flicks/FlickItem";
 import FlickItemErrorBoundary from "@/src/components/flicks/FlickItemErrorBoundary";
 import {
-    flickActiveIndexFromOffset,
-    FLICKS_PRELOAD_RADIUS,
-    flickScrollDirection,
-    type FlickScrollDirection,
-    prefetchFlickThumbnails,
-    resetFlickOnFocusChange,
-    seekOffWindowFlicks,
-    syncFlickVideoPool,
+  flickActiveIndexFromOffset,
+  flickPreloadTarget,
+  FLICKS_PRELOAD_RADIUS,
+  flickScrollDirection,
+  type FlickScrollDirection,
+  prefetchFlickThumbnails,
+  resetFlickOnFocusChange,
+  seekOffWindowFlicks,
+  syncFlickVideoPool,
 } from "@/src/features/flicks/flicks-feed-video";
 import {
-    type FlicksFeed,
-    useGetFlicksQuery,
+  type FlicksFeed,
+  useGetFlicksQuery,
 } from "@/src/features/flicks/flicks.hooks";
 import {
-    useDeletePostMutation,
-    useTrackPostView,
+  useDeletePostMutation,
+  useTrackPostView,
 } from "@/src/features/post/post.hooks";
 import { usePostStore } from "@/src/features/post/post.store";
-import { syncSystemVolumeFromDevice } from "@/src/lib/system-volume-unmute-sync";
+import {
+  applyFlicksTabFocusVolume,
+  applyHomeTabFocusVolume,
+} from "@/src/lib/system-volume-unmute-sync";
 import { videoManager } from "@/src/lib/video-manager";
+import {
+  isVideoNetworkDebugEnabled,
+  logVideoFeedWindow,
+  setVideoNetworkDebugScreen,
+} from "@/src/lib/video-network-debug";
 import { getApiErrorMessage } from "@/src/services/api/api.error";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useFocusEffect, useNavigation } from "expo-router";
 import {
-    memo,
-    useCallback,
-    useEffect,
-    useLayoutEffect,
-    useMemo,
-    useRef,
-    useState,
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
 } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    FlatList,
-    type LayoutChangeEvent,
-    ListRenderItemInfo,
-    type NativeScrollEvent,
-    type NativeSyntheticEvent,
-    PixelRatio,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
-    ViewabilityConfig,
-    ViewToken,
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  FlatList,
+  type LayoutChangeEvent,
+  ListRenderItemInfo,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  PixelRatio,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  ViewabilityConfig,
+  ViewToken,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useShallow } from "zustand/react/shallow";
@@ -280,8 +289,9 @@ export default function FlicksScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      setVideoNetworkDebugScreen("flicks");
       setIsScreenFocused(true);
-      syncSystemVolumeFromDevice();
+      applyFlicksTabFocusVolume();
       const ids = postIdsRef.current;
       const idx = focusedIndexRef.current;
       if (ids.length > 0) {
@@ -290,6 +300,9 @@ export default function FlicksScreen() {
       }
       return () => {
         setIsScreenFocused(false);
+        if (!videoManager.getHasInteracted()) {
+          applyHomeTabFocusVolume();
+        }
         videoManager.pauseAll();
       };
     }, []),
@@ -316,6 +329,33 @@ export default function FlicksScreen() {
       focusedIndex,
       postsMap,
       scrollDirection: scrollDirectionRef.current,
+    });
+
+    if (!isVideoNetworkDebugEnabled()) return;
+    if (postIds.length === 0 || focusedIndex < 0) return;
+
+    const videos: { postId: number; url: string; role: string }[] = [];
+    for (
+      let offset = -FLICKS_PRELOAD_RADIUS;
+      offset <= FLICKS_PRELOAD_RADIUS;
+      offset++
+    ) {
+      const idx = focusedIndex + offset;
+      const id = postIds[idx];
+      if (id == null) continue;
+      const target = flickPreloadTarget(postsMap[id]);
+      if (!target) continue;
+      videos.push({
+        postId: target.postId,
+        url: target.url,
+        role: offset === 0 ? "focused" : offset > 0 ? "next" : "prev",
+      });
+    }
+
+    logVideoFeedWindow("flicks", {
+      focusedPostId: postIds[focusedIndex] ?? null,
+      focusedIndex,
+      videos,
     });
   }, [focusedIndex, postIds, postsMap]);
 

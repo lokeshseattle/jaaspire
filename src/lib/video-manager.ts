@@ -1,3 +1,4 @@
+import { logVideoNetworkFetch } from "@/src/lib/video-network-debug";
 import { createVideoPlayer, VideoPlayer } from "expo-video";
 import { Platform } from "react-native";
 
@@ -24,10 +25,12 @@ class VideoPlayerManager {
   /** Last primary Home feed post — not eligible for eviction while user is away (e.g. on Flicks). */
   private pinnedFeedPostId: number | null = null;
   private currentlyPlaying: number | null = null;
-  /** Child mute button intent — drives UI icon state. */
-  private userMutedPreference = false;
+  /** Child mute button intent — drives UI icon state. Muted by default on cold start. */
+  private userMutedPreference = true;
   /** Parent device volume is zero — blocks playback regardless of child UI. */
   private systemVolumeZero = true;
+  /** Once true, Home/Flicks share mute state; pre-interaction auto-mute/unmute stops. */
+  private hasUserInteractedWithMute = false;
   private muteSubscribers = new Set<(muted: boolean) => void>();
   private resetSubscribers = new Set<() => void>();
 
@@ -41,9 +44,36 @@ class VideoPlayerManager {
     return this.userMutedPreference;
   }
 
+  getHasInteracted(): boolean {
+    return this.hasUserInteractedWithMute;
+  }
+
   setUserMuted(muted: boolean): void {
+    this.hasUserInteractedWithMute = true;
     if (this.userMutedPreference === muted) return;
     this.userMutedPreference = muted;
+    this.syncPlayerMute();
+    this.notifyMuteSubscribers();
+  }
+
+  /** Pre-interaction: unmute for Flicks without locking shared state. */
+  autoUnmuteForScreen(): void {
+    if (this.userMutedPreference === false) {
+      this.syncPlayerMute();
+      return;
+    }
+    this.userMutedPreference = false;
+    this.syncPlayerMute();
+    this.notifyMuteSubscribers();
+  }
+
+  /** Pre-interaction: mute for Home without locking shared state. */
+  autoMuteForScreen(): void {
+    if (this.userMutedPreference === true) {
+      this.syncPlayerMute();
+      return;
+    }
+    this.userMutedPreference = true;
     this.syncPlayerMute();
     this.notifyMuteSubscribers();
   }
@@ -54,10 +84,13 @@ class VideoPlayerManager {
 
     this.systemVolumeZero = isZero;
 
-    if (isZero && wasAboveZero) {
-      this.userMutedPreference = true;
-    } else if (prevVolume != null && volume > prevVolume) {
-      this.userMutedPreference = false;
+    if (prevVolume !== null) {
+      this.hasUserInteractedWithMute = true;
+      if (isZero && wasAboveZero) {
+        this.userMutedPreference = true;
+      } else if (volume > prevVolume) {
+        this.userMutedPreference = false;
+      }
     }
 
     this.syncPlayerMute();
@@ -94,6 +127,7 @@ class VideoPlayerManager {
 
       if (existing.url !== url) {
         try {
+          logVideoNetworkFetch(postId, url, "replace");
           existing.player.replace(url);
           existing.url = url;
           existing.isCleared = false;
@@ -108,6 +142,7 @@ class VideoPlayerManager {
 
       if (existing.isCleared) {
         try {
+          logVideoNetworkFetch(postId, url, "replace");
           existing.player.replace(url);
           existing.isCleared = false;
         } catch (e) {
@@ -124,6 +159,7 @@ class VideoPlayerManager {
       if (!this.evictOne(postId)) break;
     }
 
+    logVideoNetworkFetch(postId, url, "create");
     const player = createVideoPlayer(url);
     player.loop = true;
     player.muted = this.getEffectiveMuted();

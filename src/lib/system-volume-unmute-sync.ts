@@ -56,3 +56,34 @@ export function syncSystemVolumeFromDevice(): void {
     })
     .catch(() => {});
 }
+
+/** Home tab focus: restore muted default before user has interacted with volume. */
+export function applyHomeTabFocusVolume(): void {
+  if (!videoManager.getHasInteracted()) {
+    videoManager.autoMuteForScreen();
+  }
+}
+
+/** Flicks tab focus: sync device volume; auto-unmute when pre-interaction and vol > 0. */
+export function applyFlicksTabFocusVolume(): void {
+  if (Platform.OS === "web") {
+    if (!videoManager.getHasInteracted()) {
+      videoManager.autoUnmuteForScreen();
+    }
+    return;
+  }
+
+  void getVolume()
+    .then(({ volume }) => {
+      videoManager.applySystemVolume(volume, null);
+      lastSystemVolume = volume;
+      if (!videoManager.getHasInteracted() && volume > 0) {
+        videoManager.autoUnmuteForScreen();
+      }
+    })
+    .catch(() => {
+      if (!videoManager.getHasInteracted()) {
+        videoManager.autoUnmuteForScreen();
+      }
+    });
+}
