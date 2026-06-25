@@ -5,7 +5,7 @@ type VideoNetworkAction = "create" | "replace";
  * Manual dev toggle — flip to `true` to enable `[VideoNet:*]` console logs.
  * Only runs when `__DEV__` is true; production builds never log.
  */
-export const VIDEO_NETWORK_DEBUG_ENABLED = false;
+export const VIDEO_NETWORK_DEBUG_ENABLED = true;
 
 export function isVideoNetworkDebugEnabled(): boolean {
   return __DEV__ && VIDEO_NETWORK_DEBUG_ENABLED;

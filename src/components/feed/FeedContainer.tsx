@@ -6,13 +6,19 @@ import { useTheme } from "@/src/theme/ThemeProvider";
 import { useMemo } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   ListRenderItemInfo,
   RefreshControl,
+  StyleProp,
   StyleSheet,
   View,
+  ViewStyle,
 } from "react-native";
+import Animated from "react-native-reanimated";
 import { useFeedController } from "./use-feed-controller";
+
+type AnimatedFeedFlatList = typeof Animated.FlatList<number>;
+type AnimatedFeedFlatListProps = React.ComponentProps<AnimatedFeedFlatList>;
+type AnimatedFeedFlatListRef = React.ComponentRef<AnimatedFeedFlatList>;
 
 type FeedContainerProps = {
   controller: ReturnType<typeof useFeedController>;
@@ -23,8 +29,9 @@ type FeedContainerProps = {
   isRefreshing: boolean;
   onEndReached: () => void;
   isFetchingNextPage: boolean;
-  flatListRef?: React.RefObject<FlatList<number> | null>;
-  flatListProps?: Partial<React.ComponentProps<typeof FlatList<number>>>;
+  flatListRef?: React.RefObject<AnimatedFeedFlatListRef | null>;
+  flatListProps?: Partial<AnimatedFeedFlatListProps>;
+  contentContainerStyle?: StyleProp<ViewStyle>;
   /** Pushes the pull-to-refresh spinner below an overlay header (e.g. home tab). */
   refreshProgressViewOffset?: number;
 };
@@ -40,6 +47,7 @@ export function FeedContainer({
   isFetchingNextPage,
   flatListRef,
   flatListProps,
+  contentContainerStyle,
   refreshProgressViewOffset,
 }: FeedContainerProps) {
   const { theme } = useTheme();
@@ -94,7 +102,7 @@ export function FeedContainer({
 
   return (
     <View style={styles.wrap}>
-      <FlatList
+      <Animated.FlatList
         ref={flatListRef}
         data={postIds}
         keyExtractor={(item) => item.toString()}
@@ -102,6 +110,7 @@ export function FeedContainer({
         ListHeaderComponent={ListHeaderComponent}
         ListEmptyComponent={ListEmptyComponent ?? undefined}
         ListFooterComponent={ListFooter}
+        contentContainerStyle={contentContainerStyle}
         viewabilityConfigCallbackPairs={
           controller.viewabilityConfigCallbackPairs.current
         }
@@ -116,7 +125,6 @@ export function FeedContainer({
         maxToRenderPerBatch={3}
         initialNumToRender={3}
         updateCellsBatchingPeriod={50}
-        maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
         showsVerticalScrollIndicator={false}
         {...flatListProps}
       />

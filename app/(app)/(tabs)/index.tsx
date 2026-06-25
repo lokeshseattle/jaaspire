@@ -23,9 +23,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { router, useFocusEffect, useNavigation } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
-  FlatList,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -33,10 +31,15 @@ import {
   ViewabilityConfig,
 } from "react-native";
 import Animated, {
+  useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
+  withTiming,
 } from "react-native-reanimated";
-const HEADER_HEIGHT = 44;
+import { scheduleOnRN } from "react-native-worklets";
+const HEADER_HEIGHT = 48;
+const HEADER_SHOW_DURATION = 200;
+const HEADER_SNAP_DURATION = 180;
 /** Matches PostItem preload radius — videos within ±1 of primary post mount a player. */
 const HOME_VIDEO_PRELOAD_RADIUS = 1;
 
@@ -50,41 +53,66 @@ export default function Home() {
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
-  const flatListRef = useRef<FlatList<number>>(null);
+  const flatListRef =
+    useRef<React.ComponentRef<typeof Animated.FlatList<number>>>(null);
   const scrollOffsetRef = useRef(0);
-  const lastScrollY = useRef(0);
-
-  const headerTranslateY = useSharedValue(0);
-  const currentHeaderTranslate = useRef(0);
   const navigation = useNavigation();
 
-  const handleScroll = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const offsetY = event.nativeEvent.contentOffset.y;
-      scrollOffsetRef.current = offsetY;
-      const delta = offsetY - lastScrollY.current;
-      lastScrollY.current = offsetY;
+  const prevScrollY = useSharedValue(0);
+  const headerTranslateY = useSharedValue(0);
+
+  const updateScrollOffset = useCallback((offsetY: number) => {
+    scrollOffsetRef.current = offsetY;
+  }, []);
+
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      const offsetY = event.contentOffset.y;
+      const delta = offsetY - prevScrollY.value;
+      prevScrollY.value = offsetY;
+      scheduleOnRN(updateScrollOffset, offsetY);
 
       if (offsetY <= 0) {
-        currentHeaderTranslate.current = 0;
         headerTranslateY.value = 0;
-      } else if (delta > 0) {
-        currentHeaderTranslate.current = Math.max(
-          -HEADER_HEIGHT,
-          currentHeaderTranslate.current - delta,
-        );
-        headerTranslateY.value = currentHeaderTranslate.current;
-      } else if (delta < 0) {
-        currentHeaderTranslate.current = 0;
-        headerTranslateY.value = 0;
+        return;
       }
+
+      const nextTranslate = Math.max(
+        -HEADER_HEIGHT,
+        Math.min(0, headerTranslateY.value - delta),
+      );
+      headerTranslateY.value = nextTranslate;
     },
-    [headerTranslateY],
-  );
+    onEndDrag: () => {
+      if (prevScrollY.value <= 0) {
+        headerTranslateY.value = withTiming(0, {
+          duration: HEADER_SHOW_DURATION,
+        });
+        return;
+      }
+
+      const shouldHide = Math.abs(headerTranslateY.value) > HEADER_HEIGHT / 2;
+      headerTranslateY.value = withTiming(shouldHide ? -HEADER_HEIGHT : 0, {
+        duration: HEADER_SNAP_DURATION,
+      });
+    },
+    onMomentumEnd: () => {
+      if (prevScrollY.value <= 0) {
+        headerTranslateY.value = withTiming(0, {
+          duration: HEADER_SHOW_DURATION,
+        });
+        return;
+      }
+
+      const shouldHide = Math.abs(headerTranslateY.value) > HEADER_HEIGHT / 2;
+      headerTranslateY.value = withTiming(shouldHide ? -HEADER_HEIGHT : 0, {
+        duration: HEADER_SNAP_DURATION,
+      });
+    },
+  });
 
   const headerAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: headerTranslateY.value }],
-    marginBottom: headerTranslateY.value,
   }));
 
   const {
@@ -239,11 +267,6 @@ export default function Home() {
 
   return (
     <View style={styles.container}>
-      <Animated.View style={[styles.header, headerAnimatedStyle]}>
-        <View style={styles.headerSpacer} />
-        <Text style={styles.headerTitle}>Jaaspire</Text>
-        {HeaderRight}
-      </Animated.View>
       <FeedContainer
         controller={controller}
         flatListRef={flatListRef}
@@ -253,14 +276,29 @@ export default function Home() {
         isRefreshing={isRefetching}
         onEndReached={handleEndReached}
         isFetchingNextPage={isFetchingNextPage}
+        contentContainerStyle={
+          Platform.OS === "ios" ? undefined : styles.feedContent
+        }
+        refreshProgressViewOffset={
+          Platform.OS === "android" ? HEADER_HEIGHT + 24 : HEADER_HEIGHT
+        }
         flatListProps={{
-          onScroll: handleScroll,
-          scrollEventThrottle: 32,
+          onScroll: scrollHandler,
+          scrollEventThrottle: 16,
           maxToRenderPerBatch: 2,
           initialNumToRender: 2,
           updateCellsBatchingPeriod: 100,
+          ...(Platform.OS === "ios" && {
+            contentInset: { top: HEADER_HEIGHT },
+            contentOffset: { x: 0, y: -HEADER_HEIGHT },
+          }),
         }}
       />
+      <Animated.View style={[styles.header, headerAnimatedStyle]}>
+        <View style={styles.headerSpacer} />
+        <Text style={styles.headerTitle}>Jaaspire</Text>
+        {HeaderRight}
+      </Animated.View>
       <JaasiAiFloatingAvatar />
     </View>
   );
@@ -274,6 +312,11 @@ const createStyles = (theme: AppTheme) =>
       backgroundColor: theme.colors.background,
     },
     header: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      zIndex: 10,
       height: HEADER_HEIGHT,
       flexDirection: "row",
       alignItems: "center",
@@ -282,6 +325,9 @@ const createStyles = (theme: AppTheme) =>
       backgroundColor: theme.colors.background,
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.border,
+    },
+    feedContent: {
+      paddingTop: HEADER_HEIGHT,
     },
     headerSpacer: {
       width: 88,

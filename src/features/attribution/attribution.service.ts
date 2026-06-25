@@ -63,9 +63,10 @@ export async function trackInstallOnce(): Promise<void> {
       device_id: deviceId,
       platform,
       app_version: appVersion,
-      utm_source: attribution.utm_source,
+      utm_source: attribution.utm_source ?? attribution.gad_source ?? null,
       utm_medium: attribution.utm_medium ?? null,
-      utm_campaign: attribution.utm_campaign ?? null,
+      utm_campaign:
+        attribution.utm_campaign ?? attribution.gad_campaignid ?? null,
       utm_term: attribution.utm_term ?? null,
       utm_content: attribution.utm_content ?? null,
       fbclid: attribution.fbclid ?? null,

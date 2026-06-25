@@ -14,9 +14,7 @@ function storeAccountLabel(): string {
 
 /** App Store / Play virtual-currency disclosure (Jaasi Stars). */
 export function virtualCurrencyDisclaimerText(): string {
-  return (
-    "Jaasi Stars are a virtual, in-app credit system. They are licensed, not sold, and grant only a limited, revocable, non-refundable, non-transferable right to access eligible in-app features. Stars carry no monetary value, cannot be redeemed for legal tender by Users, are non-transferable between accounts, and have no utility outside of Jaaspire."
-  );
+  return "Jaasi Stars are a virtual, in-app credit system.";
 }
 
 function consumableIapPaymentDisclosure(): string {
@@ -95,8 +93,12 @@ export default function IapLegalFooter({
     <View style={[styles.root, style]} accessibilityRole="summary">
       {variant === "consumable" ? (
         <>
-          <Text style={styles.legalText}>{virtualCurrencyDisclaimerText()}</Text>
-          <Text style={styles.legalText}>{consumableIapPaymentDisclosure()}</Text>
+          <Text style={styles.legalText}>
+            {virtualCurrencyDisclaimerText()}
+          </Text>
+          {/* <Text style={styles.legalText}>
+            {consumableIapPaymentDisclosure()}
+          </Text> */}
         </>
       ) : (
         <Text style={styles.legalText}>{subscribeDisclosureText}</Text>
@@ -122,9 +124,7 @@ export function subscriptionAutoRenewDisclosure(): string {
       "You can manage or cancel subscriptions anytime in Google Play subscription settings."
     );
   }
-  return (
-    "Subscription automatically renews each month unless canceled before the end of the current billing period."
-  );
+  return "Subscription automatically renews each month unless canceled before the end of the current billing period.";
 }
 
 const createStyles = (theme: AppTheme) =>

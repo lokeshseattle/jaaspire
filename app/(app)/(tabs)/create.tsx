@@ -53,20 +53,213 @@ import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { debounce } from "@/src/utils/helpers";
 import { router } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  initialWindowMetrics,
+  SafeAreaProvider,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 type PostType = "regular" | "paid" | "subscription";
 
-/** Returns only the content inside the outer <html> tag, or the string as-is if no wrapper. */
+/** Strip inner HTML (e.g. `<i>peter</i>`) from mention content. */
+function stripInnerHtml(text: string): string {
+  return text.replace(/<[^>]+>/g, "").trim();
+}
+
+/** Converts react-native-enriched mention tags to plain @username / #hashtag text. */
+function mentionTagToPlainText(mentionTag: string): string {
+  const indicatorMatch = mentionTag.match(/\bindicator=(['"])(.*?)\1/i);
+  const indicator = indicatorMatch?.[2] ?? "@";
+
+  const textAttr = mentionTag.match(/\btext=(['"])(.*?)\1/i);
+  let name = textAttr?.[2] ?? "";
+
+  if (!name) {
+    const innerMatch = mentionTag.match(
+      /<mention\b[^>]*>([\s\S]*?)<\/mention>/i,
+    );
+    name = innerMatch?.[1] ?? "";
+  }
+
+  name = stripInnerHtml(name).replace(/^[@#]/, "");
+  if (!name) return "";
+
+  return `${indicator}${name}`;
+}
+
+function stripMentionTags(html: string): string {
+  return html.replace(
+    /<mention\b[\s\S]*?<\/mention>/gi,
+    (tag) => mentionTagToPlainText(tag),
+  );
+}
+
+/** Strip remaining HTML tags; keep line breaks from `<br>` / `</p>`. */
+function stripHtmlTags(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/** Returns plain post text with @mentions preserved (no HTML formatting). */
 function getCaptionForPost(htmlOrCaption: string): string {
   const trimmed = (htmlOrCaption ?? "").trim();
   const match = trimmed.match(/^<html[^>]*>([\s\S]*?)<\/html>$/i);
-  return match ? match[1].trim() : trimmed;
+  const inner = match ? match[1].trim() : trimmed;
+  const withMentions = stripMentionTags(inner);
+  return stripHtmlTags(withMentions).replace(/@\s+(\w)/g, "@$1");
+}
+
+/** If caption ends with an unfinished @/# mention, append a space to exit native mention mode. */
+function finalizeIncompleteMentionText(text: string): string | null {
+  if (/@[\w]*$/.test(text) || /@\s+[\w]+$/.test(text)) {
+    return `${text} `;
+  }
+  if (/#[\w]*$/.test(text) || /#\s+[\w]+$/.test(text)) {
+    return `${text} `;
+  }
+  return null;
+}
+
+function applyCaptionValue(
+  input: EnrichedTextInputInstance | null,
+  value: string,
+  setCaption: (value: string) => void,
+  captionRef: React.MutableRefObject<string>,
+) {
+  captionRef.current = value;
+  input?.setValue(value);
+  setCaption(value);
 }
 
 function formatStars(amount: number): string {
   if (Number.isInteger(amount)) return amount.toLocaleString();
   return amount.toFixed(2);
+}
+
+type MentionPickerModalProps = {
+  visible: boolean;
+  mentionQuery: string;
+  debouncedMentionQuery: string;
+  onDismiss: () => void;
+  onChangeQuery: (query: string) => void;
+  onSelect: (user: MentionUser) => void;
+};
+
+function MentionPickerModalContent({
+  mentionQuery,
+  debouncedMentionQuery,
+  onDismiss,
+  onChangeQuery,
+  onSelect,
+}: Omit<MentionPickerModalProps, "visible">) {
+  const { theme } = useTheme();
+  const styles = createStyles(theme);
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View
+      style={[
+        styles.mentionModalRoot,
+        {
+          backgroundColor: theme.colors.background,
+          paddingTop: insets.top,
+        },
+      ]}
+    >
+      <KeyboardAvoidingView
+        style={styles.mentionModalKeyboard}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <View style={styles.mentionModalHeader}>
+          <View style={styles.mentionModalHeaderRow}>
+            <View style={styles.mentionModalHeaderLeft}>
+              <Pressable
+                onPress={onDismiss}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel mention picker"
+                style={styles.mentionModalCancelHit}
+              >
+                <Text
+                  style={[
+                    styles.mentionModalCancelLabel,
+                    { color: theme.colors.primary },
+                  ]}
+                >
+                  Cancel
+                </Text>
+              </Pressable>
+            </View>
+            <Text style={styles.mentionModalTitle} pointerEvents="none">
+              Mention
+            </Text>
+            <View style={styles.mentionModalHeaderRightSpacer} />
+          </View>
+        </View>
+        <TextInput
+          value={mentionQuery}
+          onChangeText={onChangeQuery}
+          placeholder="Search users"
+          placeholderTextColor={theme.colors.textSecondary}
+          style={[
+            styles.mentionModalSearch,
+            {
+              backgroundColor: theme.colors.card,
+              borderColor: theme.colors.border,
+              color: theme.colors.textPrimary,
+            },
+          ]}
+          autoFocus
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="default"
+          returnKeyType="search"
+          {...Platform.select({
+            ios: { clearButtonMode: "while-editing" as const },
+            default: {},
+          })}
+        />
+        <MentionSuggestionsList
+          query={debouncedMentionQuery}
+          onSelect={onSelect}
+          variant="fullScreen"
+          showQueryHeader={false}
+        />
+      </KeyboardAvoidingView>
+    </View>
+  );
+}
+
+function MentionPickerModal({
+  visible,
+  mentionQuery,
+  debouncedMentionQuery,
+  onDismiss,
+  onChangeQuery,
+  onSelect,
+}: MentionPickerModalProps) {
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle={Platform.OS === "ios" ? "fullScreen" : undefined}
+      onRequestClose={onDismiss}
+    >
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+        <MentionPickerModalContent
+          mentionQuery={mentionQuery}
+          debouncedMentionQuery={debouncedMentionQuery}
+          onDismiss={onDismiss}
+          onChangeQuery={onChangeQuery}
+          onSelect={onSelect}
+        />
+      </SafeAreaProvider>
+    </Modal>
+  );
 }
 
 export default function CreateScreen() {
@@ -112,6 +305,7 @@ function CreateContent() {
 
   const [postType, setPostType] = useState<PostType>("regular");
   const [caption, setCaption] = useState("");
+  const captionRef = useRef("");
   const [html, setHtml] = useState("");
   const [selectedPriceSku, setSelectedPriceSku] = useState("");
   const [priceExpanded, setPriceExpanded] = useState(false);
@@ -125,6 +319,9 @@ function CreateContent() {
   const inputRef = useRef<EnrichedTextInputInstance>(null);
   /** After closing the mention modal, native focus + active @ session re-fire mention events; ignore briefly. */
   const mentionModalSuppressRef = useRef(false);
+  /** User cancelled the picker; don't reopen until caption changes or they start a fresh @. */
+  const mentionPickerDeclinedRef = useRef(false);
+  const lastDismissedCaptionRef = useRef<string | null>(null);
   const mentionSuppressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
@@ -145,6 +342,12 @@ function CreateContent() {
   }, [mentionQuery, mentionIndicator, debouncedSetMentionQuery]);
 
   useEffect(() => {
+    if (mentionIndicator === "@") {
+      Keyboard.dismiss();
+    }
+  }, [mentionIndicator]);
+
+  useEffect(() => {
     return () => {
       if (mentionSuppressTimerRef.current) {
         clearTimeout(mentionSuppressTimerRef.current);
@@ -158,40 +361,89 @@ function CreateContent() {
     setDebouncedMentionQuery("");
   }, []);
 
-  const handleStartMention = useCallback((indicator: string) => {
-    if (indicator === "@" && mentionModalSuppressRef.current) {
-      return;
-    }
-    if (indicator === "@") {
-      setMentionIndicator("@");
-      setMentionQuery("");
-      setDebouncedMentionQuery("");
-    } else {
-      setMentionIndicator(null);
-      setMentionQuery("");
-      setDebouncedMentionQuery("");
-    }
+  const shouldBlockMentionPicker = useCallback((mentionText?: string) => {
+    const currentCaption = captionRef.current;
+    if (mentionModalSuppressRef.current) return true;
+    if (!mentionPickerDeclinedRef.current) return false;
+    if (mentionText !== undefined && mentionText.trim() === "") return true;
+    return currentCaption === lastDismissedCaptionRef.current;
   }, []);
 
-  const handleChangeMention = useCallback((e: OnChangeMentionEvent) => {
-    const { indicator, text } = e;
-    if (indicator === "@" && mentionModalSuppressRef.current) {
-      return;
-    }
-    if (indicator === "@") {
-      setMentionIndicator("@");
-      setMentionQuery(text);
-    }
+  const clearMentionPickerDeclined = useCallback(() => {
+    mentionPickerDeclinedRef.current = false;
+    lastDismissedCaptionRef.current = null;
   }, []);
+
+  const handleStartMention = useCallback(
+    (indicator: string) => {
+      if (indicator === "@" && shouldBlockMentionPicker()) {
+        return;
+      }
+      if (indicator === "@") {
+        clearMentionPickerDeclined();
+        setMentionIndicator("@");
+        setMentionQuery("");
+        setDebouncedMentionQuery("");
+      } else {
+        setMentionIndicator(null);
+        setMentionQuery("");
+        setDebouncedMentionQuery("");
+      }
+    },
+    [shouldBlockMentionPicker, clearMentionPickerDeclined],
+  );
+
+  const handleChangeMention = useCallback(
+    (e: OnChangeMentionEvent) => {
+      const { indicator, text } = e;
+      if (indicator === "@" && shouldBlockMentionPicker(text)) {
+        return;
+      }
+      if (indicator === "@") {
+        clearMentionPickerDeclined();
+        setMentionIndicator("@");
+        setMentionQuery(text);
+      }
+    },
+    [shouldBlockMentionPicker, clearMentionPickerDeclined],
+  );
+
+  const handleEndMention = useCallback(
+    (_indicator: string) => {
+      resetMentionSession();
+    },
+    [resetMentionSession],
+  );
+
+  const prepareMentionIndicatorSwitch = useCallback(
+    (nextIndicator: "@" | "#") => {
+      if (nextIndicator === "@") {
+        clearMentionPickerDeclined();
+      }
+      const finalizedCaption = finalizeIncompleteMentionText(captionRef.current);
+      if (finalizedCaption) {
+        applyCaptionValue(
+          inputRef.current,
+          finalizedCaption,
+          setCaption,
+          captionRef,
+        );
+      }
+      inputRef.current?.startMention(nextIndicator);
+    },
+    [clearMentionPickerDeclined],
+  );
 
   const handleSelectMention = useCallback(
     (user: MentionUser) => {
-      inputRef.current?.setMention("@", user.username, {
+      clearMentionPickerDeclined();
+      const mentionText = `@${user.username}`;
+      inputRef.current?.setMention("@", mentionText, {
         user_id: String(user.id),
       });
       resetMentionSession();
     },
-    [resetMentionSession],
+    [resetMentionSession, clearMentionPickerDeclined],
   );
 
   const handleDismissMentionPicker = useCallback(() => {
@@ -199,6 +451,24 @@ function CreateContent() {
       clearTimeout(mentionSuppressTimerRef.current);
     }
     mentionModalSuppressRef.current = true;
+    mentionPickerDeclinedRef.current = true;
+
+    const finalizedCaption = finalizeIncompleteMentionText(captionRef.current);
+    const nextCaption = finalizedCaption ?? captionRef.current;
+    captionRef.current = nextCaption;
+    lastDismissedCaptionRef.current = nextCaption;
+
+    if (finalizedCaption) {
+      applyCaptionValue(
+        inputRef.current,
+        finalizedCaption,
+        setCaption,
+        captionRef,
+      );
+    }
+
+    inputRef.current?.blur();
+
     resetMentionSession();
     Keyboard.dismiss();
     mentionSuppressTimerRef.current = setTimeout(() => {
@@ -302,7 +572,9 @@ function CreateContent() {
   }, [products]);
 
   const handleChangeText = (e: NativeSyntheticEvent<OnChangeTextEvent>) => {
-    setCaption(e.nativeEvent.value);
+    const value = e.nativeEvent.value;
+    captionRef.current = value;
+    setCaption(value);
   };
 
   const handleChangeHtml = (e: NativeSyntheticEvent<OnChangeHtmlEvent>) => {
@@ -333,6 +605,7 @@ function CreateContent() {
   }, [postType]);
 
   const handlePostPress = useCallback(async () => {
+    const postText = getCaptionForPost(html || caption);
     try {
       if (selectedVideo && selectedVideoThumbnail) {
         setUploadProgress(0);
@@ -341,7 +614,7 @@ function CreateContent() {
             {
               fileUri: selectedVideo.uri,
               fileName: selectedVideo.name,
-              text: getCaptionForPost(html || caption),
+              text: postText,
               price: computedPrice,
               is_exclusive: computedIsExclusive,
               previewDuration: 6,
@@ -356,6 +629,7 @@ function CreateContent() {
               onSuccess: () => {
                 setUploadProgress(null);
                 setCaption("");
+                captionRef.current = "";
                 setHtml("");
                 setCaptionInputKey((k) => k + 1);
                 resetMentionSession();
@@ -383,7 +657,7 @@ function CreateContent() {
               fileUri: selectedImage.uri,
               fileName: selectedImage.name,
               fileType: selectedImage.type,
-              text: getCaptionForPost(html || caption),
+              text: postText,
               price: computedPrice,
               is_exclusive: computedIsExclusive,
             },
@@ -391,6 +665,7 @@ function CreateContent() {
               onSuccess: () => {
                 setUploadProgress(null);
                 setCaption("");
+                captionRef.current = "";
                 setHtml("");
                 setCaptionInputKey((k) => k + 1);
                 resetMentionSession();
@@ -513,12 +788,12 @@ function CreateContent() {
                   <ToolbarButton
                     type="material"
                     icon="at"
-                    onPress={() => inputRef.current?.startMention("@")}
+                    onPress={() => prepareMentionIndicatorSwitch("@")}
                   />
                   <ToolbarButton
                     type="material"
                     icon="pound"
-                    onPress={() => inputRef.current?.startMention("#")}
+                    onPress={() => prepareMentionIndicatorSwitch("#")}
                   />
                 </ScrollView>
               </View>
@@ -532,7 +807,7 @@ function CreateContent() {
                   onChangeState={(e) => setStylesState(e.nativeEvent)}
                   onStartMention={handleStartMention}
                   onChangeMention={handleChangeMention}
-                  onEndMention={resetMentionSession}
+                  onEndMention={handleEndMention}
                   onFocus={() => setIsFocused(true)}
                   onBlur={() => setIsFocused(false)}
                   placeholder="Write a caption..."
@@ -770,81 +1045,14 @@ function CreateContent() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <Modal
+      <MentionPickerModal
         visible={mentionIndicator === "@"}
-        animationType="slide"
-        presentationStyle={Platform.OS === "ios" ? "fullScreen" : undefined}
-        onRequestClose={handleDismissMentionPicker}
-      >
-        <SafeAreaView
-          style={[
-            styles.mentionModalRoot,
-            { backgroundColor: theme.colors.background },
-          ]}
-          edges={["top", "left", "right"]}
-        >
-          <KeyboardAvoidingView
-            style={styles.mentionModalKeyboard}
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
-          >
-            <View style={styles.mentionModalHeader}>
-              <View style={styles.mentionModalHeaderRow}>
-                <View style={styles.mentionModalHeaderLeft}>
-                  <Pressable
-                    onPress={handleDismissMentionPicker}
-                    hitSlop={12}
-                    accessibilityRole="button"
-                    accessibilityLabel="Cancel mention picker"
-                    style={styles.mentionModalCancelHit}
-                  >
-                    <Text
-                      style={[
-                        styles.mentionModalCancelLabel,
-                        { color: theme.colors.primary },
-                      ]}
-                    >
-                      Cancel
-                    </Text>
-                  </Pressable>
-                </View>
-                <Text style={styles.mentionModalTitle} pointerEvents="none">
-                  Mention
-                </Text>
-                <View style={styles.mentionModalHeaderRightSpacer} />
-              </View>
-            </View>
-            <TextInput
-              value={mentionQuery}
-              onChangeText={setMentionQuery}
-              placeholder="Search users"
-              placeholderTextColor={theme.colors.textSecondary}
-              style={[
-                styles.mentionModalSearch,
-                {
-                  backgroundColor: theme.colors.card,
-                  borderColor: theme.colors.border,
-                  color: theme.colors.textPrimary,
-                },
-              ]}
-              autoFocus
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="default"
-              returnKeyType="search"
-              {...Platform.select({
-                ios: { clearButtonMode: "while-editing" as const },
-                default: {},
-              })}
-            />
-            <MentionSuggestionsList
-              query={debouncedMentionQuery}
-              onSelect={handleSelectMention}
-              variant="fullScreen"
-              showQueryHeader={false}
-            />
-          </KeyboardAvoidingView>
-        </SafeAreaView>
-      </Modal>
+        mentionQuery={mentionQuery}
+        debouncedMentionQuery={debouncedMentionQuery}
+        onDismiss={handleDismissMentionPicker}
+        onChangeQuery={setMentionQuery}
+        onSelect={handleSelectMention}
+      />
     </View>
   );
 }

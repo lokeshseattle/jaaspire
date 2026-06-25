@@ -1,0 +1,2 @@
+{"sessionId":"868485","runId":"post-fix","hypothesisId":"H1-H2-H3","location":"ProfileHeader.tsx:showSetCoverLink","message":"Set cover visibility check","data":{"isOwnProfile":true,"avatar":"https://stgx.jaaspire.com/img/default-avatar.png","avatarLength":48,"isDefaultAvatar":true,"showSetCoverLink":true,"profileLoaded":true},"timestamp":1782338705016}
+{"sessionId":"868485","runId":"pre-fix","hypothesisId":"H4","location":"ProfileHeader.tsx:setCoverPress","message":"Set cover link rendered and pressed","data":{"pressed":true},"timestamp":1782338712456}

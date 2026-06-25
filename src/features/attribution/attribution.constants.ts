@@ -7,6 +7,8 @@ export const AD_UTM_TERM_KEY = "ad_utm_term";
 export const AD_UTM_CONTENT_KEY = "ad_utm_content";
 export const AD_FBCLID_KEY = "ad_fbclid";
 export const AD_GCLID_KEY = "ad_gclid";
+export const AD_GAD_SOURCE_KEY = "ad_gad_source";
+export const AD_GAD_CAMPAIGNID_KEY = "ad_gad_campaignid";
 export const AD_REFERRER_KEY = "ad_referrer";
 
 export const DEFAULT_SOURCE = "organic";

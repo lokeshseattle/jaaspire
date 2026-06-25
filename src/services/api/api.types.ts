@@ -138,10 +138,15 @@ export type RegisterRequest = {
   password: string;
   password_confirmation: string;
   signup_source: string;
-  country?: string;
-  utm_source?: string;
-  utm_medium?: string;
-  utm_campaign?: string;
+  device_id: string;
+  country?: string | null;
+  utm_source?: string | null;
+  utm_medium?: string | null;
+  utm_campaign?: string | null;
+  utm_term?: string | null;
+  utm_content?: string | null;
+  fbclid?: string | null;
+  gclid?: string | null;
 };
 
 export type ValidateUsernameResponse = {

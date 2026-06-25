@@ -3,8 +3,8 @@ import { useFeedController } from "@/src/components/feed/use-feed-controller";
 import {
   useGetSinglePost,
 } from "@/src/features/post/post.hooks";
-import { useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useMemo } from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   ActivityIndicator,
   StyleSheet,
@@ -56,12 +56,33 @@ const UserPostScreen = () => {
     postIds,
     viewabilityConfig: VIEWABILITY_CONFIG,
   });
+  const openComments = controller.commentsSheet.openComments;
+
+  const commentOpenHandledRef = useRef(false);
 
   useEffect(() => {
-    if (commentOpen === "true" && postId) {
-      setTimeout(() => controller.commentsSheet.openComments(Number(postId)), 100);
+    if (commentOpen !== "true") {
+      commentOpenHandledRef.current = false;
     }
-  }, [commentOpen, postId, controller.commentsSheet]);
+  }, [commentOpen, postId]);
+
+  useEffect(() => {
+    if (commentOpen !== "true" || !postId || !isSuccess || mainPostId == null) {
+      return;
+    }
+    if (commentOpenHandledRef.current) {
+      return;
+    }
+
+    commentOpenHandledRef.current = true;
+
+    const timer = setTimeout(() => {
+      openComments(Number(postId));
+      router.setParams({ commentOpen: "false" });
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [commentOpen, postId, isSuccess, mainPostId, openComments]);
 
   const handleEndReached = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) {

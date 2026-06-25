@@ -13,6 +13,7 @@ import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client
 
 import NetworkListener from "@/src/components/toast/NetworkListener";
 import { ToastProvider } from "@/src/components/toast/ToastProvider";
+import { useAnalyticsScreenTracking } from "@/src/hooks/use-firebase-analytics";
 import { queryClient } from "@/src/lib/query-client";
 import { startSystemVolumeUnmuteSync } from "@/src/lib/system-volume-unmute-sync";
 import { ActionSheetProvider } from "@expo/react-native-action-sheet";
@@ -38,6 +39,7 @@ configureForegroundNotificationHandler();
 // Inner layout that can use theme hooks
 function RootLayoutInner() {
   useAttributionCapture();
+  useAnalyticsScreenTracking();
   const { restoreSession, isLoading: authLoading } = useAuth();
   const { theme } = useTheme();
 

@@ -2,6 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import {
   AD_FBCLID_KEY,
+  AD_GAD_CAMPAIGNID_KEY,
+  AD_GAD_SOURCE_KEY,
   AD_GCLID_KEY,
   AD_REFERRER_KEY,
   AD_UTM_CAMPAIGN_KEY,
@@ -109,6 +111,12 @@ export async function getFullStoredAttribution(): Promise<ReferrerAttribution> {
       const gclid = await getOptionalString(AD_GCLID_KEY);
       if (gclid) attribution.gclid = gclid;
 
+      const gadSource = await getOptionalString(AD_GAD_SOURCE_KEY);
+      if (gadSource) attribution.gad_source = gadSource;
+
+      const gadCampaignId = await getOptionalString(AD_GAD_CAMPAIGNID_KEY);
+      if (gadCampaignId) attribution.gad_campaignid = gadCampaignId;
+
       const referrer = await getOptionalString(AD_REFERRER_KEY);
       if (referrer) attribution.referrer = referrer;
 
@@ -132,6 +140,8 @@ export async function persistAttribution(
     await setOptionalString(AD_UTM_CONTENT_KEY, params.utm_content);
     await setOptionalString(AD_FBCLID_KEY, params.fbclid);
     await setOptionalString(AD_GCLID_KEY, params.gclid);
+    await setOptionalString(AD_GAD_SOURCE_KEY, params.gad_source);
+    await setOptionalString(AD_GAD_CAMPAIGNID_KEY, params.gad_campaignid);
     await setOptionalString(AD_REFERRER_KEY, params.referrer);
   } catch {
     /* non-fatal */

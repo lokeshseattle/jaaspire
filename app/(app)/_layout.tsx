@@ -73,6 +73,13 @@ function AndroidStackHeader({
           tintColor: theme.colors.textPrimary,
         })
       : (options.headerTitle ?? resolvedTitle);
+  const headerRight = options.headerRight?.({
+    tintColor: options.headerTintColor ?? theme.colors.textPrimary,
+    canGoBack: navigation.canGoBack(),
+  });
+  const titleAlign = options.headerTitleAlign ?? "center";
+  const hasBack = Boolean(back);
+  const hasRight = headerRight != null;
 
   return (
     <View
@@ -81,7 +88,7 @@ function AndroidStackHeader({
         { backgroundColor: theme.colors.background },
       ]}
     >
-      {back ? (
+      {hasBack ? (
         <Pressable
           onPress={navigation.goBack}
           style={styles.androidBackButton}
@@ -93,8 +100,20 @@ function AndroidStackHeader({
             color={theme.colors.textPrimary}
           />
         </Pressable>
+      ) : hasRight && titleAlign !== "left" ? (
+        <View style={styles.androidHeaderSideSpacer} />
       ) : null}
-      <View style={styles.androidHeaderTitleWrap}>
+      <View
+        style={[
+          styles.androidHeaderTitleWrap,
+          titleAlign === "left"
+            ? styles.androidHeaderTitleWrapLeft
+            : styles.androidHeaderTitleWrapCenter,
+          hasBack && !hasRight && titleAlign !== "left"
+            ? styles.androidHeaderTitleWrapBalanced
+            : null,
+        ]}
+      >
         {typeof headerTitle === "string" ? (
           <Text
             numberOfLines={1}
@@ -106,6 +125,9 @@ function AndroidStackHeader({
           headerTitle
         )}
       </View>
+      {hasRight ? (
+        <View style={styles.androidHeaderRightWrap}>{headerRight}</View>
+      ) : null}
     </View>
   );
 }
@@ -144,11 +166,28 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "flex-start",
   },
+  androidHeaderSideSpacer: {
+    width: 44,
+  },
   androidHeaderTitleWrap: {
     flex: 1,
-    alignItems: "center",
+    minWidth: 0,
     justifyContent: "center",
+  },
+  androidHeaderTitleWrapCenter: {
+    alignItems: "center",
+  },
+  androidHeaderTitleWrapLeft: {
+    alignItems: "flex-start",
+  },
+  androidHeaderTitleWrapBalanced: {
     marginRight: 44,
+  },
+  androidHeaderRightWrap: {
+    minWidth: 44,
+    height: 44,
+    justifyContent: "center",
+    alignItems: "center",
   },
   androidHeaderTitle: {
     fontSize: 17,

@@ -9,7 +9,7 @@
  */
 
 /** Default staging origin — must match resolveWebOriginForConfig() in app.config.ts */
-const DEFAULT_WEB_ORIGIN = "https://stgx.jaaspire.com";
+const DEFAULT_WEB_ORIGIN = "https://jaaspire.com";
 
 function trimTrailingSlashes(s: string): string {
   return s.replace(/\/+$/, "");

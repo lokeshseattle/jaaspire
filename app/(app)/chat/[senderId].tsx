@@ -962,36 +962,6 @@ export default function MessengerChatScreen() {
     setReportTarget({ kind: "user", userId: peerId });
   }, [closeMenu, peerId]);
 
-  const handleResetChat = useCallback(() => {
-    closeMenu();
-    Alert.alert(
-      "Reset Chat",
-      "Start a fresh conversation with JaasiAI? Your current chat history will be cleared.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Reset",
-          style: "destructive",
-          onPress: () => {
-            resetAiChatMutation.mutate(undefined, {
-              onSuccess: async () => {
-                setPending([]);
-                setStreamingAi(null);
-                await refetch();
-              },
-              onError: () => {
-                Alert.alert(
-                  "Couldn't reset chat",
-                  "Something went wrong. Try again.",
-                );
-              },
-            });
-          },
-        },
-      ],
-    );
-  }, [closeMenu, resetAiChatMutation, refetch]);
-
   const handleBlock = useCallback(() => {
     if (!peerUsername) {
       Alert.alert(
@@ -1132,6 +1102,41 @@ export default function MessengerChatScreen() {
       return serverCount < ordinal;
     });
   }, [giftedServerMessages, pending, serverMessages, myId]);
+
+  const canResetAiChat =
+    isAiConversation &&
+    (serverMessages.length > 0 || pending.length > 0 || streamingAi != null);
+
+  const handleResetChat = useCallback(() => {
+    if (!canResetAiChat) return;
+    closeMenu();
+    Alert.alert(
+      "Reset Chat",
+      "Start a fresh conversation with JaasiAI? Your current chat history will be cleared.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Reset",
+          style: "destructive",
+          onPress: () => {
+            resetAiChatMutation.mutate(undefined, {
+              onSuccess: async () => {
+                setPending([]);
+                setStreamingAi(null);
+                await refetch();
+              },
+              onError: () => {
+                Alert.alert(
+                  "Couldn't reset chat",
+                  "Something went wrong. Try again.",
+                );
+              },
+            });
+          },
+        },
+      ],
+    );
+  }, [canResetAiChat, closeMenu, resetAiChatMutation, refetch]);
 
   const currentUser = useMemo(
     () =>
@@ -1807,18 +1812,30 @@ export default function MessengerChatScreen() {
               <Pressable
                 style={({ pressed }) => [
                   styles.menuRow,
-                  pressed && styles.menuRowPressed,
-                  resetAiChatMutation.isPending && styles.menuRowDisabled,
+                  pressed && canResetAiChat && styles.menuRowPressed,
+                  (!canResetAiChat || resetAiChatMutation.isPending) &&
+                    styles.menuRowDisabled,
                 ]}
                 onPress={handleResetChat}
-                disabled={resetAiChatMutation.isPending}
+                disabled={!canResetAiChat || resetAiChatMutation.isPending}
               >
                 <Ionicons
                   name="refresh-outline"
                   size={22}
-                  color={theme.colors.textPrimary}
+                  color={
+                    canResetAiChat
+                      ? theme.colors.textPrimary
+                      : theme.colors.textSecondary
+                  }
                 />
-                <Text style={styles.menuRowLabel}>Reset Chat</Text>
+                <Text
+                  style={[
+                    styles.menuRowLabel,
+                    !canResetAiChat && styles.menuRowLabelDisabled,
+                  ]}
+                >
+                  Reset Chat
+                </Text>
               </Pressable>
             ) : (
               <Pressable
@@ -2144,6 +2161,9 @@ const createStyles = (theme: AppTheme) =>
     menuRowLabel: {
       fontSize: 16,
       color: theme.colors.textPrimary,
+    },
+    menuRowLabelDisabled: {
+      color: theme.colors.textSecondary,
     },
     menuRowLabelDestructive: {
       color: "#EF4444",

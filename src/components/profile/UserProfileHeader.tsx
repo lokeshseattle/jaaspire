@@ -1,7 +1,7 @@
 import SubscribePaymentConfirmSheet from "@/src/components/payment/SubscribePaymentConfirmSheet";
 // import { logSubscriptionDebug } from "@/src/features/wallet/iap-dev.store";
-import TipBottomSheet from "@/src/components/payment/TipBottomSheet";
 import StoryAvatar from "@/src/components/home/story/StoryAvatar";
+import TipBottomSheet from "@/src/components/payment/TipBottomSheet";
 import { ThemedText as Text } from "@/src/components/themed-text";
 import {
   useFollowToggleMutation,
@@ -17,9 +17,31 @@ import {
   viewerIsAcceptedFollower,
 } from "@/src/utils/profile-visibility";
 import { Ionicons } from "@expo/vector-icons";
+import * as Linking from "expo-linking";
 import { router } from "expo-router";
 import React, { useCallback, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
+
+function formatJoinedDate(raw: string): string | null {
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function normalizeWebsiteUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
+function formatWebsiteLabel(raw: string): string {
+  return normalizeWebsiteUrl(raw)
+    .replace(/^https?:\/\//i, "")
+    .replace(/\/+$/, "");
+}
 
 const ProfileHeader = ({ username }: { username: string }) => {
   const { theme } = useTheme();
@@ -121,7 +143,12 @@ const ProfileHeader = ({ username }: { username: string }) => {
       },
     });
   };
-  if (profile)
+  if (profile) {
+    const joinedDateLabel = formatJoinedDate(profile.created_at);
+    const websiteLabel = profile.website?.trim()
+      ? formatWebsiteLabel(profile.website)
+      : null;
+
     return (
       <>
         {/* PROFILE INFO */}
@@ -171,7 +198,36 @@ const ProfileHeader = ({ username }: { username: string }) => {
               @{profile.username} · id {profile.id}
             </Text>
           )}
-          <Text style={styles.bio}>{profile.bio}</Text>
+          {profile.bio && <Text style={styles.bio}>{profile.bio}</Text>}
+          {websiteLabel ? (
+            <Pressable
+              onPress={() =>
+                Linking.openURL(normalizeWebsiteUrl(profile.website)).catch(
+                  () => {},
+                )
+              }
+              style={styles.websiteRow}
+            >
+              <Ionicons
+                name="link-outline"
+                size={14}
+                color={theme.colors.primary}
+              />
+              <Text style={styles.websiteText}>{websiteLabel}</Text>
+            </Pressable>
+          ) : null}
+          {joinedDateLabel ? (
+            <View style={styles.memberSinceRow}>
+              <Ionicons
+                name="calendar-outline"
+                size={14}
+                color={theme.colors.textSecondary}
+              />
+              <Text style={styles.memberSinceText}>
+                Joined {joinedDateLabel}
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         {/* ACTIONS / BLOCKED NOTICE */}
@@ -260,10 +316,7 @@ const ProfileHeader = ({ username }: { username: string }) => {
         {showSubscriptionRow ? (
           <View style={styles.subscribeContainer}>
             {isSubscribed ? (
-              <View
-                style={styles.subscribedBanner}
-                accessibilityRole="text"
-              >
+              <View style={styles.subscribedBanner} accessibilityRole="text">
                 <View
                   style={[
                     styles.subscribedIconWrap,
@@ -356,6 +409,7 @@ const ProfileHeader = ({ username }: { username: string }) => {
         ) : null}
       </>
     );
+  }
 };
 
 export default ProfileHeader;
@@ -536,6 +590,31 @@ const createStyles = (theme: AppTheme) =>
     bio: {
       marginTop: 4,
       color: theme.colors.textPrimary,
+    },
+
+    websiteRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginTop: 8,
+    },
+
+    websiteText: {
+      fontSize: 13,
+      fontWeight: "500",
+      color: theme.colors.primary,
+    },
+
+    memberSinceRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      // marginTop: ,
+    },
+
+    memberSinceText: {
+      fontSize: 13,
+      color: theme.colors.textSecondary,
     },
 
     editButton: {

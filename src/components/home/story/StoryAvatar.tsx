@@ -85,6 +85,7 @@ export default function StoryAvatar({
         width: diameter,
         height: diameter,
         borderRadius: diameter / 2,
+        // borderWidth: 10,
       }}
     />
   );
@@ -99,17 +100,17 @@ export default function StoryAvatar({
         accessibilityRole="button"
         accessibilityLabel="Add story"
       >
-        <Ionicons name="add-circle" size={ADD_BUTTON_SIZE} color={theme.colors.primary} />
+        <Ionicons
+          name="add-circle"
+          size={ADD_BUTTON_SIZE}
+          color={theme.colors.primary}
+        />
       </Pressable>
     );
   };
 
   if (disabled) {
-    return (
-      <View style={styles.wrapper}>
-        {renderAvatarImage(size)}
-      </View>
-    );
+    return <View style={styles.wrapper}>{renderAvatarImage(size)}</View>;
   }
 
   if (isUploading) {
@@ -118,7 +119,9 @@ export default function StoryAvatar({
         <View style={styles.uploadRingContainer}>
           <Animated.View style={[StyleSheet.absoluteFill, animatedStyle]}>
             <LinearGradient
-              colors={uploadGradient as unknown as [string, string, ...string[]]}
+              colors={
+                uploadGradient as unknown as [string, string, ...string[]]
+              }
               style={styles.uploadGradient}
             />
           </Animated.View>
@@ -156,7 +159,10 @@ export default function StoryAvatar({
   );
 }
 
-const createStyles = (theme: { colors: { background: string } }, size: number) => {
+const createStyles = (
+  theme: { colors: { background: string } },
+  size: number,
+) => {
   const innerSize = size - RING_PADDING * 2;
 
   return StyleSheet.create({

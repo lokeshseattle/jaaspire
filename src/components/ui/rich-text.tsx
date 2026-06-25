@@ -76,6 +76,13 @@ function parseHtmlToSegments(html: string): { text: string; style: SegmentStyle 
 
 const combinedRegex = /(#+\w+)|(@\w+)/g;
 
+function navigateToHashtagSearch(hashtag: string) {
+  router.push({
+    pathname: "/global-search",
+    params: { q: hashtag },
+  });
+}
+
 function renderPart(
   part: string,
   key: React.Key,
@@ -93,7 +100,7 @@ function renderPart(
           baseStyle.underline && { textDecorationLine: "underline" as const },
           { color: "#007AFF" },
         ]}
-        onPress={() => router.push(`/user/${part.slice(1)}`)}
+        onPress={() => navigateToHashtagSearch(part)}
       >
         {part}
       </Text>
@@ -189,7 +196,7 @@ const RichText = ({
               <Text
                 key={index}
                 style={[style, { color: "#007AFF" }]}
-                onPress={() => router.push(`/user/${part.slice(1)}`)}
+                onPress={() => navigateToHashtagSearch(part)}
               >
                 {part}
               </Text>

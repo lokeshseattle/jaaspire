@@ -1,5 +1,6 @@
-import { ThemedText as Text } from "@/src/components/themed-text";
+import { useMediaPicker } from "@/hooks/use-media-picker";
 import StoryAvatar from "@/src/components/home/story/StoryAvatar";
+import { ThemedText as Text } from "@/src/components/themed-text";
 import { WEB_ORIGIN } from "@/src/constants/app-env";
 import { useGetProfile } from "@/src/features/profile/profile.hooks";
 import { useGetAllStories } from "@/src/features/story/story.hooks";
@@ -10,13 +11,18 @@ import { Feather } from "@expo/vector-icons";
 import * as Linking from "expo-linking";
 import { Link, router } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
-import {
-  Platform,
-  Pressable,
-  Share,
-  StyleSheet,
-  View,
-} from "react-native";
+import { Platform, Pressable, Share, StyleSheet, View } from "react-native";
+
+const DEFAULT_AVATAR_PATH = "/img/default-avatar.png";
+
+function isDefaultAvatarUrl(avatar: string | null | undefined): boolean {
+  if (!avatar) return false;
+  try {
+    return new URL(avatar).pathname === DEFAULT_AVATAR_PATH;
+  } catch {
+    return avatar.endsWith(DEFAULT_AVATAR_PATH);
+  }
+}
 
 function profileWebUrl(username: string): string {
   const base = WEB_ORIGIN.replace(/\/+$/, "");
@@ -39,10 +45,29 @@ const ProfileHeader = ({
   const profile = isSuccess ? data.data : null;
   const { data: storiesData } = useGetAllStories();
   const { openAddStory, isUploading } = useAddStory();
+  const { openMediaPicker } = useMediaPicker();
+
+  const handlePickProfileImage = useCallback(() => {
+    openMediaPicker({
+      circular: true,
+      mediaTypes: ["images"],
+      onChange: (file) => {
+        router.push({
+          pathname: "/profile/profile-crop",
+          params: { uri: encodeURIComponent(file.uri) },
+        });
+      },
+    });
+  }, [openMediaPicker]);
+
+  const showSetCoverLink =
+    isOwnProfile && isDefaultAvatarUrl(profile?.avatar);
 
   const myStory = useMemo(() => {
     if (!profile?.username) return null;
-    return storiesData?.data.stories.find((s) => s.username === profile.username);
+    return storiesData?.data.stories.find(
+      (s) => s.username === profile.username,
+    );
   }, [storiesData?.data.stories, profile?.username]);
 
   const hasStory = (myStory?.stories?.length ?? 0) > 0;
@@ -106,16 +131,23 @@ const ProfileHeader = ({
 
         {/* PROFILE INFO */}
         <View style={styles.profileRow}>
-          <StoryAvatar
-            uri={profile.avatar}
-            username={profile.username}
-            hasStory={hasStory}
-            seen={seen}
-            size={90}
-            showAddButton
-            onAddStory={openAddStory}
-            isUploading={isUploading}
-          />
+          <View style={styles.avatarColumn}>
+            <StoryAvatar
+              uri={profile.avatar}
+              username={profile.username}
+              hasStory={hasStory}
+              seen={seen}
+              size={90}
+              showAddButton
+              onAddStory={openAddStory}
+              isUploading={isUploading}
+            />
+            {showSetCoverLink ? (
+              <Pressable onPress={handlePickProfileImage}>
+                <Text style={styles.setCoverLink}>Set cover</Text>
+              </Pressable>
+            ) : null}
+          </View>
 
           <View style={styles.statsContainer}>
             <View style={styles.stat}>
@@ -254,6 +286,17 @@ const createStyles = (theme: AppTheme) =>
       flexDirection: "row",
       paddingHorizontal: 16,
       marginTop: 10,
+    },
+
+    avatarColumn: {
+      alignItems: "center",
+    },
+
+    setCoverLink: {
+      marginTop: 4,
+      color: theme.colors.primary,
+      fontSize: 12,
+      fontWeight: "700",
     },
 
     avatar: {

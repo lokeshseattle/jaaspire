@@ -5,7 +5,7 @@ import { useTheme } from "@/src/theme/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
-  Animated,
+  LayoutChangeEvent,
   Platform,
   Pressable,
   Share,
@@ -13,6 +13,12 @@ import {
   Text,
   View,
 } from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import RichText from "../../ui/rich-text";
 
 function buildPostUrl(postId: number): string {
@@ -23,13 +29,24 @@ function buildPostUrl(postId: number): string {
 const LIKED_COLOR = "#ff3040";
 const ACTION_ICON_SIZE = 24;
 const VIEWS_ICON_SIZE = 18;
+const CAPTION_LINE_HEIGHT = 20;
+const CAPTION_COLLAPSED_LINES = 2;
+const CAPTION_COLLAPSED_HEIGHT =
+  CAPTION_LINE_HEIGHT * CAPTION_COLLAPSED_LINES;
+const CAPTION_ANIMATION_MS = 220;
+
+function captionHasVisibleText(text: string | null | undefined): boolean {
+  return (text ?? "").replace(/<[^>]+>/g, "").trim().length > 0;
+}
 
 function PostFooterInner() {
   const { theme } = useTheme();
+  const { post } = usePost();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const hasCaption = captionHasVisibleText(post.text);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, !hasCaption && styles.containerNoCaption]}>
       <PostActions theme={theme} styles={styles} />
       <PostCaptions theme={theme} styles={styles} />
     </View>
@@ -132,9 +149,7 @@ const ShareButton = ({ theme }: { theme: AppTheme }) => {
     const url = buildPostUrl(post.id);
     try {
       // URL-only payload so "Copy" in the system sheet copies just the link.
-      await Share.share(
-        Platform.OS === "ios" ? { url } : { message: url },
-      );
+      await Share.share(Platform.OS === "ios" ? { url } : { message: url });
     } catch {
       /* dismissed */
     }
@@ -174,60 +189,70 @@ const Views = ({ viewCount, theme, styles }: ViewsProps) => {
    Post Captions
 ========================= */
 
-const PostCaptions = ({ theme, styles }: ActionProps) => {
+const PostCaptions = ({ styles }: ActionProps) => {
   const caption = usePost().post.text;
 
   const [expanded, setExpanded] = useState(false);
-  const [shouldShowToggle, setShouldShowToggle] = useState(false);
+  const [isTruncated, setIsTruncated] = useState(false);
 
-  const animatedHeight = useRef(new Animated.Value(0)).current;
-  const fullHeight = useRef(0);
-  const collapsedHeight = useRef(0);
+  const fullHeightRef = useRef(0);
+  const measuredRef = useRef(false);
+  const animatedHeight = useSharedValue(CAPTION_COLLAPSED_HEIGHT);
 
-  const LINE_HEIGHT = 20;
-  const COLLAPSED_LINES = 2;
+  const animatedCaptionStyle = useAnimatedStyle(() => ({
+    height: animatedHeight.value,
+    overflow: "hidden" as const,
+  }));
 
-  const toggle = () => {
-    const toValue = expanded ? collapsedHeight.current : fullHeight.current;
+  const handleMeasureLayout = useCallback(
+    (e: LayoutChangeEvent) => {
+      const fullHeight = e.nativeEvent.layout.height;
+      fullHeightRef.current = fullHeight;
+      const truncated = fullHeight > CAPTION_COLLAPSED_HEIGHT;
 
-    Animated.timing(animatedHeight, {
-      toValue,
-      duration: 100,
-      useNativeDriver: false,
-    }).start();
+      if (!measuredRef.current) {
+        measuredRef.current = true;
+        animatedHeight.value = truncated
+          ? CAPTION_COLLAPSED_HEIGHT
+          : fullHeight;
+        setIsTruncated(truncated);
+      } else if (!truncated) {
+        setIsTruncated(false);
+      }
+    },
+    [animatedHeight],
+  );
 
-    setExpanded(!expanded);
-  };
+  const toggle = useCallback(() => {
+    setExpanded((prev) => {
+      const nextExpanded = !prev;
+      const toValue = nextExpanded
+        ? fullHeightRef.current
+        : CAPTION_COLLAPSED_HEIGHT;
+      animatedHeight.value = withTiming(toValue, {
+        duration: CAPTION_ANIMATION_MS,
+        easing: Easing.out(Easing.cubic),
+      });
+      return nextExpanded;
+    });
+  }, [animatedHeight]);
+
+  if (!captionHasVisibleText(caption)) return null;
 
   return (
     <View style={styles.captionContainer}>
-      {/* Measure full height */}
       <RichText
         style={[styles.captionText, styles.hidden]}
-        onLayout={(e) => {
-          fullHeight.current = e.nativeEvent.layout.height;
-
-          if (collapsedHeight.current === 0) {
-            collapsedHeight.current = LINE_HEIGHT * COLLAPSED_LINES;
-
-            if (fullHeight.current > collapsedHeight.current) {
-              setShouldShowToggle(true);
-              animatedHeight.setValue(collapsedHeight.current);
-            } else {
-              animatedHeight.setValue(fullHeight.current);
-            }
-          }
-        }}
+        onLayout={handleMeasureLayout}
       >
         {caption}
       </RichText>
 
-      {/* Animated visible container */}
-      <Animated.View style={{ height: animatedHeight, overflow: "hidden" }}>
+      <Animated.View style={animatedCaptionStyle}>
         <RichText style={styles.captionText}>{caption}</RichText>
       </Animated.View>
 
-      {shouldShowToggle && (
+      {isTruncated && (
         <Pressable onPress={toggle}>
           <Text style={styles.toggleText}>
             {expanded ? "Show less" : "More"}
@@ -246,6 +271,10 @@ const createStyles = (theme: AppTheme) =>
   StyleSheet.create({
     container: {
       padding: theme.spacing.sm,
+    },
+
+    containerNoCaption: {
+      paddingBottom: theme.spacing.xl,
     },
 
     actionsContainer: {
@@ -277,12 +306,12 @@ const createStyles = (theme: AppTheme) =>
     },
 
     captionContainer: {
-      paddingVertical: theme.spacing.sm,
+      marginTop: theme.spacing.sm,
     },
 
     captionText: {
       fontSize: 14,
-      lineHeight: 20,
+      lineHeight: CAPTION_LINE_HEIGHT,
       color: theme.colors.textPrimary,
     },
 

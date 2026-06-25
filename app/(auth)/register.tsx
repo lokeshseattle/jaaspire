@@ -4,12 +4,13 @@ import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useDebounce } from "@/hooks/use-debounce";
 import Button from "@/src/components/ui/button";
 import FormInput from "@/src/components/ui/input";
+import { getInstallDeviceId } from "@/src/features/attribution/attribution.device";
+import { getStoredAttribution } from "@/src/features/attribution/attribution.storage";
 import {
   useAuth,
   useCheckUsername,
   useRegister,
 } from "@/src/features/auth/auth.hooks";
-import { getStoredAttribution } from "@/src/features/attribution/attribution.storage";
 import { AuthScreenLayout } from "@/src/features/auth/AuthScreenLayout";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
@@ -102,7 +103,10 @@ export default function Register() {
   }, [checkUsername.isSuccess, checkUsername.data, setError, clearErrors]);
 
   const onSubmit = async (data: FormData) => {
-    const attribution = await getStoredAttribution();
+    const [attribution, deviceId] = await Promise.all([
+      getStoredAttribution(),
+      getInstallDeviceId(),
+    ]);
 
     register.mutate(
       {
@@ -112,11 +116,15 @@ export default function Register() {
         password_confirmation: data.confirmPassword,
         username: data.username,
         signup_source: Platform.OS === "android" ? "android" : "ios",
-        utm_source: attribution.utm_source,
-        ...(attribution.utm_medium && { utm_medium: attribution.utm_medium }),
-        ...(attribution.utm_campaign && {
-          utm_campaign: attribution.utm_campaign,
-        }),
+        device_id: deviceId,
+        utm_source: attribution.utm_source ?? attribution.gad_source ?? null,
+        utm_medium: attribution.utm_medium ?? null,
+        utm_campaign:
+          attribution.utm_campaign ?? attribution.gad_campaignid ?? null,
+        utm_term: attribution.utm_term ?? null,
+        utm_content: attribution.utm_content ?? null,
+        fbclid: attribution.fbclid ?? null,
+        gclid: attribution.gclid ?? null,
       },
       {
         onSuccess: (data) => {
