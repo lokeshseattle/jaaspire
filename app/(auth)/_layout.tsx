@@ -51,6 +51,14 @@ export default function AuthLayout() {
           title: "",
         }}
       />
+      <Stack.Screen
+        name="attribution-debug"
+        options={{
+          headerShown: true,
+          headerTitle: "Attribution debug",
+          headerBackButtonDisplayMode: "minimal",
+        }}
+      />
     </Stack>
   );
 }

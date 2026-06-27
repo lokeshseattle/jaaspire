@@ -2,10 +2,13 @@ import { Logo } from "@/assets/svg";
 import { ThemedView } from "@/src/components/themed-view";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
-import { Link } from "expo-router";
-import { ReactNode } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Link, useRouter, type Href } from "expo-router";
+import { ReactNode, useRef, useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
+
+const LOGO_TAP_TARGET = 10;
+const LOGO_TAP_RESET_MS = 2000;
 
 type AuthScreenLayoutProps = {
   /** Shown only when `showBranding` is true (default). */
@@ -30,14 +33,42 @@ export function AuthScreenLayout({
 }: AuthScreenLayoutProps) {
   const { theme } = useTheme();
   const styles = createStyles(theme);
+  const router = useRouter();
+  const [logoTapCount, setLogoTapCount] = useState(0);
+  const lastLogoTapAtRef = useRef(0);
+
+  const handleLogoPress = () => {
+    const now = Date.now();
+    const elapsed = now - lastLogoTapAtRef.current;
+    const nextCount =
+      elapsed > LOGO_TAP_RESET_MS || lastLogoTapAtRef.current === 0
+        ? 1
+        : logoTapCount + 1;
+
+    lastLogoTapAtRef.current = now;
+
+    if (nextCount >= LOGO_TAP_TARGET) {
+      setLogoTapCount(0);
+      lastLogoTapAtRef.current = 0;
+      router.push("/(auth)/attribution-debug" as Href);
+      return;
+    }
+
+    setLogoTapCount(nextCount);
+  };
 
   const body = (
     <>
       {showBranding ? (
         <>
-          <View style={styles.logoContainer}>
+          <Pressable
+            onPress={handleLogoPress}
+            style={styles.logoContainer}
+            accessibilityRole="button"
+            accessibilityLabel="App logo"
+          >
             <Logo />
-          </View>
+          </Pressable>
           <View style={styles.titleRow}>
             <Text style={styles.title}>{title}</Text>
           </View>

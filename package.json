@@ -10,6 +10,8 @@
     "ios": "npx expo run:ios --device",
     "web": "expo start --web",
     "lint": "expo lint",
+    "update:production:android": "EXPO_PUBLIC_WEB_ORIGIN=https://jaaspire.com EXPO_PUBLIC_API_BASE_URL=https://jaaspire.com/api/v1 eas update --platform android --channel production",
+    "update:production:ios": "EXPO_PUBLIC_WEB_ORIGIN=https://jaaspire.com EXPO_PUBLIC_API_BASE_URL=https://jaaspire.com/api/v1 eas update --platform ios --channel production",
     "update:preview": "EXPO_PUBLIC_WEB_ORIGIN=https://stgx.jaaspire.com EXPO_PUBLIC_API_BASE_URL=https://stgx.jaaspire.com/api/v1 eas update --channel preview",
     "update:production": "EXPO_PUBLIC_WEB_ORIGIN=https://jaaspire.com EXPO_PUBLIC_API_BASE_URL=https://jaaspire.com/api/v1 eas update --channel production",
     "update:list": "eas update:list",

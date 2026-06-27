@@ -4,6 +4,7 @@ import {
   AD_FBCLID_KEY,
   AD_GAD_CAMPAIGNID_KEY,
   AD_GAD_SOURCE_KEY,
+  AD_GBRAID_KEY,
   AD_GCLID_KEY,
   AD_REFERRER_KEY,
   AD_UTM_CAMPAIGN_KEY,
@@ -12,7 +13,6 @@ import {
   AD_UTM_SOURCE_KEY,
   AD_UTM_TERM_KEY,
   ATTRIBUTION_DONE_KEY,
-  DEFAULT_SOURCE,
   INSTALL_TRACK_DONE_KEY,
 } from "./attribution.constants";
 import type { ReferrerAttribution } from "./attribution.parser";
@@ -76,7 +76,7 @@ export async function setInstallTrackDone(value: "true"): Promise<void> {
   }
 }
 
-export async function getAdUtmSource(): Promise<string> {
+export async function getAdUtmSource(): Promise<string | undefined> {
   const attribution = await getStoredAttribution();
   return attribution.utm_source;
 }
@@ -86,60 +86,60 @@ export async function getStoredAttribution(): Promise<ReferrerAttribution> {
 }
 
 export async function getFullStoredAttribution(): Promise<ReferrerAttribution> {
+  const attribution: ReferrerAttribution = {};
+
   try {
-    const utmSource = await AsyncStorage.getItem(AD_UTM_SOURCE_KEY);
-    if (typeof utmSource === "string" && utmSource.trim().length > 0) {
-      const attribution: ReferrerAttribution = {
-        utm_source: utmSource.trim(),
-      };
+    const utmSource = await getOptionalString(AD_UTM_SOURCE_KEY);
+    if (utmSource) attribution.utm_source = utmSource;
 
-      const utmMedium = await getOptionalString(AD_UTM_MEDIUM_KEY);
-      if (utmMedium) attribution.utm_medium = utmMedium;
+    const utmMedium = await getOptionalString(AD_UTM_MEDIUM_KEY);
+    if (utmMedium) attribution.utm_medium = utmMedium;
 
-      const utmCampaign = await getOptionalString(AD_UTM_CAMPAIGN_KEY);
-      if (utmCampaign) attribution.utm_campaign = utmCampaign;
+    const utmCampaign = await getOptionalString(AD_UTM_CAMPAIGN_KEY);
+    if (utmCampaign) attribution.utm_campaign = utmCampaign;
 
-      const utmTerm = await getOptionalString(AD_UTM_TERM_KEY);
-      if (utmTerm) attribution.utm_term = utmTerm;
+    const utmTerm = await getOptionalString(AD_UTM_TERM_KEY);
+    if (utmTerm) attribution.utm_term = utmTerm;
 
-      const utmContent = await getOptionalString(AD_UTM_CONTENT_KEY);
-      if (utmContent) attribution.utm_content = utmContent;
+    const utmContent = await getOptionalString(AD_UTM_CONTENT_KEY);
+    if (utmContent) attribution.utm_content = utmContent;
 
-      const fbclid = await getOptionalString(AD_FBCLID_KEY);
-      if (fbclid) attribution.fbclid = fbclid;
+    const fbclid = await getOptionalString(AD_FBCLID_KEY);
+    if (fbclid) attribution.fbclid = fbclid;
 
-      const gclid = await getOptionalString(AD_GCLID_KEY);
-      if (gclid) attribution.gclid = gclid;
+    const gclid = await getOptionalString(AD_GCLID_KEY);
+    if (gclid) attribution.gclid = gclid;
 
-      const gadSource = await getOptionalString(AD_GAD_SOURCE_KEY);
-      if (gadSource) attribution.gad_source = gadSource;
+    const gbraid = await getOptionalString(AD_GBRAID_KEY);
+    if (gbraid) attribution.gbraid = gbraid;
 
-      const gadCampaignId = await getOptionalString(AD_GAD_CAMPAIGNID_KEY);
-      if (gadCampaignId) attribution.gad_campaignid = gadCampaignId;
+    const gadSource = await getOptionalString(AD_GAD_SOURCE_KEY);
+    if (gadSource) attribution.gad_source = gadSource;
 
-      const referrer = await getOptionalString(AD_REFERRER_KEY);
-      if (referrer) attribution.referrer = referrer;
+    const gadCampaignId = await getOptionalString(AD_GAD_CAMPAIGNID_KEY);
+    if (gadCampaignId) attribution.gad_campaignid = gadCampaignId;
 
-      return attribution;
-    }
+    const referrer = await getOptionalString(AD_REFERRER_KEY);
+    if (referrer) attribution.referrer = referrer;
   } catch {
-    /* fall through */
+    /* non-fatal */
   }
 
-  return { utm_source: DEFAULT_SOURCE };
+  return attribution;
 }
 
 export async function persistAttribution(
   params: ReferrerAttribution,
 ): Promise<void> {
   try {
-    await AsyncStorage.setItem(AD_UTM_SOURCE_KEY, params.utm_source);
+    await setOptionalString(AD_UTM_SOURCE_KEY, params.utm_source);
     await setOptionalString(AD_UTM_MEDIUM_KEY, params.utm_medium);
     await setOptionalString(AD_UTM_CAMPAIGN_KEY, params.utm_campaign);
     await setOptionalString(AD_UTM_TERM_KEY, params.utm_term);
     await setOptionalString(AD_UTM_CONTENT_KEY, params.utm_content);
     await setOptionalString(AD_FBCLID_KEY, params.fbclid);
     await setOptionalString(AD_GCLID_KEY, params.gclid);
+    await setOptionalString(AD_GBRAID_KEY, params.gbraid);
     await setOptionalString(AD_GAD_SOURCE_KEY, params.gad_source);
     await setOptionalString(AD_GAD_CAMPAIGNID_KEY, params.gad_campaignid);
     await setOptionalString(AD_REFERRER_KEY, params.referrer);

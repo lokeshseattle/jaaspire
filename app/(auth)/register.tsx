@@ -5,6 +5,7 @@ import { useDebounce } from "@/hooks/use-debounce";
 import Button from "@/src/components/ui/button";
 import FormInput from "@/src/components/ui/input";
 import { getInstallDeviceId } from "@/src/features/attribution/attribution.device";
+import { buildAttributionExtras } from "@/src/features/attribution/attribution.parser";
 import { getStoredAttribution } from "@/src/features/attribution/attribution.storage";
 import {
   useAuth,
@@ -125,6 +126,7 @@ export default function Register() {
         utm_content: attribution.utm_content ?? null,
         fbclid: attribution.fbclid ?? null,
         gclid: attribution.gclid ?? null,
+        attribution_extras: buildAttributionExtras(attribution),
       },
       {
         onSuccess: (data) => {

@@ -107,13 +107,19 @@ export type PushDeviceRegisterResponse = {
   data?: unknown;
 };
 
+export type AttributionExtras = {
+  raw?: string;
+} & Record<string, string>;
+
 export type InstallTrackRequest = {
   device_id: string;
   platform: "ios" | "android";
   app_version: string;
-  utm_source: string;
+  utm_source?: string | null;
+  gad_source?: string | null;
   utm_medium?: string | null;
   utm_campaign?: string | null;
+  gad_campaignid?: string | null;
   utm_term?: string | null;
   utm_content?: string | null;
   fbclid?: string | null;
@@ -147,6 +153,7 @@ export type RegisterRequest = {
   utm_content?: string | null;
   fbclid?: string | null;
   gclid?: string | null;
+  attribution_extras?: AttributionExtras | null;
 };
 
 export type ValidateUsernameResponse = {

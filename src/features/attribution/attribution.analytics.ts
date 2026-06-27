@@ -11,7 +11,7 @@ export async function logRegistrationAttribution(): Promise<void> {
     // Typed sign_up overload only allows { method }; use string name for extra params.
     await logEvent(analytics, "sign_up" as string, {
       method: "email",
-      campaign_source,
+      ...(campaign_source ? { campaign_source } : {}),
     });
   } catch (error) {
     if (__DEV__) console.warn("[attribution] sign_up failed", error);

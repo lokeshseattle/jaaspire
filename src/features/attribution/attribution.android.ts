@@ -45,11 +45,10 @@ export async function getAndroidReferrerAttribution(): Promise<AndroidReferrerRe
     const raw = await getInstallReferrerString();
     if (!raw) return null;
 
-    const attribution = extractReferrerAttribution(raw);
-    if (!attribution) return null;
+    const parsed = extractReferrerAttribution(raw);
 
     return {
-      attribution: { ...attribution, referrer: raw },
+      attribution: { ...(parsed ?? {}), referrer: raw },
       rawReferrer: raw,
     };
   } catch {
