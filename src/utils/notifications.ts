@@ -5,6 +5,18 @@ import { Platform } from "react-native";
 
 export type PushPlatform = "ios" | "android";
 
+function isNotificationPermissionGranted(
+  settings: Notifications.NotificationPermissionsStatus,
+): boolean {
+  if (
+    settings.ios?.status === Notifications.IosAuthorizationStatus.AUTHORIZED ||
+    settings.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL
+  ) {
+    return true;
+  }
+  return (settings as { status?: string }).status === "granted";
+}
+
 export function getPushPlatform(): PushPlatform | null {
   if (Platform.OS === "ios") return "ios";
   if (Platform.OS === "android") return "android";
@@ -36,13 +48,13 @@ export async function registerForPushNotificationsAsync(): Promise<
     });
   }
 
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
-  if (existingStatus !== "granted") {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
+  const existing = await Notifications.getPermissionsAsync();
+  let isGranted = isNotificationPermissionGranted(existing);
+  if (!isGranted) {
+    const requested = await Notifications.requestPermissionsAsync();
+    isGranted = isNotificationPermissionGranted(requested);
   }
-  if (finalStatus !== "granted") {
+  if (!isGranted) {
     if (__DEV__) {
       // console.warn(
         // "Push notification permission not granted; skipping device registration.",

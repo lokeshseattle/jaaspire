@@ -2,12 +2,14 @@ import React from "react";
 import { StyleSheet, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { LAYOUT, TRIMMER } from "../../constants";
-import { ThumbnailFrame, TrimRange } from "../../types";
+import { ThumbnailFrame, TrimRange, TrimmerAnimatedStyle } from "../../types";
 import { Playhead } from "./Playhead";
 import { ThumbnailBackground } from "./ThumbnailBackground";
 import { TimeLabels } from "./TimeLabels";
 import { TrimHandle } from "./TrimHandle";
 import { TrimSelection } from "./TrimSelection";
+
+type AnimatedViewStyle = TrimmerAnimatedStyle;
 
 interface TrimmerBarProps {
   duration: number;
@@ -18,12 +20,12 @@ interface TrimmerBarProps {
   rightHandleGesture: ReturnType<typeof import("react-native-gesture-handler").Gesture.Pan>;
   middleGesture: ReturnType<typeof import("react-native-gesture-handler").Gesture.Pan>;
   playheadGesture: ReturnType<typeof import("react-native-gesture-handler").Gesture.Pan>;
-  leftHandleStyle: ReturnType<typeof Animated.useAnimatedStyle>;
-  rightHandleStyle: ReturnType<typeof Animated.useAnimatedStyle>;
-  selectionStyle: ReturnType<typeof Animated.useAnimatedStyle>;
-  leftDimStyle: ReturnType<typeof Animated.useAnimatedStyle>;
-  rightDimStyle: ReturnType<typeof Animated.useAnimatedStyle>;
-  playheadStyle: ReturnType<typeof Animated.useAnimatedStyle>;
+  leftHandleStyle: AnimatedViewStyle;
+  rightHandleStyle: AnimatedViewStyle;
+  selectionStyle: AnimatedViewStyle;
+  leftDimStyle: AnimatedViewStyle;
+  rightDimStyle: AnimatedViewStyle;
+  playheadStyle: AnimatedViewStyle;
 }
 
 export const TrimmerBar: React.FC<TrimmerBarProps> = ({

@@ -24,7 +24,7 @@ import { usePlayheadScrubber } from "../hooks/usePlayheadScrubber";
 import { useTrimmerThumbnails } from "../hooks/useTrimmerThumbnails";
 import { useVideoLoop } from "../hooks/useVideoLoop";
 import { useVideoTrimmer } from "../hooks/useVideoTrimmer";
-import { VideoEditorProps, VideoEditorResult } from "../types";
+import { VideoEditorProps, VideoEditorResult, TrimmerAnimatedStyle } from "../types";
 
 interface VideoEditorContentProps {
   player: VideoPlayer;
@@ -212,7 +212,7 @@ const VideoEditorContent: React.FC<VideoEditorContentProps> = ({
         translateX: progressPosition.value * trackWidth + TRIMMER.HANDLE_WIDTH,
       },
     ],
-  }));
+  })) as TrimmerAnimatedStyle;
 
   const handleConfirm = useCallback(() => {
     if (player) {

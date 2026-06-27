@@ -2,6 +2,7 @@
 import { usePostStore } from "@/src/features/post/post.store";
 import { canViewPostMedia } from "@/src/features/post/post.utils";
 import { AppTheme } from "@/src/theme";
+import { resolveColorScheme } from "@/src/utils/color-scheme";
 import { useTheme } from "@/src/theme/ThemeProvider";
 import { getMediaType } from "@/src/utils/helpers";
 import { Ionicons } from "@expo/vector-icons";
@@ -66,7 +67,8 @@ export function ProfileGridView({
 }: ProfileGridViewProps) {
   const { theme, mode } = useTheme();
   const systemScheme = useColorScheme();
-  const resolvedMode = mode === "system" ? (systemScheme ?? "light") : mode;
+  const resolvedMode =
+    mode === "system" ? resolveColorScheme(systemScheme) : mode;
 
   const styles = useMemo(
     () => createStyles(theme, resolvedMode),

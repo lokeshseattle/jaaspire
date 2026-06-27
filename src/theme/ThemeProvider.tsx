@@ -8,6 +8,7 @@ import React, {
   useState,
 } from "react";
 import { useColorScheme } from "react-native";
+import { resolveColorScheme } from "@/src/utils/color-scheme";
 import { appThemes } from "./index";
 
 export type ThemeMode = "light" | "dark" | "system";
@@ -41,7 +42,7 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const resolvedMode =
-    mode === "system" ? (systemScheme ?? "light") : mode;
+    mode === "system" ? resolveColorScheme(systemScheme) : mode;
 
   const theme = useMemo(() => {
     return appThemes[resolvedMode];

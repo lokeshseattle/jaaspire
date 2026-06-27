@@ -11,7 +11,7 @@ import {
   UseMutationResult,
   useMutationState,
 } from "@tanstack/react-query";
-import { File, Paths } from "expo-file-system/next";
+import { File, Paths } from "expo-file-system";
 
 const DEFAULT_PREVIEW_DURATION = 6;
 

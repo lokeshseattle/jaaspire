@@ -8,7 +8,7 @@
 import { Colors } from "@/src/constants/theme";
 import { AppTheme } from "@/src/theme";
 import { useTheme } from "@/src/theme/ThemeProvider";
-import { useColorScheme } from "react-native";
+import { resolveColorScheme } from "@/src/utils/color-scheme";
 
 function colorFromTheme(
   theme: AppTheme,
@@ -37,9 +37,9 @@ export function useThemeColor(
   colorName: keyof typeof Colors.light & keyof typeof Colors.dark,
 ) {
   const { theme, mode } = useTheme();
-  const systemScheme = useColorScheme() ?? "light";
+  const systemScheme = useColorScheme();
   const resolved: "light" | "dark" =
-    mode === "system" ? (systemScheme === "dark" ? "dark" : "light") : mode;
+    mode === "system" ? resolveColorScheme(systemScheme) : mode;
 
   const colorFromProps = props[resolved];
   if (colorFromProps) {

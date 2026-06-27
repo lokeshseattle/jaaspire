@@ -1,5 +1,11 @@
 // src/features/videoEditor/types.ts
 
+import type { ViewStyle } from "react-native";
+import type { AnimatedStyle } from "react-native-reanimated";
+
+/** Animated view styles from `useAnimatedStyle` (Reanimated 4.x compat). */
+export type TrimmerAnimatedStyle = AnimatedStyle<ViewStyle>;
+
 export interface TrimRange {
   startTime: number; // in milliseconds
   endTime: number; // in milliseconds

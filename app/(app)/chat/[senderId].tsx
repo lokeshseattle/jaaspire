@@ -1,4 +1,5 @@
 import JaasiStar from "@/assets/svg/JaasiStar";
+import { resolveColorScheme } from "@/src/utils/color-scheme";
 import { PickedFile, useMediaPicker } from "@/hooks/use-media-picker";
 import ReportModal from "@/src/components/home/posts/ReportModal";
 import PaymentConfirmSheet from "@/src/components/payment/PaymentConfirmSheet";
@@ -601,7 +602,7 @@ export default function MessengerChatScreen() {
   const { theme, mode } = useTheme();
   const systemScheme = useColorScheme();
   const colorScheme: "light" | "dark" =
-    mode === "system" ? (systemScheme ?? "light") : mode;
+    mode === "system" ? resolveColorScheme(systemScheme) : mode;
   const [attachments, setAttachments] = useState<PickedFile | null>(null);
   const [processedAttachmentId, setProcessedAttachmentId] = useState<
     string | null

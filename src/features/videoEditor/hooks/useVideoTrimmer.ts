@@ -9,7 +9,7 @@ import {
     withSpring,
 } from 'react-native-reanimated';
 import { LAYOUT, TRIMMER } from '../constants';
-import { TrimRange } from '../types';
+import { TrimRange, TrimmerAnimatedStyle } from '../types';
 
 interface UseVideoTrimmerProps {
     duration: number;
@@ -24,11 +24,11 @@ interface UseVideoTrimmerReturn {
     leftHandleGesture: ReturnType<typeof Gesture.Pan>;
     rightHandleGesture: ReturnType<typeof Gesture.Pan>;
     middleGesture: ReturnType<typeof Gesture.Pan>;
-    leftHandleStyle: ReturnType<typeof useAnimatedStyle>;
-    rightHandleStyle: ReturnType<typeof useAnimatedStyle>;
-    selectionStyle: ReturnType<typeof useAnimatedStyle>;
-    leftDimStyle: ReturnType<typeof useAnimatedStyle>;
-    rightDimStyle: ReturnType<typeof useAnimatedStyle>;
+    leftHandleStyle: TrimmerAnimatedStyle;
+    rightHandleStyle: TrimmerAnimatedStyle;
+    selectionStyle: TrimmerAnimatedStyle;
+    leftDimStyle: TrimmerAnimatedStyle;
+    rightDimStyle: TrimmerAnimatedStyle;
     resetTrim: () => void;
 }
 
@@ -164,16 +164,16 @@ export const useVideoTrimmer = ({
     // Animated styles
     const leftHandleStyle = useAnimatedStyle(() => ({
         transform: [{ translateX: leftPosition.value }],
-    }));
+    })) as TrimmerAnimatedStyle;
 
     const rightHandleStyle = useAnimatedStyle(() => ({
         transform: [{ translateX: rightPosition.value + TRIMMER.HANDLE_WIDTH }],
-    }));
+    })) as TrimmerAnimatedStyle;
 
     const selectionStyle = useAnimatedStyle(() => ({
         left: leftPosition.value + TRIMMER.HANDLE_WIDTH,
         width: rightPosition.value - leftPosition.value,
-    }));
+    })) as TrimmerAnimatedStyle;
 
     const leftDimStyle = useAnimatedStyle(() => ({
         position: "absolute",
@@ -183,7 +183,7 @@ export const useVideoTrimmer = ({
         width: leftPosition.value + TRIMMER.HANDLE_WIDTH,
         backgroundColor: "rgba(0,0,0,0.55)",
         zIndex: 2,
-    }));
+    })) as TrimmerAnimatedStyle;
 
     const rightDimStyle = useAnimatedStyle(() => ({
         position: "absolute",
@@ -193,7 +193,7 @@ export const useVideoTrimmer = ({
         left: rightPosition.value + TRIMMER.HANDLE_WIDTH,
         backgroundColor: "rgba(0,0,0,0.55)",
         zIndex: 2,
-    }));
+    })) as TrimmerAnimatedStyle;
 
     // Reset function - also cap at MAX_DURATION
     const resetTrim = useCallback(() => {

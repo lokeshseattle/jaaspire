@@ -1,10 +1,11 @@
 import React from "react";
 import { StyleSheet, type ViewStyle } from "react-native";
 import { GestureDetector, GestureType } from "react-native-gesture-handler";
-import Animated, { type AnimatedStyle } from "react-native-reanimated";
+import Animated from "react-native-reanimated";
+import { TrimmerAnimatedStyle } from "../../types";
 
 interface PlayheadProps {
-  animatedStyle: AnimatedStyle<ViewStyle>;
+  animatedStyle: TrimmerAnimatedStyle;
   gesture: GestureType;
 }
 

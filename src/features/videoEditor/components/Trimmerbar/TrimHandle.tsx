@@ -4,11 +4,12 @@ import React from "react";
 import { StyleSheet, View } from "react-native";
 import { GestureDetector, GestureType } from "react-native-gesture-handler";
 import Animated from "react-native-reanimated";
+import { TrimmerAnimatedStyle } from "../../types";
 import { COLORS, TRIMMER } from "../../constants";
 
 interface TrimHandleProps {
   gesture: GestureType;
-  style: ReturnType<typeof Animated.useAnimatedStyle>;
+  style: TrimmerAnimatedStyle;
   position: "left" | "right";
 }
 
