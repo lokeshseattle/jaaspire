@@ -23,6 +23,9 @@ export async function captureAttributionOnce(): Promise<void> {
   try {
     if ((await getAttributionDone()) === "true") return;
 
+    // iOS attribution is captured asynchronously via AppsFlyer listeners.
+    if (Platform.OS === "ios") return;
+
     let attribution: ReferrerAttribution = {};
 
     if (Platform.OS === "android") {
