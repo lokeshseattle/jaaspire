@@ -40,6 +40,7 @@ type GridItem = {
   type: "image" | "video";
   status: "pending" | "completed";
   isLocked: boolean;
+  viewsCount: number;
 };
 
 interface ProfileGridViewProps {
@@ -129,6 +130,7 @@ export function ProfileGridView({
             post.price,
             post.is_exclusive,
           ),
+          viewsCount: post.views_count ?? 0,
         });
       }
     }
@@ -199,6 +201,13 @@ export function ProfileGridView({
             {item.type === "video" && !isPending && (
               <View style={styles.videoIndicator}>
                 <Ionicons name="play" size={14} color="#FFFFFF" />
+              </View>
+            )}
+
+            {!isPending && (
+              <View style={styles.viewsIndicator}>
+                <Ionicons name="eye-outline" size={12} color="#FFFFFF" />
+                <Text style={styles.viewsText}>{item.viewsCount}</Text>
               </View>
             )}
 
@@ -278,6 +287,26 @@ const createStyles = (theme: AppTheme, resolvedMode: "light" | "dark") =>
           : hexWithAlpha(theme.colors.background, 0.72),
       borderRadius: theme.radius.sm,
       padding: 4,
+    },
+    viewsIndicator: {
+      position: "absolute",
+      bottom: theme.spacing.sm,
+      left: theme.spacing.sm,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 3,
+      backgroundColor:
+        resolvedMode === "light"
+          ? hexWithAlpha(theme.colors.textPrimary, 0.58)
+          : hexWithAlpha(theme.colors.background, 0.72),
+      borderRadius: theme.radius.sm,
+      paddingHorizontal: 5,
+      paddingVertical: 3,
+    },
+    viewsText: {
+      color: "#FFFFFF",
+      fontSize: 11,
+      fontWeight: "600",
     },
     loader: {
       padding: 20,
