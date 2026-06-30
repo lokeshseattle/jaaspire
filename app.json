@@ -81,6 +81,13 @@
       "expo-iap",
       "expo-notifications",
       "@react-native-firebase/app/app.plugin.js",
+      "react-native-appsflyer",
+      [
+        "expo-tracking-transparency",
+        {
+          "userTrackingPermission": "Jaaspire uses this identifier to measure ad performance and understand which campaigns brought you to the app. This helps us improve the experience."
+        }
+      ],
       [
         "@react-native-firebase/analytics/app.plugin.js",
         {
