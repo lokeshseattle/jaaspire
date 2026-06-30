@@ -28,6 +28,13 @@ export const usePostStore = create<PostStore>((set, get) => ({
         if (post.user == null && existing?.user != null) {
           merged.user = existing.user;
         }
+        // Flicks endpoints return views_count: 0; preserve counts already loaded from profile/feed.
+        if (
+          (post.views_count == null || post.views_count === 0) &&
+          (existing?.views_count ?? 0) > 0
+        ) {
+          merged.views_count = existing.views_count;
+        }
         updated[post.id] = merged;
       });
 
